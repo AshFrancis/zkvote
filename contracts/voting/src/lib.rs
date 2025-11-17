@@ -413,6 +413,24 @@ impl Voting {
 
         #[cfg(not(any(test, feature = "testutils")))]
         {
+            // SECURITY NOTE: G1Affine::from_bytes() and G2Affine::from_bytes() do NOT validate
+            // curve/subgroup membership in soroban-sdk (uses unchecked_new internally).
+            //
+            // Current assumption: We rely on the host function (pairing_check) to validate points.
+            // If the host function doesn't validate, this creates attack vectors:
+            // - Invalid curve attacks (points not on BN254)
+            // - Small subgroup attacks (for G2, cofactor > 1)
+            //
+            // TODO (before mainnet): Add explicit validation:
+            // 1. For G1: Check y² = x³ + 3 (mod p) - [cofactor=1, so this suffices]
+            // 2. For G2: Check curve membership + subgroup check via endomorphism
+            //    ([x+1]P + ψ([x]P) + ψ²(xP) = ψ³([2x]P) where x = BN254 seed)
+            //
+            // References:
+            // - Besu CVE: Missing curve check before subgroup check allowed invalid points
+            // - Fast G2 check: https://ethresear.ch/t/fast-mathbb-g-2-subgroup-check-in-bn254/13974
+            // - See audit.md for implementation plan
+
             // Step 1: Compute vk_x = IC[0] + sum(pub_signals[i] * IC[i+1])
             let vk_x = Self::compute_vk_x(env, vk, pub_signals);
 
