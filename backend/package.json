@@ -1,0 +1,26 @@
+{
+  "name": "daovote-backend",
+  "version": "1.0.0",
+  "description": "Backend services for DaoVote: Relayer (required) and optional Proof Query Service",
+  "type": "module",
+  "scripts": {
+    "relayer": "node src/relayer.js",
+    "dev:relayer": "node --watch src/relayer.js"
+  },
+  "keywords": [
+    "stellar",
+    "soroban",
+    "zk",
+    "voting",
+    "dao"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@stellar/stellar-sdk": "^14.3.2",
+    "circomlibjs": "^0.1.7",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "node-fetch": "^3.3.2"
+  }
+}

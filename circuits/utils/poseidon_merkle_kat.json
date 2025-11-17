@@ -1,0 +1,31 @@
+{
+  "tree_depth": 20,
+  "test_input": {
+    "secret": "12345",
+    "salt": "67890"
+  },
+  "commitment": "0x1914879b2a4e7f9555f3eb55837243cefb1366a692794a7e5b5b3181fb14b49b",
+  "expected_root_after_first_insert": "0x2d8b784789ca06c6bb30d7593b0774a6124aff26581f04b9125d1be25e46545d",
+  "zero_hashes": [
+    {
+      "level": 0,
+      "hash": "0x2a09a9fd93c590c26b91effbb2499f07e8f7aa12e2b4940a3aed2411cb65e11c"
+    },
+    {
+      "level": 1,
+      "hash": "0x17192e62a157556849d93b3c6be1e2bd1f3f1660d10dd9b1ffc429aa9021252c"
+    },
+    {
+      "level": 2,
+      "hash": "0x04d5abb4c7f77e3b5d8bc7a049d5ba6e79f29c5c5a9edf0a58726e653e8bc0c7"
+    },
+    {
+      "level": 3,
+      "hash": "0x0ea559a90beac7d48cc70dfad2fea27621b76f140446329b293a04454ccb0ec3"
+    },
+    {
+      "level": 4,
+      "hash": "0x26f52f9b31ef80782798f2ae44659dc1bedf53ac38366d4dfed74ce7d95ad1d5"
+    }
+  ]
+}
