@@ -307,8 +307,28 @@ function u256ToScVal(hexString) {
   // Remove 0x prefix if present
   const hex = hexString.startsWith('0x') ? hexString.slice(2) : hexString;
 
+  // Validate hex string format (even length, valid chars)
+  if (!/^[0-9a-fA-F]*$/.test(hex)) {
+    throw new Error('Invalid U256 hex string: contains non-hexadecimal characters');
+  }
+  if (hex.length % 2 !== 0 && hex.length > 0) {
+    throw new Error(`Invalid U256 hex string: odd length (${hex.length})`);
+  }
+  if (hex.length > 64) {
+    throw new Error(`Invalid U256 hex string: too long (${hex.length} chars, max 64)`);
+  }
+
   // Pad to 64 characters (32 bytes)
   const padded = hex.padStart(64, '0');
+
+  // Validate that value is in BN254 scalar field
+  // BN254 scalar field modulus: 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47
+  const value = BigInt('0x' + padded);
+  const BN254_SCALAR_FIELD = BigInt('0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47');
+
+  if (value >= BN254_SCALAR_FIELD) {
+    throw new Error('Value exceeds BN254 scalar field modulus');
+  }
 
   // Split into 4 u64 parts (hi_hi, hi_lo, lo_hi, lo_lo)
   const hiHi = BigInt('0x' + padded.slice(0, 16));
@@ -395,11 +415,29 @@ function proofToScVal(proof) {
 // Helper: Convert hex string to byte array
 function hexToBytes(hex, expectedLength) {
   const cleanHex = hex.startsWith('0x') ? hex.slice(2) : hex;
+
+  // Validate hex string format
+  if (!/^[0-9a-fA-F]*$/.test(cleanHex)) {
+    throw new Error('Invalid hex string: contains non-hexadecimal characters');
+  }
+
+  // Validate even length (hex strings must have even length)
+  if (cleanHex.length % 2 !== 0 && cleanHex.length > 0) {
+    throw new Error(`Invalid hex string: odd length (${cleanHex.length})`);
+  }
+
+  // Validate length constraint
+  if (cleanHex.length > expectedLength * 2) {
+    throw new Error(`Hex string too long: ${cleanHex.length} chars, max ${expectedLength * 2}`);
+  }
+
   const padded = cleanHex.padStart(expectedLength * 2, '0');
   const bytes = Buffer.from(padded, 'hex');
+
   if (bytes.length !== expectedLength) {
     throw new Error(`Expected ${expectedLength} bytes, got ${bytes.length}`);
   }
+
   return bytes;
 }
 
