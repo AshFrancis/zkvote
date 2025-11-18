@@ -99,61 +99,61 @@ function hexToBytes(hex, expectedLength) {
 
 ## 🟡 Medium (Spec Inconsistencies - Need Clarification)
 
-### 4. DAORegistry permissionless creation
-**Location**: `contracts/dao-registry/src/lib.rs:18`
+### 4. DAORegistry permissionless creation ✅ RESOLVED
+**Location**: `contracts/dao-registry/src/lib.rs:45`
 
-**Spec**: README states "permissionless DAO creation (anyone can create)"
+**Resolution**: Made permissionless - creator automatically becomes admin
 
-**Code**: Requires admin authentication:
+**Updated Code**:
 ```rust
-pub fn create_dao(env: Env, name: String, admin: Address) -> u64 {
-    admin.require_auth(); // ← Contradicts "permissionless"
-    // ...
+pub fn create_dao(env: Env, name: String, creator: Address) -> u64 {
+    creator.require_auth(); // Creator authorizes becoming admin
+    // Creator automatically becomes admin (prevents making others admin)
 }
 ```
 
-**Question**: Should DAO creation be truly permissionless, or should only the admin initialization require auth?
+**Design Decision**:
+- Anyone can create a DAO (permissionless)
+- Creator automatically becomes the admin
+- Cannot create DAOs for other people without their consent
+- Prevents griefing attacks where someone makes you admin without permission
 
-**Options**:
-1. **Remove auth check**: Allow anyone to create DAOs (matches spec)
-2. **Update spec**: Document that admin must authorize their own DAO creation
-3. **Separate functions**: `create_dao()` permissionless, `set_admin()` requires auth
-
-**Status**: ⚠️ Clarify intended behavior
+**Status**: ✅ Fixed - matches spec intent
 
 ---
 
-### 5. Tree depth discrepancy
-**Location**: `contracts/membership-tree/src/lib.rs`
+### 5. Tree depth discrepancy ✅ RESOLVED
+**Location**: `contracts/membership-tree/src/lib.rs:8`
 
-**Spec**: README emphasizes depth 20 (supports ~1M members) or 24
+**Resolution**: Enforced depth 20 to match spec
 
-**Code**: Caps at depth 32:
+**Updated Code**:
 ```rust
-require!(depth <= 32, "depth too large");
+const MAX_TREE_DEPTH: u32 = 20;  // Supports ~1M members (2^20 = 1,048,576)
+
+// Validation in init_tree:
+if depth == 0 || depth > MAX_TREE_DEPTH {
+    panic!("invalid depth");
+}
 ```
 
-**Gap**: Why allow depths 25-32 if spec recommends 20-24?
+**Design Decision**:
+- Maximum depth: 20 (matches spec default)
+- Supports up to ~1 million members
+- Keeps Merkle proof size reasonable (20 hashes)
+- Prevents excessive gas costs from deep trees
+- Circuit constraints remain manageable
 
-**Considerations**:
-- Depth 32 = 4B leaves (impractical gas costs for proof verification)
-- Merkle proof size scales linearly with depth (32 hashes vs 20)
-- Higher depths = higher circuit constraints
-
-**Recommendation**: Either:
-1. Enforce stricter limit matching spec (e.g., `depth <= 24`)
-2. Update spec to document support for depths up to 32 with performance warnings
-
-**Status**: 📝 Clarify intended max depth
+**Status**: ✅ Fixed - matches spec recommendation
 
 ---
 
-### 6. Voting root verification strictness
+### 6. Voting root verification strictness ✅ RESOLVED
 **Location**: `contracts/voting/src/lib.rs:vote()`
 
-**Spec**: Mentions `root_ok` to accept "any recent root" (allows late members to vote)
+**Resolution**: Keeping strict snapshot approach (current implementation is correct)
 
-**Code**: Enforces strict equality to snapshot at proposal creation:
+**Current Code**:
 ```rust
 // Snapshotted at proposal creation:
 let eligible_root: U256 = env.storage().persistent().get(&root_key).unwrap();
@@ -162,28 +162,31 @@ let eligible_root: U256 = env.storage().persistent().get(&root_key).unwrap();
 require!(root == eligible_root, "root mismatch");
 ```
 
-**Impact**:
-- ✅ **Stricter** = prevents late-joining members from voting (clearer rules)
-- ❌ **Less flexible** = members who join after proposal creation cannot vote
+**Design Decision**:
+- Use strict snapshot at proposal creation time
+- Only members present when proposal was created can vote
+- Clear, unambiguous eligibility rules
+- Prevents governance attacks from late-joining members
+- Simpler implementation (no root history tracking needed)
 
-**Trade-offs**:
-- Current (strict): Clear eligibility snapshot, prevents governance attacks
-- Spec (flexible): More inclusive, but complex root history tracking needed
+**Rationale**:
+- Stricter is better for security
+- Prevents manipulation via strategic late joining
+- Clear eligibility definition at proposal time
+- Spec will be updated to document snapshot-based approach
 
-**Recommendation**: Keep current strict behavior, update spec to reflect snapshot-based eligibility
-
-**Status**: 📝 Update spec to match implementation
+**Status**: ✅ Keep current - spec to be updated
 
 ---
 
-### 7. `sbt_contr` storage
+### 7. `sbt_contr` storage ✅ RESOLVED
 **Location**: `contracts/voting/src/lib.rs`
 
-**Spec**: Lists `sbt_contr` as stored in voting contract
+**Resolution**: Keeping derivation approach (current implementation is correct)
 
-**Code**: Does NOT store SBT address, derives it via tree each call:
+**Current Code**:
 ```rust
-// Not stored in voting contract
+// Derived via tree contract, not stored directly in voting
 let sbt_contract: Address = env.invoke_contract(
     &tree_contract,
     &symbol_short!("sbt_contr"),
@@ -191,15 +194,20 @@ let sbt_contract: Address = env.invoke_contract(
 );
 ```
 
-**Impact**: Extra cross-contract call on every operation vs direct storage
+**Design Decision**:
+- Derive SBT address via tree contract on each call
+- Do NOT cache/store SBT address in voting contract
+- Always uses correct SBT contract reference
+- Resilient to upgrades/changes in tree or SBT contracts
 
-**Trade-offs**:
-- Current (derive): Always uses correct SBT even if tree is upgraded
-- Spec (store): Faster, fewer cross-contract calls
+**Rationale**:
+- Extra cross-contract call is negligible overhead
+- Prevents stale reference bugs
+- More robust to contract upgrades
+- Maintains single source of truth (tree contract)
+- Better separation of concerns
 
-**Recommendation**: Document that SBT address is derived, not stored (matches current code)
-
-**Status**: 📝 Update spec
+**Status**: ✅ Keep current - spec to be updated
 
 ---
 
@@ -312,28 +320,31 @@ pub fn init_tree(env: Env, dao_id: u64, depth: u32, admin: Address) {
 
 ## Summary
 
-| Severity | Count | Action Required |
-|----------|-------|-----------------|
-| 🔴 Critical | 3 | Fix before mainnet |
-| 🟡 Medium | 4 | Clarify/align spec ↔ code |
-| 🟢 Low | 5 | Documentation updates |
+| Severity | Count | Status |
+|----------|-------|--------|
+| 🔴 Critical | 3 | ✅ **ALL FIXED** |
+| 🟡 Medium | 4 | ✅ **ALL RESOLVED** |
+| 🟢 Low | 5 | 📝 Documentation updates needed |
 
-### Recommended Priority
+### Resolution Status
 
-1. **Immediate** (before mainnet):
-   - Add size limits to prevent DoS
-   - Strengthen `set_vk` validation
-   - Add backend hex validation
+1. **Critical** (✅ ALL FIXED):
+   - ✅ Size limits added (descriptions, VK, DAO names)
+   - ✅ VK validation strengthened (exact IC length)
+   - ✅ Backend hex validation added (format, field checks)
 
-2. **Short-term** (clarify design):
-   - Decide on DAORegistry permissionless creation
-   - Document max tree depth policy
-   - Update spec for root verification strictness
+2. **Medium** (✅ ALL RESOLVED):
+   - ✅ DAO creation: Made permissionless, creator becomes admin
+   - ✅ Tree depth: Enforced max depth 20
+   - ✅ Root verification: Keeping strict snapshot (secure)
+   - ✅ SBT storage: Keeping derivation (robust)
 
-3. **Documentation** (ongoing):
+3. **Documentation** (📝 remaining):
    - Update spec to reflect actual data models
    - Document constructor patterns
    - Clarify nullifier scoping terminology
+   - Document snapshot-based eligibility
+   - Document SBT derivation approach
 
 ---
 
