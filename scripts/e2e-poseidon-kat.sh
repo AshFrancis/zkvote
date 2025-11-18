@@ -63,7 +63,7 @@ cargo build --target wasm32v1-none --release -p dao-registry -p membership-sbt -
 echo "  Contracts built."
 echo ""
 
-# Step 4: Deploy contracts
+# Step 4: Deploy contracts with constructors
 echo "Step 4: Deploying contracts..."
 
 REGISTRY_ID=$(stellar contract deploy \
@@ -73,18 +73,18 @@ echo "  DAORegistry: $REGISTRY_ID"
 
 SBT_ID=$(stellar contract deploy \
   --wasm target/wasm32v1-none/release/membership_sbt.wasm \
-  --source "$KEY_NAME" --network local 2>&1 | tail -1)
+  --source "$KEY_NAME" --network local \
+  -- --registry "$REGISTRY_ID" 2>&1 | tail -1)
 echo "  MembershipSBT: $SBT_ID"
 
 TREE_ID=$(stellar contract deploy \
   --wasm target/wasm32v1-none/release/membership_tree.wasm \
-  --source "$KEY_NAME" --network local 2>&1 | tail -1)
+  --source "$KEY_NAME" --network local \
+  -- --sbt_contract "$SBT_ID" 2>&1 | tail -1)
 echo "  MembershipTree: $TREE_ID"
 echo ""
 
-# Step 5: Initialize contracts via constructors
-# Note: CAP-0058 constructors are called at deploy time
-# For now, we'll call init methods if they exist
+# Step 5: Contracts initialized via CAP-0058 constructors at deploy time
 
 # Step 6: Create test DAO
 echo "Step 5: Creating test DAO..."
