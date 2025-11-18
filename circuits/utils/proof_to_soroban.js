@@ -75,10 +75,11 @@ if (require.main === module) {
   console.log(`C (G1, 64 bytes): ${toHexString(proof.c)}`);
 
   console.log("\n=== Public Signals ===");
-  console.log(`Root: ${publicSignals[0]}`);
-  console.log(`Nullifier: ${publicSignals[1]}`);
-  console.log(`Proposal ID: ${publicSignals[2]}`);
-  console.log(`Vote Choice: ${publicSignals[3]}`);
+  console.log(`[0] Root:        ${publicSignals[0]}`);
+  console.log(`[1] Nullifier:   ${publicSignals[1]}`);
+  console.log(`[2] DAO ID:      ${publicSignals[2]}`);
+  console.log(`[3] Proposal ID: ${publicSignals[3]}`);
+  console.log(`[4] Vote Choice: ${publicSignals[4]} (${publicSignals[4] === "1" ? "YES" : "NO"})`);
 
   // Save JSON format
   const outputPath = "proof_soroban.json";
@@ -100,9 +101,9 @@ stellar contract invoke \\
   --id <VOTING_CONTRACT_ID> \\
   --source-account relayer \\
   -- vote \\
-  --dao_id <DAO_ID> \\
-  --proposal_id ${publicSignals[2]} \\
-  --vote_choice ${publicSignals[3] === "1"} \\
+  --dao_id ${publicSignals[2]} \\
+  --proposal_id ${publicSignals[3]} \\
+  --vote_choice ${publicSignals[4] === "1"} \\
   --nullifier ${publicSignals[1]} \\
   --root ${publicSignals[0]} \\
   --proof '{"a": "${toHexString(proof.a)}", "b": "${toHexString(proof.b)}", "c": "${toHexString(proof.c)}"}'
