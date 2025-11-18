@@ -333,14 +333,14 @@ impl MembershipTree {
     /// Test helper: Expose Poseidon hash for KAT verification
     /// This function is used to verify that Stellar P25's Poseidon implementation
     /// matches circomlib's parameters. Compare results with circuits/utils/poseidon_kat.js
-    #[cfg(feature = "testutils")]
+    /// WARNING: For testing only - remove before mainnet deployment
     pub fn test_poseidon_hash(env: Env, a: U256, b: U256) -> U256 {
         Self::hash_pair(&env, &a, &b)
     }
 
     /// Test helper: Get zero value at specific tree level
     /// Used to verify Merkle tree zero values match between on-chain and circuit
-    #[cfg(feature = "testutils")]
+    /// WARNING: For testing only - remove before mainnet deployment
     pub fn test_zero_at_level(env: Env, level: u32) -> U256 {
         Self::zero_at_level(&env, level)
     }
