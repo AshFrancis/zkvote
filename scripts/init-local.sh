@@ -1,10 +1,10 @@
 #!/bin/bash
-# Initialize DaoVote contracts on local P25 network
+# Configure DaoVote backend after deployment
 # Run after deploy-local.sh
 
 set -e
 
-echo "=== DaoVote Contract Initialization ==="
+echo "=== DaoVote Backend Configuration ==="
 
 # Load contract IDs
 if [ ! -f ".contract-ids.local" ]; then
@@ -15,12 +15,9 @@ fi
 source .contract-ids.local
 
 # Configuration
-NETWORK="${NETWORK:-local}"
-SOURCE="${SOURCE:-mykey}"
+RELAYER_KEY="${RELAYER_KEY:-relayer}"
 
 echo "Network: $NETWORK"
-echo "Source: $SOURCE"
-echo ""
 echo "Contract IDs:"
 echo "  Registry: $REGISTRY_ID"
 echo "  SBT: $SBT_ID"
@@ -28,49 +25,79 @@ echo "  Tree: $TREE_ID"
 echo "  Voting: $VOTING_ID"
 echo ""
 
-# Note: With CAP-0058 constructors, initialization happens at deployment
-# These contracts use __constructor which is called automatically during deploy
-# However, the constructor requires the dependency contract address
-
-# For CAP-0058, we need to redeploy with constructor args
-# This script assumes contracts were deployed without constructor (will fail)
-#
-# TODO: Update stellar CLI to support constructor args during deploy
-# For now, this is a placeholder showing the initialization flow
-
-echo "Note: CAP-0058 constructors are called at deployment time."
-echo "With current stellar CLI, you may need to:"
-echo ""
-echo "1. Deploy contracts with constructor args (when CLI supports it):"
-echo "   stellar contract deploy --wasm <wasm> --arg registry=$REGISTRY_ID"
-echo ""
-echo "2. Or manually invoke constructors if they were deployed without args:"
-echo "   (This won't work as constructors can only be called once)"
-echo ""
-echo "For testing purposes, use the integration test suite which properly"
-echo "initializes contracts with constructor arguments."
-echo ""
-echo "=== Manual Initialization (if needed) ==="
-echo ""
-echo "# If your contracts have init() instead of __constructor():"
-echo "stellar contract invoke --id $SBT_ID -- init --registry $REGISTRY_ID"
-echo "stellar contract invoke --id $TREE_ID -- init --sbt_contract $SBT_ID"
-echo "stellar contract invoke --id $VOTING_ID -- init --tree_contract $TREE_ID"
-
-# Update backend .env
-if [ -f "backend/.env.example" ]; then
-    echo ""
-    echo "=== Updating backend/.env ==="
-    cat > backend/.env << EOF
-SOROBAN_RPC_URL=http://localhost:8000/soroban/rpc
-NETWORK_PASSPHRASE=Standalone Network ; February 2017
-RELAYER_SECRET_KEY=SCZANGBA5YHTNYVVV3C7CAZMTQDBJHJVHCPXPI7P6DZ7V6XBHB4LXBWO
-VOTING_CONTRACT_ID=$VOTING_ID
-TREE_CONTRACT_ID=$TREE_ID
-PORT=3001
-EOF
-    echo "Backend .env created with contract IDs"
+# Generate or use existing relayer key
+echo "=== Relayer Account Setup ==="
+if stellar keys address "$RELAYER_KEY" &>/dev/null; then
+    echo "Using existing relayer key: $RELAYER_KEY"
+    RELAYER_ADDRESS=$(stellar keys address "$RELAYER_KEY")
+else
+    echo "Generating new relayer key: $RELAYER_KEY"
+    stellar keys generate "$RELAYER_KEY" --no-fund
+    RELAYER_ADDRESS=$(stellar keys address "$RELAYER_KEY")
+    echo "Generated relayer address: $RELAYER_ADDRESS"
 fi
 
+# Fund relayer account if on local network
+if [ "$NETWORK" == "local" ]; then
+    echo "Funding relayer account on local network..."
+    if stellar keys fund "$RELAYER_KEY" --network "$NETWORK" 2>&1 | grep -q "funded"; then
+        echo "✓ Relayer account funded"
+    else
+        echo "Warning: Could not fund relayer account. Fund manually with:"
+        echo "  stellar keys fund $RELAYER_KEY --network $NETWORK"
+    fi
+fi
+
+# Get relayer secret key
+RELAYER_SECRET=$(stellar keys show "$RELAYER_KEY")
+
+# Determine RPC URL and passphrase based on network
+if [ "$NETWORK" == "local" ]; then
+    RPC_URL="http://localhost:8000/soroban/rpc"
+    PASSPHRASE="Standalone Network ; February 2017"
+else
+    RPC_URL="https://rpc-futurenet.stellar.org:443"
+    PASSPHRASE="Test SDF Future Network ; October 2022"
+fi
+
+# Create backend .env
 echo ""
-echo "=== Initialization Complete ==="
+echo "=== Creating backend/.env ==="
+cat > backend/.env << EOF
+# DaoVote Relayer Configuration
+# Generated: $(date)
+# Network: $NETWORK
+
+# Network Configuration
+SOROBAN_RPC_URL=$RPC_URL
+NETWORK_PASSPHRASE=$PASSPHRASE
+
+# Relayer Account
+# WARNING: Keep this secret secure! Never commit to version control.
+RELAYER_SECRET_KEY=$RELAYER_SECRET
+
+# Contract Addresses
+VOTING_CONTRACT_ID=$VOTING_ID
+TREE_CONTRACT_ID=$TREE_ID
+
+# Server Configuration
+PORT=3001
+EOF
+
+echo "✓ Backend configuration created at backend/.env"
+echo ""
+echo "⚠️  SECURITY WARNING:"
+echo "  - backend/.env contains sensitive keys"
+echo "  - Never commit this file to version control"
+echo "  - backend/.env is in .gitignore"
+echo ""
+echo "=== Configuration Complete ==="
+echo ""
+echo "Relayer account: $RELAYER_ADDRESS"
+echo "Voting contract: $VOTING_ID"
+echo "Tree contract: $TREE_ID"
+echo ""
+echo "Next steps:"
+echo "  1. cd backend && npm install"
+echo "  2. npm run dev"
+echo "  3. Test with: curl http://localhost:3001/health"

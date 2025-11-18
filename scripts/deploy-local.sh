@@ -1,5 +1,5 @@
 #!/bin/bash
-# Deploy DaoVote contracts to local P25 network
+# Deploy DaoVote contracts to local P25 network with constructor arguments
 # Prerequisites: stellar container start -t future
 
 set -e
@@ -29,37 +29,48 @@ if [ ! -f "$WASM_DIR/dao_registry.wasm" ]; then
     exit 1
 fi
 
-# Deploy contracts
-echo "1. Deploying DAORegistry..."
+# Deploy contracts in dependency order with constructor arguments
+# Contracts use CAP-0058 constructors (__constructor) called automatically at deploy
+
+echo "1. Deploying DAORegistry (no constructor)..."
 REGISTRY_ID=$(stellar contract deploy \
     --wasm "$WASM_DIR/dao_registry.wasm" \
     --source "$SOURCE" \
     --network "$NETWORK" 2>&1 | tail -1)
-echo "   Registry: $REGISTRY_ID"
+echo "   ✓ Registry: $REGISTRY_ID"
 
-echo "2. Deploying MembershipSBT..."
+echo ""
+echo "2. Deploying MembershipSBT (constructor: registry)..."
 SBT_ID=$(stellar contract deploy \
     --wasm "$WASM_DIR/membership_sbt.wasm" \
     --source "$SOURCE" \
-    --network "$NETWORK" 2>&1 | tail -1)
-echo "   SBT: $SBT_ID"
+    --network "$NETWORK" \
+    -- --registry "$REGISTRY_ID" 2>&1 | tail -1)
+echo "   ✓ SBT: $SBT_ID"
 
-echo "3. Deploying MembershipTree..."
+echo ""
+echo "3. Deploying MembershipTree (constructor: sbt_contract)..."
 TREE_ID=$(stellar contract deploy \
     --wasm "$WASM_DIR/membership_tree.wasm" \
     --source "$SOURCE" \
-    --network "$NETWORK" 2>&1 | tail -1)
-echo "   Tree: $TREE_ID"
+    --network "$NETWORK" \
+    -- --sbt_contract "$SBT_ID" 2>&1 | tail -1)
+echo "   ✓ Tree: $TREE_ID"
 
-echo "4. Deploying Voting..."
+echo ""
+echo "4. Deploying Voting (constructor: tree_contract)..."
 VOTING_ID=$(stellar contract deploy \
     --wasm "$WASM_DIR/voting.wasm" \
     --source "$SOURCE" \
-    --network "$NETWORK" 2>&1 | tail -1)
-echo "   Voting: $VOTING_ID"
+    --network "$NETWORK" \
+    -- --tree_contract "$TREE_ID" 2>&1 | tail -1)
+echo "   ✓ Voting: $VOTING_ID"
 
 # Save contract IDs
 cat > .contract-ids.local << EOF
+# DaoVote Contract IDs (local network)
+# Generated: $(date)
+NETWORK=$NETWORK
 REGISTRY_ID=$REGISTRY_ID
 SBT_ID=$SBT_ID
 TREE_ID=$TREE_ID
@@ -70,4 +81,10 @@ echo ""
 echo "=== Deployment Complete ==="
 echo "Contract IDs saved to .contract-ids.local"
 echo ""
-echo "Next: Initialize contracts with ./scripts/init-local.sh"
+echo "All contracts deployed with constructor arguments:"
+echo "  - Registry: $REGISTRY_ID (no constructor)"
+echo "  - SBT: $SBT_ID (registry=$REGISTRY_ID)"
+echo "  - Tree: $TREE_ID (sbt_contract=$SBT_ID)"
+echo "  - Voting: $VOTING_ID (tree_contract=$TREE_ID)"
+echo ""
+echo "Next: Configure backend with ./scripts/init-local.sh"
