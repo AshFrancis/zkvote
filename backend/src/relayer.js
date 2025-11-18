@@ -1,35 +1,92 @@
 import express from 'express';
 import * as StellarSdk from '@stellar/stellar-sdk';
 import dotenv from 'dotenv';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 
 dotenv.config();
 
 const app = express();
-app.use(express.json({ limit: '1mb' }));
+
+// Security: HTTP headers
+app.use(helmet());
+
+// Security: CORS configuration
+const corsOptions = {
+  origin: process.env.CORS_ORIGIN || '*',  // In production, set to specific origin
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type'],
+  maxAge: 86400  // 24 hours
+};
+app.use(cors(corsOptions));
+
+// Security: Request body size limit
+app.use(express.json({ limit: '100kb' }));  // Reduced from 1mb
+
+// Security: Rate limiting
+const voteLimiter = rateLimit({
+  windowMs: 60 * 1000,  // 1 minute
+  max: 10,  // 10 votes per minute per IP
+  message: { error: 'Too many vote requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const queryLimiter = rateLimit({
+  windowMs: 60 * 1000,  // 1 minute
+  max: 60,  // 60 queries per minute per IP
+  message: { error: 'Too many requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 // Configuration
 const RPC_URL = process.env.SOROBAN_RPC_URL || 'http://localhost:8000/soroban/rpc';
 const NETWORK_PASSPHRASE = process.env.NETWORK_PASSPHRASE || 'Standalone Network ; February 2017';
 const PORT = process.env.PORT || 3001;
 
-// Contract IDs
+// Contract IDs - MUST be set or server won't start
 const VOTING_CONTRACT_ID = process.env.VOTING_CONTRACT_ID;
 const TREE_CONTRACT_ID = process.env.TREE_CONTRACT_ID;
+
+// Validate configuration on startup
+if (!VOTING_CONTRACT_ID || !TREE_CONTRACT_ID) {
+  console.error('ERROR: Missing required environment variables:');
+  if (!VOTING_CONTRACT_ID) console.error('  - VOTING_CONTRACT_ID is not set');
+  if (!TREE_CONTRACT_ID) console.error('  - TREE_CONTRACT_ID is not set');
+  console.error('\nRun ./scripts/init-local.sh to generate backend/.env');
+  process.exit(1);
+}
+
+// Validate contract ID format
+if (!isValidContractId(VOTING_CONTRACT_ID)) {
+  console.error(`ERROR: Invalid VOTING_CONTRACT_ID format: ${VOTING_CONTRACT_ID}`);
+  process.exit(1);
+}
+if (!isValidContractId(TREE_CONTRACT_ID)) {
+  console.error(`ERROR: Invalid TREE_CONTRACT_ID format: ${TREE_CONTRACT_ID}`);
+  process.exit(1);
+}
 
 // Relayer account
 let relayerKeypair;
 try {
+  if (!process.env.RELAYER_SECRET_KEY) {
+    throw new Error('RELAYER_SECRET_KEY is not set');
+  }
   relayerKeypair = StellarSdk.Keypair.fromSecret(process.env.RELAYER_SECRET_KEY);
   console.log(`Relayer account: ${relayerKeypair.publicKey()}`);
 } catch (err) {
-  console.error('Invalid RELAYER_SECRET_KEY in .env');
+  console.error(`ERROR: Invalid RELAYER_SECRET_KEY: ${err.message}`);
+  console.error('Run ./scripts/init-local.sh to generate a secure key');
   process.exit(1);
 }
 
 // Soroban RPC client
 const server = new StellarSdk.SorobanRpc.Server(RPC_URL);
 
-// Health check
+// Health check (no rate limit)
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -39,8 +96,8 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Submit anonymous vote
-app.post('/vote', async (req, res) => {
+// Submit anonymous vote (with rate limiting)
+app.post('/vote', voteLimiter, async (req, res) => {
   const { daoId, proposalId, choice, nullifier, root, proof } = req.body;
 
   // Validate required fields
@@ -168,8 +225,8 @@ app.post('/vote', async (req, res) => {
   }
 });
 
-// Get proposal info (convenience endpoint)
-app.get('/proposal/:daoId/:proposalId', async (req, res) => {
+// Get proposal info (convenience endpoint, with rate limiting)
+app.get('/proposal/:daoId/:proposalId', queryLimiter, async (req, res) => {
   const { daoId, proposalId } = req.params;
 
   try {
@@ -208,8 +265,8 @@ app.get('/proposal/:daoId/:proposalId', async (req, res) => {
   }
 });
 
-// Get current Merkle root for a DAO
-app.get('/root/:daoId', async (req, res) => {
+// Get current Merkle root for a DAO (with rate limiting)
+app.get('/root/:daoId', queryLimiter, async (req, res) => {
   const { daoId } = req.params;
 
   try {
@@ -285,12 +342,39 @@ function scValToU256Hex(scVal) {
 // Helper: Convert proof object to ScVal
 function proofToScVal(proof) {
   // proof = { a: "0x...", b: "0x...", c: "0x..." }
-  // a and c are BytesN<64> (G1 points)
-  // b is BytesN<128> (G2 point)
+  //
+  // BN254 Groth16 proof structure (from snarkjs):
+  //   a: G1 point (64 bytes) - [x (32 bytes), y (32 bytes)]
+  //   b: G2 point (128 bytes) - [x1, x2, y1, y2] (32 bytes each)
+  //   c: G1 point (64 bytes) - [x (32 bytes), y (32 bytes)]
+  //
+  // Byte order: BIG-ENDIAN (from circuits/utils/proof_to_soroban.js)
+  //   - snarkjs outputs big-endian by default
+  //   - BN254 field elements are big-endian
+  //   - Soroban expects big-endian BytesN
+  //
+  // Validation:
+  //   - Proof must come from circuits/utils/proof_to_soroban.js
+  //   - Do NOT reverse byte order
+  //   - Do NOT modify hex strings from circuit output
 
+  // Validate proof has expected structure
+  if (!proof || typeof proof !== 'object') {
+    throw new Error('Invalid proof: must be an object');
+  }
+  if (!proof.a || !proof.b || !proof.c) {
+    throw new Error('Invalid proof: missing a, b, or c fields');
+  }
+
+  // Convert to bytes with validation
   const aBytes = hexToBytes(proof.a, 64);
   const bBytes = hexToBytes(proof.b, 128);
   const cBytes = hexToBytes(proof.c, 64);
+
+  // Additional validation: Check for all-zero proofs (likely invalid)
+  if (isAllZeros(aBytes) || isAllZeros(bBytes) || isAllZeros(cBytes)) {
+    throw new Error('Invalid proof: proof components cannot be all zeros');
+  }
 
   return StellarSdk.xdr.ScVal.scvMap([
     new StellarSdk.xdr.ScMapEntry({
@@ -354,6 +438,21 @@ function isValidHex(str, maxHexChars) {
   const hex = str.startsWith('0x') ? str.slice(2) : str;
   if (hex.length > maxHexChars) return false;
   return /^[0-9a-fA-F]*$/.test(hex);
+}
+
+// Helper: Check if byte array is all zeros
+function isAllZeros(bytes) {
+  return bytes.every(byte => byte === 0);
+}
+
+// Helper: Validate Stellar contract ID format
+function isValidContractId(contractId) {
+  if (typeof contractId !== 'string') return false;
+  // Stellar contract IDs are 56-character C-addresses
+  if (contractId.length !== 56) return false;
+  if (!contractId.startsWith('C')) return false;
+  // Base32 alphabet (uppercase)
+  return /^C[A-Z2-7]{55}$/.test(contractId);
 }
 
 // Start server

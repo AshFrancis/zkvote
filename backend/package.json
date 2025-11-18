@@ -19,8 +19,11 @@
   "dependencies": {
     "@stellar/stellar-sdk": "^14.3.2",
     "circomlibjs": "^0.1.7",
+    "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "express-rate-limit": "^7.1.5",
+    "helmet": "^7.1.0",
     "node-fetch": "^3.3.2"
   }
 }
