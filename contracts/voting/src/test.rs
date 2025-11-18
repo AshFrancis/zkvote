@@ -693,7 +693,7 @@ fn test_vk_change_after_proposal_creation_fails() {
 }
 
 #[test]
-#[should_panic(expected = "VK IC vector cannot be empty")]
+#[should_panic(expected = "VK IC length must be exactly 6 for vote circuit")]
 fn test_set_vk_empty_ic_fails() {
     let (env, voting_id, _tree_id, _sbt_id, registry_id, _member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
@@ -715,12 +715,12 @@ fn test_set_vk_empty_ic_fails() {
         ic: soroban_sdk::vec![&env], // Empty!
     };
 
-    // Should panic with "VK IC vector cannot be empty"
+    // Should panic - IC length must be exactly 6
     voting_client.set_vk(&1u64, &invalid_vk, &admin);
 }
 
 #[test]
-#[should_panic(expected = "VK IC vector too large")]
+#[should_panic(expected = "VK IC length must be exactly 6 for vote circuit")]
 fn test_set_vk_ic_too_large_fails() {
     let (env, voting_id, _tree_id, _sbt_id, registry_id, _member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
@@ -731,7 +731,7 @@ fn test_set_vk_ic_too_large_fails() {
     // Create a DAO
     registry_client.set_admin(&1u64, &admin);
 
-    // Create VK with too many IC elements (MAX_IC_LENGTH + 1)
+    // Create VK with too many IC elements (22 > MAX_IC_LENGTH of 21)
     let g1 = bn254_g1_generator(&env);
     let g2 = bn254_g2_generator(&env);
     let mut ic_vec = soroban_sdk::vec![&env];
@@ -747,8 +747,128 @@ fn test_set_vk_ic_too_large_fails() {
         ic: ic_vec,
     };
 
-    // Should panic with "VK IC vector too large"
+    // Should panic - first check catches IC length != 6
     voting_client.set_vk(&1u64, &invalid_vk, &admin);
+}
+
+#[test]
+#[should_panic(expected = "VK IC length must be exactly 6 for vote circuit")]
+fn test_set_vk_ic_length_5_fails() {
+    let (env, voting_id, _tree_id, _sbt_id, registry_id, _member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+
+    let admin = Address::generate(&env);
+    registry_client.set_admin(&1u64, &admin);
+
+    // Create VK with IC length = 5 (need exactly 6 for vote circuit)
+    let g1 = bn254_g1_generator(&env);
+    let g2 = bn254_g2_generator(&env);
+    let invalid_vk = VerificationKey {
+        alpha: g1.clone(),
+        beta: g2.clone(),
+        gamma: g2.clone(),
+        delta: g2,
+        ic: soroban_sdk::vec![&env, g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone()],
+    };
+
+    // Should panic - need exactly 6 elements
+    voting_client.set_vk(&1u64, &invalid_vk, &admin);
+}
+
+#[test]
+#[should_panic(expected = "VK IC length must be exactly 6 for vote circuit")]
+fn test_set_vk_ic_length_7_fails() {
+    let (env, voting_id, _tree_id, _sbt_id, registry_id, _member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+
+    let admin = Address::generate(&env);
+    registry_client.set_admin(&1u64, &admin);
+
+    // Create VK with IC length = 7 (need exactly 6 for vote circuit)
+    let g1 = bn254_g1_generator(&env);
+    let g2 = bn254_g2_generator(&env);
+    let invalid_vk = VerificationKey {
+        alpha: g1.clone(),
+        beta: g2.clone(),
+        gamma: g2.clone(),
+        delta: g2,
+        ic: soroban_sdk::vec![&env, g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone()],
+    };
+
+    // Should panic - need exactly 6 elements
+    voting_client.set_vk(&1u64, &invalid_vk, &admin);
+}
+
+// NOTE: G1/G2 point validation tests are not included here because point validation
+// is disabled in test mode (#[cfg(not(any(test, feature = "testutils")))]).
+//
+// Point validation (curve membership, subgroup checks) is only active in production.
+// This is intentional because:
+// 1. Test environment doesn't have access to BN254 host functions
+// 2. Point validation is security-critical and should be tested on real network
+// 3. Integration tests on P25 testnet verify actual point validation
+//
+// Tests that should be added as integration tests on real network:
+// - Invalid G1 point in VK alpha (off-curve)
+// - Invalid G1 point in VK IC (off-curve)
+// - Invalid G2 point in VK beta/gamma/delta (off-curve or wrong subgroup)
+// - Malformed point byte lengths (though BytesN<64>/BytesN<128> types prevent this)
+
+#[test]
+#[should_panic(expected = "description too long")]
+fn test_create_proposal_description_too_long_fails() {
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    sbt_client.set_member(&1u64, &member, &true);
+    tree_client.set_root(&1u64, &U256::from_u32(&env, 12345));
+    registry_client.set_admin(&1u64, &admin);
+    voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
+
+    // Create description > 1024 chars (MAX_DESCRIPTION_LEN)
+    let long_description = "a".repeat(1025);
+
+    let now = env.ledger().timestamp();
+    voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, &long_description),
+        &(now + 3600),
+        &member,
+    );
+}
+
+#[test]
+fn test_create_proposal_max_description_length_succeeds() {
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    sbt_client.set_member(&1u64, &member, &true);
+    tree_client.set_root(&1u64, &U256::from_u32(&env, 12345));
+    registry_client.set_admin(&1u64, &admin);
+    voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
+
+    // Create description exactly 1024 chars (MAX_DESCRIPTION_LEN)
+    let max_description = "a".repeat(1024);
+
+    let now = env.ledger().timestamp();
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, &max_description),
+        &(now + 3600),
+        &member,
+    );
+
+    assert_eq!(proposal_id, 1);
 }
 
 // Test helper: manual G1 negation (same logic as production code)
