@@ -3,6 +3,9 @@ use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, E
 
 const DAO_COUNT: Symbol = symbol_short!("dao_cnt");
 
+// Size limit to prevent DoS attacks
+const MAX_DAO_NAME_LEN: u32 = 256;  // Max DAO name length (256 chars)
+
 #[contracttype]
 #[derive(Clone)]
 pub struct DaoInfo {
@@ -40,6 +43,11 @@ impl DaoRegistry {
     /// Admin must authorize this call.
     pub fn create_dao(env: Env, name: String, admin: Address) -> u64 {
         admin.require_auth();
+
+        // Validate name length to prevent DoS
+        if name.len() > MAX_DAO_NAME_LEN {
+            panic!("DAO name too long");
+        }
 
         let dao_id = Self::next_dao_id(&env);
 

@@ -13,6 +13,10 @@ const TREE_CONTRACT: Symbol = symbol_short!("tree");
 // Allow some slack for future upgrades (up to 20 public inputs)
 const MAX_IC_LENGTH: u32 = 21;
 
+// Size limits to prevent DoS attacks
+const MAX_DESCRIPTION_LEN: u32 = 1024;  // Max proposal description length (1KB)
+const EXPECTED_IC_LENGTH: u32 = 6;      // Exact IC length for vote circuit (5 public signals + 1)
+
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
@@ -130,10 +134,14 @@ impl Voting {
         }
 
         // Validate VK size to prevent DoS attacks
-        // IC vector must have at least 1 element (for IC[0]) and at most MAX_IC_LENGTH
-        if vk.ic.is_empty() {
-            panic!("VK IC vector cannot be empty");
+        // IC vector must have exactly num_public_signals + 1 elements
+        // Vote circuit has 5 public signals (root, nullifier, daoId, proposalId, voteChoice)
+        // Therefore IC must have exactly 6 elements
+        if vk.ic.len() != EXPECTED_IC_LENGTH {
+            panic!("VK IC length must be exactly 6 for vote circuit");
         }
+
+        // Additional safety check: enforce max limit for any future circuit changes
         if vk.ic.len() > MAX_IC_LENGTH {
             panic!("VK IC vector too large");
         }
@@ -169,6 +177,11 @@ impl Voting {
         creator: Address,
     ) -> u64 {
         creator.require_auth();
+
+        // Validate description length to prevent DoS
+        if description.len() > MAX_DESCRIPTION_LEN {
+            panic!("description too long");
+        }
 
         // Verify creator has SBT membership (via tree contract)
         let tree_contract: Address = env.storage().instance().get(&TREE_CONTRACT).unwrap();
