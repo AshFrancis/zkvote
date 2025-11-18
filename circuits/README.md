@@ -33,7 +33,7 @@ Without revealing:
 - Tree depth: 20 levels (supports ~1M members)
 - Public signals: `[root, nullifier, daoId, proposalId, voteChoice]`
 - Private inputs: `[secret, salt, pathElements, pathIndices]`
-- Constraints: ~40,000
+- Constraints: ~3,500 (well under pot14 limit of 16,384)
 - Nullifier: `Poseidon(secret, daoId, proposalId)` (domain-separated)
 
 ### `merkle_tree.circom` (Helper)
@@ -74,11 +74,11 @@ Compile the circuit and perform trusted setup:
 
 This will:
 1. Compile `vote.circom` to R1CS
-2. Download Powers of Tau file (pot20_final.ptau)
+2. Download Powers of Tau file (pot14_final.ptau, ~50MB)
 3. Generate proving key (zkey)
 4. Export verification key
 
-**Note:** The Powers of Tau download is ~1GB and takes time.
+**Note:** Uses pot14 (2^14 = 16,384 constraints), sufficient for our ~3.5K constraint circuit.
 
 ## Generate Proof
 
