@@ -46,7 +46,7 @@ DAO_ID=$(stellar contract invoke \
     --network local \
     -- create_dao \
     --name "ZK Test DAO" \
-    --admin $KEY_ADDRESS 2>/dev/null)
+    --creator $KEY_ADDRESS 2>/dev/null)
 
 echo "   Created DAO ID: $DAO_ID"
 

@@ -94,7 +94,7 @@ DAO_ID=$(stellar contract invoke \
   --network local \
   -- create_dao \
   --name "KAT Test DAO" \
-  --admin "$PUBKEY" 2>&1 | tail -1 | tr -d '"')
+  --creator "$PUBKEY" 2>&1 | tail -1 | tr -d '"')
 echo "  DAO ID: $DAO_ID"
 echo ""
 

@@ -5,7 +5,7 @@ use soroban_sdk::{
 
 const SBT_CONTRACT: Symbol = symbol_short!("sbt");
 const MAX_ROOTS: u32 = 30;
-const MAX_TREE_DEPTH: u32 = 32;
+const MAX_TREE_DEPTH: u32 = 20;  // Supports ~1M members (2^20 = 1,048,576)
 const ZEROS_CACHE: Symbol = symbol_short!("zeros");
 
 #[contracttype]
@@ -69,7 +69,7 @@ impl MembershipTree {
             panic!("not admin");
         }
 
-        if depth == 0 || depth > 32 {
+        if depth == 0 || depth > MAX_TREE_DEPTH {
             panic!("invalid depth");
         }
 

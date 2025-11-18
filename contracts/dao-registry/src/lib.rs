@@ -39,10 +39,11 @@ pub struct DaoRegistry;
 
 #[contractimpl]
 impl DaoRegistry {
-    /// Create a new DAO with specified admin.
-    /// Admin must authorize this call.
-    pub fn create_dao(env: Env, name: String, admin: Address) -> u64 {
-        admin.require_auth();
+    /// Create a new DAO (permissionless).
+    /// Creator automatically becomes the admin.
+    /// Cannot create DAOs for other people - you can only create your own DAO.
+    pub fn create_dao(env: Env, name: String, creator: Address) -> u64 {
+        creator.require_auth();
 
         // Validate name length to prevent DoS
         if name.len() > MAX_DAO_NAME_LEN {
@@ -51,10 +52,11 @@ impl DaoRegistry {
 
         let dao_id = Self::next_dao_id(&env);
 
+        // Creator automatically becomes admin (prevents making others admin without consent)
         let info = DaoInfo {
             id: dao_id,
             name: name.clone(),
-            admin: admin.clone(),
+            admin: creator.clone(),
             created_at: env.ledger().timestamp(),
         };
 
@@ -63,7 +65,7 @@ impl DaoRegistry {
 
         DaoCreateEvent {
             dao_id,
-            admin,
+            admin: creator,
             name,
         }
         .publish(&env);
