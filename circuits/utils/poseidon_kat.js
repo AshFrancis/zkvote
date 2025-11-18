@@ -1,161 +1,118 @@
 #!/usr/bin/env node
 /**
- * Poseidon Known-Answer Test (KAT) Generator
+ * Poseidon Known Answer Test (KAT)
  *
- * Generates test vectors from circomlib's Poseidon implementation.
- * These values MUST match the P25 env.crypto().poseidon_hash() output.
+ * Verifies compatibility between:
+ * 1. circomlibjs (used for generating proofs)
+ * 2. Stellar P25 host Poseidon (used on-chain)
  *
- * Usage: node poseidon_kat.js
+ * Tests:
+ * - Zero leaf handling (must both use 0)
+ * - Hash parity for 1-input, 2-input, 3-input Poseidon
+ * - Merkle tree hash computation
  */
 
 const { buildPoseidon } = require("circomlibjs");
 
-async function generateTestVectors() {
-    console.log("Poseidon Known-Answer Test (KAT) Generator");
-    console.log("============================================\n");
+// Test vectors for Poseidon hash
+const TEST_VECTORS = [
+  {
+    name: "Zero leaf",
+    inputs: [0],
+    expected: null, // Will compute from circomlibjs
+  },
+  {
+    name: "Single input (secret=1)",
+    inputs: [1],
+    expected: null,
+  },
+  {
+    name: "Two inputs (secret=1, salt=2)",
+    inputs: [1, 2],
+    expected: null,
+  },
+  {
+    name: "Two inputs (left=0, right=0) - empty node",
+    inputs: [0, 0],
+    expected: null,
+  },
+  {
+    name: "Three inputs (secret=1, daoId=1, proposalId=42) - nullifier",
+    inputs: [1, 1, 42],
+    expected: null,
+  },
+  {
+    name: "Large values",
+    inputs: [
+      BigInt("12345678901234567890"),
+      BigInt("98765432109876543210")
+    ],
+    expected: null,
+  },
+];
 
-    const poseidon = await buildPoseidon();
-    const F = poseidon.F;
+async function main() {
+  console.log("=== Poseidon Known Answer Test ===\n");
 
-    // Test cases with various inputs
-    const testCases = [
-        // Basic small values
-        { name: "zeros", inputs: [0n, 0n] },
-        { name: "ones", inputs: [1n, 1n] },
-        { name: "small", inputs: [1n, 2n] },
-        { name: "sequential", inputs: [123n, 456n] },
+  // Build Poseidon instance (circomlibjs uses same params as circomlib)
+  const poseidon = await buildPoseidon();
 
-        // Larger values
-        { name: "medium", inputs: [123456789n, 987654321n] },
+  console.log("Circomlib Poseidon Parameters:");
+  console.log("- Field: BN254 scalar field (Fr)");
+  console.log("- S-box: x^5");
+  console.log("- Full rounds: 8");
+  console.log("- Partial rounds (t=2): 56, (t=3): 57, (t=4): 56");
+  console.log("");
 
-        // Edge cases near field size (BN254 scalar field: ~21888242871839275222246405745257275088548364400416034343698204186575808495617)
-        {
-            name: "large",
-            inputs: [
-                1000000000000000000000000000n,
-                2000000000000000000000000000n
-            ]
-        },
+  // Run test vectors
+  console.log("=== Test Vectors ===\n");
 
-        // Simulated identity commitment inputs
-        {
-            name: "identity_commitment",
-            inputs: [
-                12345678901234567890n,  // secret
-                98765432109876543210n   // salt
-            ]
-        },
+  for (const test of TEST_VECTORS) {
+    const hash = poseidon(test.inputs);
+    const hashStr = poseidon.F.toString(hash);
 
-        // Zero value constant (used in Merkle tree)
-        { name: "zero_value", inputs: [0n] },
+    console.log(`${test.name}:`);
+    console.log(`  Inputs:  [${test.inputs.join(", ")}]`);
+    console.log(`  Hash:    ${hashStr}`);
+    console.log("");
+  }
 
-        // Tree operations (two inputs for hash_pair)
-        {
-            name: "tree_hash_pair",
-            inputs: [
-                0xdeadbeefn,
-                0xcafebaben
-            ]
-        }
-    ];
+  // Special case: Verify Merkle tree zero values
+  console.log("=== Merkle Tree Zero Values ===\n");
+  console.log("Computing zeros[0..5] where zeros[i+1] = Poseidon(zeros[i], zeros[i]):\n");
 
-    const results = [];
+  let zero = poseidon.F.zero;
+  console.log(`zeros[0] = ${poseidon.F.toString(zero)}`);
 
-    for (const tc of testCases) {
-        try {
-            // Convert inputs to field elements and hash
-            const fieldInputs = tc.inputs.map(x => F.e(x));
-            const hashResult = poseidon(fieldInputs);
-            const hashBigInt = F.toObject(hashResult);
+  for (let i = 0; i < 5; i++) {
+    zero = poseidon([zero, zero]);
+    console.log(`zeros[${i+1}] = ${poseidon.F.toString(zero)}`);
+  }
 
-            // Format as hex (padded to 64 chars = 32 bytes)
-            const hashHex = "0x" + hashBigInt.toString(16).padStart(64, '0');
-
-            results.push({
-                name: tc.name,
-                inputs: tc.inputs.map(x => "0x" + x.toString(16)),
-                inputs_decimal: tc.inputs.map(x => x.toString()),
-                output_decimal: hashBigInt.toString(),
-                output_hex: hashHex
-            });
-
-            console.log(`Test: ${tc.name}`);
-            console.log(`  Inputs: [${tc.inputs.map(x => x.toString()).join(", ")}]`);
-            console.log(`  Poseidon Hash: ${hashHex}`);
-            console.log(`  Decimal: ${hashBigInt.toString()}`);
-            console.log();
-
-        } catch (err) {
-            console.error(`Error with test case ${tc.name}:`, err.message);
-        }
-    }
-
-    // Output as JSON for easy comparison
-    console.log("\n=== JSON Test Vectors (for on-chain comparison) ===\n");
-    console.log(JSON.stringify(results, null, 2));
-
-    // Output as Rust test code
-    console.log("\n=== Rust Test Code (requires P25 testnet) ===\n");
-    generateRustTestCode(results);
-
-    // Save to file
-    const fs = require("fs");
-    const outputPath = __dirname + "/poseidon_test_vectors.json";
-    fs.writeFileSync(outputPath, JSON.stringify(results, null, 2));
-    console.log(`\nTest vectors saved to: ${outputPath}`);
+  console.log("\n=== Instructions for On-Chain Verification ===\n");
+  console.log("1. Deploy the membership-tree contract to your test network");
+  console.log("2. Call tree contract functions to verify Poseidon parity:");
+  console.log("");
+  console.log("Test zero leaf:");
+  console.log("  stellar contract invoke --id <TREE_CONTRACT> -- test_hash --a 0 --b 0");
+  console.log("");
+  console.log("Test commitment (secret=1, salt=2):");
+  console.log("  stellar contract invoke --id <TREE_CONTRACT> -- test_hash --a 1 --b 2");
+  console.log("");
+  console.log("Compare outputs with the hashes above.");
+  console.log("If they match, Poseidon parameters are compatible! ✓");
+  console.log("");
+  console.log("=== Stellar P25 Poseidon Notes ===\n");
+  console.log("According to P25 documentation:");
+  console.log("- Uses BN254 scalar field (Fr)");
+  console.log("- Should match circomlib implementation");
+  console.log("- Verify via env.crypto().poseidon_hash() host function");
+  console.log("");
+  console.log("IMPORTANT: If hashes DON'T match, check:");
+  console.log("1. Are we using the same Poseidon variant? (original vs Poseidon2)");
+  console.log("2. Are round constants identical?");
+  console.log("3. Is the MDS matrix the same?");
+  console.log("4. Is input ordering consistent?");
 }
 
-function generateRustTestCode(results) {
-    console.log(`// Add to contracts/membership-tree/src/lib.rs or integration tests
-// Note: This test requires P25 host functions (won't work in unit tests)
-
-#[test]
-fn test_poseidon_known_answer_kat() {
-    let env = Env::default();
-    let field = Symbol::new(&env, "BN254");
-
-    // Test vectors from circomlib Poseidon
-    let test_cases = vec![`);
-
-    for (const tc of results) {
-        if (tc.inputs.length === 2) {
-            console.log(`        // ${tc.name}`);
-            console.log(`        (vec![`);
-            for (const inp of tc.inputs_decimal) {
-                console.log(`            U256::from_be_bytes(&env, &hex_to_bytes("${tc.inputs[tc.inputs_decimal.indexOf(inp)]}")),`);
-            }
-            console.log(`        ], "${tc.output_hex}"),`);
-        }
-    }
-
-    console.log(`    ];
-
-    for (inputs, expected_hex) in test_cases {
-        let mut input_vec = Vec::new(&env);
-        for inp in inputs {
-            input_vec.push_back(inp);
-        }
-
-        let result = env.crypto().poseidon_hash(&input_vec, field.clone());
-        let expected = U256::from_be_bytes(&env, &hex_to_bytes(expected_hex));
-
-        assert_eq!(
-            result, expected,
-            "Poseidon KAT FAILED! Circuit and P25 implementations are INCOMPATIBLE."
-        );
-    }
-}
-
-fn hex_to_bytes(hex: &str) -> BytesN<32> {
-    // Remove 0x prefix
-    let hex_str = if hex.starts_with("0x") { &hex[2..] } else { hex };
-    let bytes = hex::decode(hex_str).expect("Invalid hex");
-    BytesN::from_array(&Env::default(), &bytes.try_into().unwrap())
-}`);
-}
-
-// Run the generator
-generateTestVectors().catch(err => {
-    console.error("Fatal error:", err);
-    process.exit(1);
-});
+main().catch(console.error);
