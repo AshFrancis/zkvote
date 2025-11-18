@@ -131,6 +131,30 @@ fn test_init_tree_invalid_depth() {
 }
 
 #[test]
+#[should_panic(expected = "invalid depth")]
+fn test_init_tree_depth_exceeds_max_fails() {
+    let (env, tree_id, _, registry_id, admin) = setup_env();
+    let client = MembershipTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+
+    registry_client.set_admin(&1u64, &admin);
+    // Depth 21 exceeds MAX_TREE_DEPTH of 20
+    client.init_tree(&1u64, &21u32, &admin);
+}
+
+#[test]
+#[should_panic(expected = "invalid depth")]
+fn test_init_tree_depth_extremely_large_fails() {
+    let (env, tree_id, _, registry_id, admin) = setup_env();
+    let client = MembershipTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+
+    registry_client.set_admin(&1u64, &admin);
+    // Depth 32 far exceeds MAX_TREE_DEPTH
+    client.init_tree(&1u64, &32u32, &admin);
+}
+
+#[test]
 #[should_panic(expected = "not admin")]
 fn test_init_tree_non_admin_fails() {
     let (env, tree_id, _, registry_id, admin) = setup_env();

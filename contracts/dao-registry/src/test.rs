@@ -150,3 +150,54 @@ fn test_dao_count_consistency() {
     client.create_dao(&String::from_str(&env, "DAO 3"), &admin);
     assert_eq!(client.dao_count(), 3);
 }
+
+#[test]
+fn test_create_dao_max_name_length_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(DaoRegistry, ());
+    let client = DaoRegistryClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    // Create name exactly 256 chars (MAX_DAO_NAME_LEN)
+    let max_name = "a".repeat(256);
+
+    let dao_id = client.create_dao(&String::from_str(&env, &max_name), &admin);
+    assert_eq!(dao_id, 1);
+
+    let info = client.get_dao(&dao_id);
+    assert_eq!(info.name.len(), 256);
+}
+
+#[test]
+#[should_panic(expected = "DAO name too long")]
+fn test_create_dao_name_too_long_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(DaoRegistry, ());
+    let client = DaoRegistryClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    // Create name > 256 chars (MAX_DAO_NAME_LEN)
+    let long_name = "a".repeat(257);
+
+    client.create_dao(&String::from_str(&env, &long_name), &admin);
+}
+
+#[test]
+#[should_panic(expected = "DAO name too long")]
+fn test_create_dao_name_extremely_long_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(DaoRegistry, ());
+    let client = DaoRegistryClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    // Create name much larger than limit (5KB)
+    let extreme_name = "a".repeat(5000);
+
+    client.create_dao(&String::from_str(&env, &extreme_name), &admin);
+}
