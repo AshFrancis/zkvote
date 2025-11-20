@@ -2,8 +2,6 @@
 
 **Version:** 1.0.0 (Multi-Tenant Architecture with Real Groth16 Verification)
 
-**Authors:** Ash + ChatGPT + Claude
-
 **Last updated:** 17 Nov 2025 (Europe/London)
 
 ---
