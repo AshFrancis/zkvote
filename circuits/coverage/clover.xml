@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1763481454347" clover="3.2.0">
+  <project timestamp="1763481454347" name="All files">
+    <metrics statements="17" coveredstatements="17" conditionals="0" coveredconditionals="0" methods="7" coveredmethods="7" elements="24" coveredelements="24" complexity="0" loc="17" ncloc="17" packages="1" files="1" classes="1"/>
+    <file name="conversion-utils.js" path="/Users/ash/code/daovote/circuits/conversion-utils.js">
+      <metrics statements="17" coveredstatements="17" conditionals="0" coveredconditionals="0" methods="7" coveredmethods="7"/>
+      <line num="12" count="356" type="stmt"/>
+      <line num="14" count="356" type="stmt"/>
+      <line num="15" count="356" type="stmt"/>
+      <line num="27" count="88" type="stmt"/>
+      <line num="28" count="88" type="stmt"/>
+      <line num="29" count="88" type="stmt"/>
+      <line num="45" count="43" type="stmt"/>
+      <line num="46" count="43" type="stmt"/>
+      <line num="47" count="43" type="stmt"/>
+      <line num="48" count="43" type="stmt"/>
+      <line num="50" count="43" type="stmt"/>
+      <line num="60" count="9" type="stmt"/>
+      <line num="75" count="57" type="stmt"/>
+      <line num="77" count="10" type="stmt"/>
+      <line num="94" count="8" type="stmt"/>
+      <line num="95" count="8" type="stmt"/>
+      <line num="98" count="2" type="stmt"/>
+    </file>
+  </project>
+</coverage>

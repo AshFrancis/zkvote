@@ -1,0 +1,169 @@
+// ZK Proof generation utilities using snarkjs
+
+import { groth16 } from "snarkjs";
+import type { Groth16Proof } from "snarkjs";
+
+export interface ProofInput {
+  secret: string;
+  salt: string;
+  root: string;
+  nullifier: string;
+  daoId: string;
+  proposalId: string;
+  voteChoice: string; // "0" for no, "1" for yes
+  pathElements: string[];
+  pathIndices: number[];
+}
+
+export interface GeneratedProof {
+  proof: Groth16Proof;
+  publicSignals: string[];
+}
+
+/**
+ * Generate a Groth16 proof for anonymous voting
+ * @param input Proof input parameters
+ * @param wasmPath Path to compiled circuit WASM
+ * @param zkeyPath Path to proving key
+ * @returns Generated proof and public signals
+ */
+export async function generateVoteProof(
+  input: ProofInput,
+  wasmPath: string,
+  zkeyPath: string
+): Promise<GeneratedProof> {
+  try {
+    // Format input for circuit - matches vote.circom signal names
+    const circuitInput = {
+      // Public signals
+      root: input.root,
+      nullifier: input.nullifier,
+      daoId: input.daoId,
+      proposalId: input.proposalId,
+      voteChoice: input.voteChoice,
+      // Private signals
+      secret: input.secret,
+      salt: input.salt,
+      pathElements: input.pathElements,
+      pathIndices: input.pathIndices,
+    };
+
+    console.log("Circuit input:", circuitInput);
+
+    // Generate proof using snarkjs
+    const { proof, publicSignals } = await groth16.fullProve(
+      circuitInput,
+      wasmPath,
+      zkeyPath
+    );
+
+    return { proof, publicSignals };
+  } catch (error) {
+    console.error("Failed to generate proof:", error);
+    throw new Error(`Proof generation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+  }
+}
+
+/**
+ * Convert snarkjs proof format to Soroban-compatible hex strings
+ * Uses little-endian byte order for BN254 field elements
+ */
+export function formatProofForSoroban(proof: Groth16Proof): {
+  proof_a: string;
+  proof_b: string;
+  proof_c: string;
+} {
+  // Convert field element to little-endian hex
+  const toHexLE = (value: string): string => {
+    const bigInt = BigInt(value);
+    const hex = bigInt.toString(16).padStart(64, "0");
+    // Convert to little-endian by reversing byte pairs
+    return hex.match(/.{2}/g)!.reverse().join("");
+  };
+
+  // Format pi_a (G1 point): [x, y]
+  const proof_a = toHexLE(proof.pi_a[0]) + toHexLE(proof.pi_a[1]);
+
+  // Format pi_b (G2 point): [[x1, x2], [y1, y2]]
+  const proof_b =
+    toHexLE(proof.pi_b[0][0]) +
+    toHexLE(proof.pi_b[0][1]) +
+    toHexLE(proof.pi_b[1][0]) +
+    toHexLE(proof.pi_b[1][1]);
+
+  // Format pi_c (G1 point): [x, y]
+  const proof_c = toHexLE(proof.pi_c[0]) + toHexLE(proof.pi_c[1]);
+
+  return { proof_a, proof_b, proof_c };
+}
+
+/**
+ * Generate a random secret for commitment
+ */
+export function generateSecret(): string {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  let result = BigInt(0);
+  for (let i = 0; i < array.length; i++) {
+    result = (result << BigInt(8)) | BigInt(array[i]);
+  }
+  return result.toString();
+}
+
+/**
+ * Calculate nullifier using Poseidon hash
+ * nullifier = Poseidon(secret, daoId, proposalId)
+ */
+export async function calculateNullifier(
+  secret: string,
+  daoId: string,
+  proposalId: string
+): Promise<string> {
+  const { buildPoseidon } = await import("circomlibjs");
+  const poseidon = await buildPoseidon();
+
+  const hash = poseidon.F.toString(
+    poseidon([BigInt(secret), BigInt(daoId), BigInt(proposalId)])
+  );
+
+  return hash;
+}
+
+/**
+ * Calculate commitment from secret and salt using Poseidon hash
+ * commitment = Poseidon(secret, salt)
+ */
+export async function calculateCommitment(
+  secret: string,
+  salt: string
+): Promise<string> {
+  const { buildPoseidon } = await import("circomlibjs");
+  const poseidon = await buildPoseidon();
+
+  const hash = poseidon.F.toString(
+    poseidon([BigInt(secret), BigInt(salt)])
+  );
+
+  return hash;
+}
+
+/**
+ * Verify a proof locally before submitting
+ * @param proof Generated proof
+ * @param publicSignals Public signals
+ * @param vkeyPath Path to verification key JSON
+ */
+export async function verifyProofLocally(
+  proof: Groth16Proof,
+  publicSignals: string[],
+  vkeyPath: string
+): Promise<boolean> {
+  try {
+    const vkey = await fetch(vkeyPath).then((r) => r.json());
+    const result = await groth16.verify(vkey, publicSignals, proof);
+    return result;
+  } catch (error) {
+    console.error("Local verification failed:", error);
+    return false;
+  }
+}

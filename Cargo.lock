@@ -360,6 +360,7 @@ name = "daovote-integration-tests"
 version = "0.1.0"
 dependencies = [
  "dao-registry",
+ "hex",
  "membership-sbt",
  "membership-tree",
  "soroban-sdk",

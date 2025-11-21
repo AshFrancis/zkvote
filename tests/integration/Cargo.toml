@@ -11,6 +11,7 @@ doctest = false
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+hex = "0.4"
 
 # Import all contract crates with testutils enabled
 dao_registry = { path = "../../contracts/dao-registry", package = "dao-registry", features = ["testutils"] }

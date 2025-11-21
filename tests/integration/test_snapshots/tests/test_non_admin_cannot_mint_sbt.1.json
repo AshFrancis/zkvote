@@ -23,6 +23,9 @@
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                },
+                {
+                  "bool": false
                 }
               ]
             }
@@ -102,6 +105,14 @@
                       },
                       "val": {
                         "u64": "1"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "membership_open"
+                      },
+                      "val": {
+                        "bool": false
                       }
                     },
                     {

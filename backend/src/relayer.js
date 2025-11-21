@@ -84,7 +84,7 @@ try {
 }
 
 // Soroban RPC client
-const server = new StellarSdk.SorobanRpc.Server(RPC_URL);
+const server = new StellarSdk.rpc.Server(RPC_URL, { allowHttp: true });
 
 // Health check (no rate limit)
 app.get('/health', (req, res) => {

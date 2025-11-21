@@ -84,20 +84,17 @@ impl MembershipTree {
             .persistent()
             .set(&DataKey::NextLeafIndex(dao_id), &0u32);
 
-        // Initialize filled subtrees with zeros
-        let zero = Self::zero_value(&env);
+        // Initialize filled subtrees with zeros (use cached zeros for O(1) lookup)
         let mut filled = Vec::new(&env);
-        let mut current_zero = zero;
-        for _ in 0..depth {
-            filled.push_back(current_zero.clone());
-            current_zero = Self::hash_pair(&env, &current_zero, &current_zero);
+        for level in 0..depth {
+            filled.push_back(Self::zero_at_level(&env, level));
         }
         env.storage()
             .persistent()
             .set(&DataKey::FilledSubtrees(dao_id), &filled);
 
-        // Initialize root history with empty tree root
-        let empty_root = current_zero;
+        // Initialize root history with empty tree root (cached zero at depth level)
+        let empty_root = Self::zero_at_level(&env, depth);
         let mut roots = Vec::new(&env);
         roots.push_back(empty_root.clone());
         env.storage()
@@ -108,6 +105,99 @@ impl MembershipTree {
             dao_id,
             depth,
             empty_root,
+        }
+        .publish(&env);
+    }
+
+    /// Initialize tree from registry during DAO initialization
+    /// This function is called by the registry contract during create_and_init_dao
+    /// to avoid re-entrancy issues. The registry is a trusted system contract.
+    pub fn init_tree_from_registry(env: Env, dao_id: u64, depth: u32) {
+        if depth == 0 || depth > MAX_TREE_DEPTH {
+            panic!("invalid depth");
+        }
+
+        let depth_key = DataKey::TreeDepth(dao_id);
+        if env.storage().persistent().has(&depth_key) {
+            panic!("tree already initialized");
+        }
+
+        // Store tree parameters
+        env.storage().persistent().set(&depth_key, &depth);
+        env.storage()
+            .persistent()
+            .set(&DataKey::NextLeafIndex(dao_id), &0u32);
+
+        // Initialize filled subtrees with zeros (use cached zeros for O(1) lookup)
+        let mut filled = Vec::new(&env);
+        for level in 0..depth {
+            filled.push_back(Self::zero_at_level(&env, level));
+        }
+        env.storage()
+            .persistent()
+            .set(&DataKey::FilledSubtrees(dao_id), &filled);
+
+        // Initialize root history with empty tree root (cached zero at depth level)
+        let empty_root = Self::zero_at_level(&env, depth);
+        let mut roots = Vec::new(&env);
+        roots.push_back(empty_root.clone());
+        env.storage()
+            .persistent()
+            .set(&DataKey::Roots(dao_id), &roots);
+
+        TreeInitEvent {
+            dao_id,
+            depth,
+            empty_root,
+        }
+        .publish(&env);
+    }
+
+    /// Register a commitment from registry during DAO initialization
+    /// This function is called by the registry contract during create_and_init_dao
+    /// to automatically register the creator's commitment.
+    /// The registry is trusted to have already verified SBT ownership.
+    pub fn register_from_registry(env: Env, dao_id: u64, commitment: U256) {
+        // Check tree is initialized
+        let depth_key = DataKey::TreeDepth(dao_id);
+        if !env.storage().persistent().has(&depth_key) {
+            panic!("tree not initialized");
+        }
+
+        // Check commitment not already registered
+        let leaf_key = DataKey::LeafIndex(dao_id, commitment.clone());
+        if env.storage().persistent().has(&leaf_key) {
+            panic!("commitment already registered");
+        }
+
+        // Get tree parameters
+        let depth: u32 = env.storage().persistent().get(&depth_key).unwrap();
+        let next_index: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::NextLeafIndex(dao_id))
+            .unwrap();
+
+        if next_index >= (1u32 << depth) {
+            panic!("tree is full");
+        }
+
+        // Insert leaf into tree
+        let new_root = Self::insert_leaf(&env, dao_id, commitment.clone(), next_index, depth);
+
+        // Update next index
+        env.storage()
+            .persistent()
+            .set(&DataKey::NextLeafIndex(dao_id), &(next_index + 1));
+
+        // Store leaf index for this commitment
+        env.storage().persistent().set(&leaf_key, &next_index);
+
+        CommitEvent {
+            dao_id,
+            commitment,
+            index: next_index,
+            new_root,
         }
         .publish(&env);
     }
@@ -233,6 +323,12 @@ impl MembershipTree {
         env.storage().instance().get(&SBT_CONTRACT).unwrap()
     }
 
+    /// Pre-initialize the zeros cache to avoid budget issues during first tree operations.
+    /// This should be called once during deployment to precompute zero values for all levels.
+    pub fn init_zeros_cache(env: Env) {
+        Self::ensure_zeros_cache(&env);
+    }
+
     // Internal: Insert leaf and update tree
     fn insert_leaf(env: &Env, dao_id: u64, leaf: U256, index: u32, depth: u32) -> U256 {
         let mut filled: Vec<U256> = env
@@ -329,18 +425,22 @@ impl MembershipTree {
         let zeros: Vec<U256> = env.storage().instance().get(&ZEROS_CACHE).unwrap();
         zeros.get(level).unwrap()
     }
+}
 
+// Test-only functions in separate contractimpl block
+// This prevents the macro from generating references to these functions in production builds
+#[cfg(any(test, feature = "testutils"))]
+#[contractimpl]
+impl MembershipTree {
     /// Test helper: Expose Poseidon hash for KAT verification
     /// This function is used to verify that Stellar P25's Poseidon implementation
     /// matches circomlib's parameters. Compare results with circuits/utils/poseidon_kat.js
-    /// WARNING: For testing only - remove before mainnet deployment
     pub fn test_poseidon_hash(env: Env, a: U256, b: U256) -> U256 {
         Self::hash_pair(&env, &a, &b)
     }
 
     /// Test helper: Get zero value at specific tree level
     /// Used to verify Merkle tree zero values match between on-chain and circuit
-    /// WARNING: For testing only - remove before mainnet deployment
     pub fn test_zero_at_level(env: Env, level: u32) -> U256 {
         Self::zero_at_level(&env, level)
     }

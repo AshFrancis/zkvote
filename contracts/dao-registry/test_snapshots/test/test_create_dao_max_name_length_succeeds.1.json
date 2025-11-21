@@ -20,6 +20,9 @@
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                },
+                {
+                  "bool": false
                 }
               ]
             }
@@ -99,6 +102,14 @@
                       },
                       "val": {
                         "u64": "1"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "membership_open"
+                      },
+                      "val": {
+                        "bool": false
                       }
                     },
                     {

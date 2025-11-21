@@ -20,6 +20,9 @@
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                },
+                {
+                  "bool": false
                 }
               ]
             }
@@ -42,6 +45,9 @@
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
+                  "bool": true
                 }
               ]
             }
@@ -64,6 +70,9 @@
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                },
+                {
+                  "bool": false
                 }
               ]
             }
@@ -150,6 +159,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "membership_open"
+                      },
+                      "val": {
+                        "bool": false
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "name"
                       },
                       "val": {
@@ -228,6 +245,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "membership_open"
+                      },
+                      "val": {
+                        "bool": true
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "name"
                       },
                       "val": {
@@ -302,6 +327,14 @@
                       },
                       "val": {
                         "u64": "3"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "membership_open"
+                      },
+                      "val": {
+                        "bool": false
                       }
                     },
                     {
