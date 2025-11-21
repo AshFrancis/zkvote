@@ -145,7 +145,7 @@ mod tests {
         let dao_name = String::from_str(&system.env, "Test DAO");
 
         // Create DAO in registry
-        let dao_id = system.registry_client().create_dao(&dao_name, &admin);
+        let dao_id = system.registry_client().create_dao(&dao_name, &admin, &false);
         assert_eq!(dao_id, 1);
 
         // Verify DAO exists and admin is correct
@@ -167,11 +167,11 @@ mod tests {
         // Create DAO
         let dao_id = system
             .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin);
+            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
 
         // Admin mints SBT to member
         // This verifies admin through registry cross-contract call
-        system.sbt_client().mint(&dao_id, &member, &admin);
+        system.sbt_client().mint(&dao_id, &member, &admin, &None);
 
         // Verify membership
         assert!(system.sbt_client().has(&dao_id, &member));
@@ -188,13 +188,13 @@ mod tests {
         // Create DAO
         let dao_id = system
             .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin);
+            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
 
         // Initialize tree
         system.tree_client().init_tree(&dao_id, &5, &admin);
 
         // Mint SBT to member
-        system.sbt_client().mint(&dao_id, &member, &admin);
+        system.sbt_client().mint(&dao_id, &member, &admin, &None);
 
         // Member registers identity commitment
         // This verifies SBT ownership through cross-contract call
@@ -218,13 +218,13 @@ mod tests {
         // Setup DAO
         let dao_id = system
             .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin);
+            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
 
         // Initialize tree (required for proposal creation to snapshot root)
         system.tree_client().init_tree(&dao_id, &5, &admin);
 
         // Member needs SBT to create proposal
-        system.sbt_client().mint(&dao_id, &member, &admin);
+        system.sbt_client().mint(&dao_id, &member, &admin, &None);
 
         // Create verification key for proposals
         let vk = system.create_test_vk();
@@ -261,14 +261,14 @@ mod tests {
         // 1. Create DAO
         let dao_id = system
             .registry_client()
-            .create_dao(&String::from_str(&system.env, "Voting DAO"), &admin);
+            .create_dao(&String::from_str(&system.env, "Voting DAO"), &admin, &false);
 
         // 2. Initialize tree
         system.tree_client().init_tree(&dao_id, &5, &admin);
 
         // 3. Mint SBTs to members
-        system.sbt_client().mint(&dao_id, &member1, &admin);
-        system.sbt_client().mint(&dao_id, &member2, &admin);
+        system.sbt_client().mint(&dao_id, &member1, &admin, &None);
+        system.sbt_client().mint(&dao_id, &member2, &admin, &None);
 
         // 4. Members register identity commitments
         let commitment1 = U256::from_u32(&system.env, 11111);
@@ -342,10 +342,10 @@ mod tests {
         // Create DAO with specific admin
         let dao_id = system
             .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin);
+            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
 
         // Non-admin tries to mint SBT - should fail
-        system.sbt_client().mint(&dao_id, &member, &non_admin);
+        system.sbt_client().mint(&dao_id, &member, &non_admin, &None);
     }
 
     #[test]
@@ -358,7 +358,7 @@ mod tests {
 
         let dao_id = system
             .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin);
+            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
 
@@ -379,7 +379,7 @@ mod tests {
 
         let dao_id = system
             .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin);
+            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
 
         let vk = system.create_test_vk();
         system
@@ -406,10 +406,10 @@ mod tests {
 
         let dao_id = system
             .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin);
+            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
-        system.sbt_client().mint(&dao_id, &member, &admin);
+        system.sbt_client().mint(&dao_id, &member, &admin, &None);
 
         let commitment = U256::from_u32(&system.env, 12345);
         system
@@ -466,18 +466,18 @@ mod tests {
         // Create two separate DAOs
         let dao1 = system
             .registry_client()
-            .create_dao(&String::from_str(&system.env, "DAO 1"), &admin1);
+            .create_dao(&String::from_str(&system.env, "DAO 1"), &admin1, &false);
         let dao2 = system
             .registry_client()
-            .create_dao(&String::from_str(&system.env, "DAO 2"), &admin2);
+            .create_dao(&String::from_str(&system.env, "DAO 2"), &admin2, &false);
 
         // Initialize trees
         system.tree_client().init_tree(&dao1, &5, &admin1);
         system.tree_client().init_tree(&dao2, &5, &admin2);
 
         // Mint SBTs (each admin to their own DAO)
-        system.sbt_client().mint(&dao1, &member1, &admin1);
-        system.sbt_client().mint(&dao2, &member2, &admin2);
+        system.sbt_client().mint(&dao1, &member1, &admin1, &None);
+        system.sbt_client().mint(&dao2, &member2, &admin2, &None);
 
         // Verify isolation
         assert!(system.sbt_client().has(&dao1, &member1));
@@ -515,14 +515,14 @@ mod tests {
 
         let dao_id = system
             .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin1);
+            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin1, &false);
 
         // Transfer admin rights
         system.registry_client().transfer_admin(&dao_id, &admin2);
 
         // Old admin can no longer mint
         // New admin can mint
-        system.sbt_client().mint(&dao_id, &member, &admin2);
+        system.sbt_client().mint(&dao_id, &member, &admin2, &None);
         assert!(system.sbt_client().has(&dao_id, &member));
     }
 
@@ -536,11 +536,11 @@ mod tests {
 
         let dao_id = system
             .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin);
+            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
-        system.sbt_client().mint(&dao_id, &member1, &admin);
-        system.sbt_client().mint(&dao_id, &member2, &admin);
+        system.sbt_client().mint(&dao_id, &member1, &admin, &None);
+        system.sbt_client().mint(&dao_id, &member2, &admin, &None);
 
         // Only Member 1 registers before proposal creation
         let commitment1 = U256::from_u32(&system.env, 11111);
@@ -608,11 +608,11 @@ mod tests {
 
         let dao_id = system
             .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin);
+            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
-        system.sbt_client().mint(&dao_id, &member1, &admin);
-        system.sbt_client().mint(&dao_id, &member2, &admin);
+        system.sbt_client().mint(&dao_id, &member1, &admin, &None);
+        system.sbt_client().mint(&dao_id, &member2, &admin, &None);
 
         // Only Member 1 registers before proposal
         let commitment1 = U256::from_u32(&system.env, 11111);
