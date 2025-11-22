@@ -466,13 +466,14 @@ impl MembershipTree {
             .get(&DataKey::TreeDepth(dao_id))
             .unwrap();
 
-        // Zero the leaf and recompute root
+        // CRITICAL FIX: Update leaf value to zero BEFORE recomputing root
+        // Otherwise update_leaf reads the old value from storage and root doesn't change
         let zero = Self::zero_value(&env);
-        let new_root = Self::update_leaf(&env, dao_id, leaf_index, zero.clone(), depth);
-
-        // Update leaf value to zero
         let leaf_value_key = DataKey::LeafValue(dao_id, leaf_index);
         env.storage().persistent().set(&leaf_value_key, &zero);
+
+        // Now recompute root with the zeroed leaf
+        let new_root = Self::update_leaf(&env, dao_id, leaf_index, zero.clone(), depth);
 
         RemovalEvent {
             dao_id,

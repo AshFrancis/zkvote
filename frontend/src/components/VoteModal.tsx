@@ -138,6 +138,16 @@ export default function VoteModal({
         pathIndices,
       };
 
+      console.log("=== PROOF INPUT DEBUG ===");
+      console.log("Root (eligible_root):", root.toString());
+      console.log("Commitment:", "Poseidon(secret, salt)");
+      console.log("Secret:", secret);
+      console.log("Salt:", salt);
+      console.log("LeafIndex:", leafIndex);
+      console.log("Path elements:", pathElements);
+      console.log("Full proof input:", proofInput);
+      console.log("========================");
+
       const { proof } = await generateVoteProof(
         proofInput,
         wasmPath,
