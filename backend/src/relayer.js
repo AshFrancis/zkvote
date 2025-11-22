@@ -173,16 +173,46 @@ app.post('/vote', voteLimiter, async (req, res) => {
     console.log('Simulating transaction...');
     const simResult = await server.simulateTransaction(tx);
 
-    if (StellarSdk.SorobanRpc.Api.isSimulationError(simResult)) {
-      console.error('Simulation failed:', simResult.error);
+    if (!StellarSdk.rpc.Api.isSimulationSuccess(simResult)) {
+      console.error('Simulation failed:', simResult);
+
+      // Extract user-friendly error message from contract panic
+      let errorMessage = 'Transaction simulation failed';
+
+      // Check for contract error in simulation result
+      if (simResult.error) {
+        const errorStr = JSON.stringify(simResult.error);
+
+        // Common contract errors
+        if (errorStr.includes('already voted')) {
+          errorMessage = 'You have already voted on this proposal';
+        } else if (errorStr.includes('voting period closed')) {
+          errorMessage = 'Voting period has ended';
+        } else if (errorStr.includes('invalid proof')) {
+          errorMessage = 'Invalid vote proof';
+        } else if (errorStr.includes('root must match')) {
+          errorMessage = 'You are not eligible to vote on this proposal';
+        } else if (errorStr.includes('proposal not found')) {
+          errorMessage = 'Proposal not found';
+        } else if (errorStr.includes('UnreachableCodeReached')) {
+          errorMessage = 'Invalid proof or contract error (proof verification failed)';
+        } else {
+          // Try to extract any panic message
+          const panicMatch = errorStr.match(/Error\(Contract, #\d+\)/);
+          if (panicMatch) {
+            errorMessage = 'Contract error: ' + panicMatch[0];
+          }
+        }
+      }
+
       return res.status(400).json({
-        error: 'Transaction simulation failed',
-        details: simResult.error
+        error: errorMessage,
+        details: simResult.error || simResult
       });
     }
 
     // Prepare and sign
-    const preparedTx = StellarSdk.SorobanRpc.assembleTransaction(tx, simResult).build();
+    const preparedTx = StellarSdk.rpc.assembleTransaction(tx, simResult).build();
     preparedTx.sign(relayerKeypair);
 
     // Submit
@@ -249,7 +279,7 @@ app.get('/proposal/:daoId/:proposalId', queryLimiter, async (req, res) => {
 
     const simResult = await server.simulateTransaction(tx);
 
-    if (StellarSdk.SorobanRpc.Api.isSimulationSuccess(simResult)) {
+    if (StellarSdk.rpc.Api.isSimulationSuccess(simResult)) {
       const result = simResult.result?.retval;
       if (result) {
         const [yesVotes, noVotes] = StellarSdk.scValToNative(result);
@@ -286,7 +316,7 @@ app.get('/root/:daoId', queryLimiter, async (req, res) => {
 
     const simResult = await server.simulateTransaction(tx);
 
-    if (StellarSdk.SorobanRpc.Api.isSimulationSuccess(simResult)) {
+    if (StellarSdk.rpc.Api.isSimulationSuccess(simResult)) {
       const result = simResult.result?.retval;
       if (result) {
         const rootHex = scValToU256Hex(result);

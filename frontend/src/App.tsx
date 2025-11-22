@@ -12,7 +12,7 @@ import { initializeContractClients } from "./lib/contracts";
 import { getReadOnlyDaoRegistry } from "./lib/readOnlyContracts";
 import verificationKey from "./lib/verification_key_soroban_le.json";
 import { CONTRACTS } from "./config/contracts";
-import { generateZKCredentials, storeZKCredentials } from "./lib/zk";
+// ZK credentials will be generated deterministically after DAO creation
 
 // Component for DAO detail page
 function DAODetailPage({ publicKey, isConnected, isInitializing }: { publicKey: string | null; isConnected: boolean; isInitializing: boolean }) {
@@ -350,11 +350,11 @@ function App() {
       setError(null);
       setSuccess(null);
 
-      const clients = initializeContractClients(publicKey);
-
       if (!kit) {
-        throw new Error("Wallet kit not available");
+        throw new Error("Wallet kit not available. Please reconnect your wallet.");
       }
+
+      const clients = initializeContractClients(publicKey);
 
       // Helper function to retry transactions on TRY_AGAIN_LATER errors
       const sendWithRetry = async (tx: any, maxRetries = 3) => {
@@ -375,11 +375,6 @@ function App() {
         }
       };
 
-      // Generate ZK credentials for anonymous voting
-      console.log("Generating ZK credentials...");
-      const zkCredentials = await generateZKCredentials();
-      console.log("Generated commitment:", zkCredentials.commitment);
-
       // Convert hex strings to Buffers for VK
       const vk = {
         alpha: Buffer.from(verificationKey.alpha, 'hex'),
@@ -389,10 +384,11 @@ function App() {
         ic: verificationKey.ic.map((ic: string) => Buffer.from(ic, 'hex')),
       };
 
-      // Single transaction: Create and fully initialize DAO
-      console.log("Creating and initializing DAO in a single transaction...");
+      // Single transaction: Create and initialize DAO (without creator registration)
+      // Creator will register with deterministic credentials after creation
+      console.log("Creating and initializing DAO...");
 
-      const createAndInitTx = await clients.daoRegistry.create_and_init_dao(
+      const createAndInitTx = await clients.daoRegistry.create_and_init_dao_no_reg(
         {
           name: newDaoName,
           creator: publicKey,
@@ -400,8 +396,7 @@ function App() {
           sbt_contract: CONTRACTS.SBT_ID,
           tree_contract: CONTRACTS.TREE_ID,
           voting_contract: CONTRACTS.VOTING_ID,
-          tree_depth: 20,
-          creator_commitment: BigInt(zkCredentials.commitment),
+          tree_depth: 18,
           vk,
         },
         {
@@ -418,19 +413,16 @@ function App() {
       const newDaoId = Number(result.result);
       console.log(`DAO created and fully initialized with ID: ${newDaoId}`);
 
-      // Store ZK credentials for this DAO (leafIndex is 0 since creator is first registered member)
-      storeZKCredentials(newDaoId, publicKey, zkCredentials, 0);
-      console.log(`Stored ZK credentials for DAO ${newDaoId}`);
+      setSuccess(
+        `DAO "${newDaoName}" created! Click "Register for Voting" to set up your voting credentials.`
+      );
 
-      setSuccess(`DAO "${newDaoName}" created and fully initialized! DAO ID: ${newDaoId}. You can now vote anonymously!`);
       console.log(`DAO "${newDaoName}" (ID: ${newDaoId}) fully initialized!`);
       setNewDaoName("");
       setShowCreateForm(false);
 
-      // Navigate to the newly created DAO's page
-      setTimeout(() => {
-        navigate(`/daos/${newDaoId}`);
-      }, 1500); // Give user time to see success message
+      // Navigate to DAO page
+      navigate(`/daos/${newDaoId}`);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to create DAO";
       setError(errorMessage);
@@ -544,7 +536,7 @@ function App() {
                   <div className="flex gap-3">
                     <button
                       onClick={handleCreateDao}
-                      disabled={creating}
+                      disabled={creating || isInitializing || !kit}
                       className="flex-1 px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                     >
                       {creating && (
@@ -589,43 +581,6 @@ function App() {
             isInitializing={isInitializing}
           />
 
-          {/* Info Banner when not connected */}
-          {!isConnected && !isInitializing && (
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                Welcome to DaoVote
-              </h2>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
-                An anonymous voting system for DAOs built on Stellar using zero-knowledge proofs.
-              </p>
-              <ul className="space-y-3">
-                <li className="flex items-start">
-                  <span className="text-green-500 dark:text-green-400 mr-3 mt-0.5">✓</span>
-                  <span className="text-gray-700 dark:text-gray-300">
-                    <strong className="font-semibold">Anonymous voting</strong> - Vote without revealing your identity
-                  </span>
-                </li>
-                <li className="flex items-start">
-                  <span className="text-green-500 dark:text-green-400 mr-3 mt-0.5">✓</span>
-                  <span className="text-gray-700 dark:text-gray-300">
-                    <strong className="font-semibold">ZK proofs</strong> - Prove membership without revealing which member
-                  </span>
-                </li>
-                <li className="flex items-start">
-                  <span className="text-green-500 dark:text-green-400 mr-3 mt-0.5">✓</span>
-                  <span className="text-gray-700 dark:text-gray-300">
-                    <strong className="font-semibold">Soulbound tokens</strong> - Non-transferable membership NFTs
-                  </span>
-                </li>
-                <li className="flex items-start">
-                  <span className="text-green-500 dark:text-green-400 mr-3 mt-0.5">✓</span>
-                  <span className="text-gray-700 dark:text-gray-300">
-                    <strong className="font-semibold">Protocol 25</strong> - Native BN254 curve operations on Stellar
-                  </span>
-                </li>
-              </ul>
-            </div>
-          )}
           </div>
           } />
 

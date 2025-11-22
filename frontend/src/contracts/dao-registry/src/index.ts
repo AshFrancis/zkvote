@@ -31,7 +31,12 @@ if (typeof window !== 'undefined') {
 }
 
 
-
+export const networks = {
+  futurenet: {
+    networkPassphrase: "Test SDF Future Network ; October 2022",
+    contractId: "CB4H7LP33Y3FGBMJXCFBEGDE4URJVFECMP65V3AOI4J5EZAAFUPRDTF5",
+  }
+} as const
 
 
 export interface DaoInfo {
@@ -207,6 +212,33 @@ export interface Client {
   }) => Promise<AssembledTransaction<boolean>>
 
   /**
+   * Construct and simulate a create_and_init_dao_no_reg transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Create and initialize DAO without registering creator for voting.
+   * Creator must register separately using deterministic credentials.
+   * This calls:
+   * 1. create_dao (creates registry entry)
+   * 2. membership_sbt.mint (mints SBT to creator)
+   * 3. membership_tree.init_tree (initializes Merkle tree)
+   * 4. voting.set_vk (sets verification key)
+   */
+  create_and_init_dao_no_reg: ({name, creator, membership_open, sbt_contract, tree_contract, voting_contract, tree_depth, vk}: {name: string, creator: string, membership_open: boolean, sbt_contract: string, tree_contract: string, voting_contract: string, tree_depth: u32, vk: VerificationKey}, options?: {
+    /**
+     * The fee to pay for the transaction. Default: BASE_FEE
+     */
+    fee?: number;
+
+    /**
+     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
+     */
+    timeoutInSeconds?: number;
+
+    /**
+     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
+     */
+    simulate?: boolean;
+  }) => Promise<AssembledTransaction<u64>>
+
+  /**
    * Construct and simulate a create_and_init_dao transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Create and fully initialize a DAO in a single transaction.
    * This calls:
@@ -262,6 +294,7 @@ export class Client extends ContractClient {
         "AAAAAAAAACpUcmFuc2ZlciBhZG1pbiByaWdodHMgKGN1cnJlbnQgYWRtaW4gb25seSkAAAAAAA50cmFuc2Zlcl9hZG1pbgAAAAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAluZXdfYWRtaW4AAAAAAAATAAAAAA==",
         "AAAAAAAAACBHZXQgdG90YWwgbnVtYmVyIG9mIERBT3MgY3JlYXRlZAAAAAlkYW9fY291bnQAAAAAAAAAAAAAAQAAAAY=",
         "AAAAAAAAACJDaGVjayBpZiBhIERBTyBoYXMgb3BlbiBtZW1iZXJzaGlwAAAAAAASaXNfbWVtYmVyc2hpcF9vcGVuAAAAAAABAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAQ==",
+        "AAAAAAAAAURDcmVhdGUgYW5kIGluaXRpYWxpemUgREFPIHdpdGhvdXQgcmVnaXN0ZXJpbmcgY3JlYXRvciBmb3Igdm90aW5nLgpDcmVhdG9yIG11c3QgcmVnaXN0ZXIgc2VwYXJhdGVseSB1c2luZyBkZXRlcm1pbmlzdGljIGNyZWRlbnRpYWxzLgpUaGlzIGNhbGxzOgoxLiBjcmVhdGVfZGFvIChjcmVhdGVzIHJlZ2lzdHJ5IGVudHJ5KQoyLiBtZW1iZXJzaGlwX3NidC5taW50IChtaW50cyBTQlQgdG8gY3JlYXRvcikKMy4gbWVtYmVyc2hpcF90cmVlLmluaXRfdHJlZSAoaW5pdGlhbGl6ZXMgTWVya2xlIHRyZWUpCjQuIHZvdGluZy5zZXRfdmsgKHNldHMgdmVyaWZpY2F0aW9uIGtleSkAAAAaY3JlYXRlX2FuZF9pbml0X2Rhb19ub19yZWcAAAAAAAgAAAAAAAAABG5hbWUAAAAQAAAAAAAAAAdjcmVhdG9yAAAAABMAAAAAAAAAD21lbWJlcnNoaXBfb3BlbgAAAAABAAAAAAAAAAxzYnRfY29udHJhY3QAAAATAAAAAAAAAA10cmVlX2NvbnRyYWN0AAAAAAAAEwAAAAAAAAAPdm90aW5nX2NvbnRyYWN0AAAAABMAAAAAAAAACnRyZWVfZGVwdGgAAAAAAAQAAAAAAAAAAnZrAAAAAAfQAAAAD1ZlcmlmaWNhdGlvbktleQAAAAABAAAABg==",
         "AAAAAAAAAUZDcmVhdGUgYW5kIGZ1bGx5IGluaXRpYWxpemUgYSBEQU8gaW4gYSBzaW5nbGUgdHJhbnNhY3Rpb24uClRoaXMgY2FsbHM6CjEuIGNyZWF0ZV9kYW8gKGNyZWF0ZXMgcmVnaXN0cnkgZW50cnkpCjIuIG1lbWJlcnNoaXBfc2J0Lm1pbnQgKG1pbnRzIFNCVCB0byBjcmVhdG9yKQozLiBtZW1iZXJzaGlwX3RyZWUuaW5pdF90cmVlIChpbml0aWFsaXplcyBNZXJrbGUgdHJlZSkKNC4gbWVtYmVyc2hpcF90cmVlLnJlZ2lzdGVyX2Zyb21fcmVnaXN0cnkgKHJlZ2lzdGVycyBjcmVhdG9yJ3MgY29tbWl0bWVudCkKNS4gdm90aW5nLnNldF92ayAoc2V0cyB2ZXJpZmljYXRpb24ga2V5KQAAAAAAE2NyZWF0ZV9hbmRfaW5pdF9kYW8AAAAACQAAAAAAAAAEbmFtZQAAABAAAAAAAAAAB2NyZWF0b3IAAAAAEwAAAAAAAAAPbWVtYmVyc2hpcF9vcGVuAAAAAAEAAAAAAAAADHNidF9jb250cmFjdAAAABMAAAAAAAAADXRyZWVfY29udHJhY3QAAAAAAAATAAAAAAAAAA92b3RpbmdfY29udHJhY3QAAAAAEwAAAAAAAAAKdHJlZV9kZXB0aAAAAAAABAAAAAAAAAASY3JlYXRvcl9jb21taXRtZW50AAAAAAAMAAAAAAAAAAJ2awAAAAAH0AAAAA9WZXJpZmljYXRpb25LZXkAAAAAAQAAAAY=" ]),
       options
     )
@@ -274,6 +307,7 @@ export class Client extends ContractClient {
         transfer_admin: this.txFromJSON<null>,
         dao_count: this.txFromJSON<u64>,
         is_membership_open: this.txFromJSON<boolean>,
+        create_and_init_dao_no_reg: this.txFromJSON<u64>,
         create_and_init_dao: this.txFromJSON<u64>
   }
 }

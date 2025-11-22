@@ -31,9 +31,15 @@ if (typeof window !== 'undefined') {
 }
 
 
+export const networks = {
+  futurenet: {
+    networkPassphrase: "Test SDF Future Network ; October 2022",
+    contractId: "CAUD425RBSWFZVZUQIGIDEBZM6PNLX375M5K327MQFJGOMRBDYP3IOTZ",
+  }
+} as const
 
+export type DataKey = {tag: "TreeDepth", values: readonly [u64]} | {tag: "NextLeafIndex", values: readonly [u64]} | {tag: "FilledSubtrees", values: readonly [u64]} | {tag: "Roots", values: readonly [u64]} | {tag: "LeafIndex", values: readonly [u64, u256]} | {tag: "MemberLeafIndex", values: readonly [u64, string]} | {tag: "LeafValue", values: readonly [u64, u32]};
 
-export type DataKey = {tag: "TreeDepth", values: readonly [u64]} | {tag: "NextLeafIndex", values: readonly [u64]} | {tag: "FilledSubtrees", values: readonly [u64]} | {tag: "Roots", values: readonly [u64]} | {tag: "LeafIndex", values: readonly [u64, u256]};
 
 
 
@@ -90,7 +96,7 @@ export interface Client {
    * to automatically register the creator's commitment.
    * The registry is trusted to have already verified SBT ownership.
    */
-  register_from_registry: ({dao_id, commitment}: {dao_id: u64, commitment: u256}, options?: {
+  register_from_registry: ({dao_id, commitment, member}: {dao_id: u64, commitment: u256, member: string}, options?: {
     /**
      * The fee to pay for the transaction. Default: BASE_FEE
      */
@@ -234,6 +240,30 @@ export interface Client {
   }) => Promise<AssembledTransaction<readonly [u32, u32, u256]>>
 
   /**
+   * Construct and simulate a get_merkle_path transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Get Merkle path for a specific leaf index
+   * Returns (pathElements, pathIndices) where:
+   * - pathElements[i] is the sibling hash at level i
+   * - pathIndices[i] is 0 if leaf is left child, 1 if right child
+   */
+  get_merkle_path: ({dao_id, leaf_index}: {dao_id: u64, leaf_index: u32}, options?: {
+    /**
+     * The fee to pay for the transaction. Default: BASE_FEE
+     */
+    fee?: number;
+
+    /**
+     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
+     */
+    timeoutInSeconds?: number;
+
+    /**
+     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
+     */
+    simulate?: boolean;
+  }) => Promise<AssembledTransaction<readonly [Array<u256>, Array<u32>]>>
+
+  /**
    * Construct and simulate a sbt_contr transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Get SBT contract address
    */
@@ -276,6 +306,28 @@ export interface Client {
     simulate?: boolean;
   }) => Promise<AssembledTransaction<null>>
 
+  /**
+   * Construct and simulate a remove_member transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Remove a member by zeroing their leaf and recomputing the root
+   * Only callable by DAO admin
+   */
+  remove_member: ({dao_id, member, admin}: {dao_id: u64, member: string, admin: string}, options?: {
+    /**
+     * The fee to pay for the transaction. Default: BASE_FEE
+     */
+    fee?: number;
+
+    /**
+     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
+     */
+    timeoutInSeconds?: number;
+
+    /**
+     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
+     */
+    simulate?: boolean;
+  }) => Promise<AssembledTransaction<null>>
+
 }
 export class Client extends ContractClient {
   static async deploy<T = Client>(
@@ -296,21 +348,24 @@ export class Client extends ContractClient {
   }
   constructor(public readonly options: ContractClientOptions) {
     super(
-      new ContractSpec([ "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAABQAAAAEAAAAAAAAACVRyZWVEZXB0aAAAAAAAAAEAAAAGAAAAAQAAAAAAAAANTmV4dExlYWZJbmRleAAAAAAAAAEAAAAGAAAAAQAAAAAAAAAORmlsbGVkU3VidHJlZXMAAAAAAAEAAAAGAAAAAQAAAAAAAAAFUm9vdHMAAAAAAAABAAAABgAAAAEAAAAAAAAACUxlYWZJbmRleAAAAAAAAAIAAAAGAAAADA==",
+      new ContractSpec([ "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAABwAAAAEAAAAAAAAACVRyZWVEZXB0aAAAAAAAAAEAAAAGAAAAAQAAAAAAAAANTmV4dExlYWZJbmRleAAAAAAAAAEAAAAGAAAAAQAAAAAAAAAORmlsbGVkU3VidHJlZXMAAAAAAAEAAAAGAAAAAQAAAAAAAAAFUm9vdHMAAAAAAAABAAAABgAAAAEAAAAAAAAACUxlYWZJbmRleAAAAAAAAAIAAAAGAAAADAAAAAEAAAAAAAAAD01lbWJlckxlYWZJbmRleAAAAAACAAAABgAAABMAAAABAAAAAAAAAAlMZWFmVmFsdWUAAAAAAAACAAAABgAAAAQ=",
         "AAAABQAAAAAAAAAAAAAADVRyZWVJbml0RXZlbnQAAAAAAAABAAAAD3RyZWVfaW5pdF9ldmVudAAAAAADAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAAAAAAVkZXB0aAAAAAAAAAQAAAAAAAAAAAAAAAplbXB0eV9yb290AAAAAAAMAAAAAAAAAAI=",
         "AAAABQAAAAAAAAAAAAAAC0NvbW1pdEV2ZW50AAAAAAEAAAAMY29tbWl0X2V2ZW50AAAABAAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAQAAAAAAAAAKY29tbWl0bWVudAAAAAAADAAAAAAAAAAAAAAABWluZGV4AAAAAAAABAAAAAAAAAAAAAAACG5ld19yb290AAAADAAAAAAAAAAC",
-        "AAAAAAAAADpDb25zdHJ1Y3RvcjogSW5pdGlhbGl6ZSBjb250cmFjdCB3aXRoIFNCVCBjb250cmFjdCBhZGRyZXNzAAAAAAANX19jb25zdHJ1Y3RvcgAAAAAAAAEAAAAAAAAADHNidF9jb250cmFjdAAAABMAAAAA",
+        "AAAABQAAAAAAAAAAAAAADFJlbW92YWxFdmVudAAAAAEAAAANcmVtb3ZhbF9ldmVudAAAAAAAAAQAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAAAAAAABm1lbWJlcgAAAAAAEwAAAAEAAAAAAAAABWluZGV4AAAAAAAABAAAAAAAAAAAAAAACG5ld19yb290AAAADAAAAAAAAAAC",
+        "AAAAAAAAAJRDb25zdHJ1Y3RvcjogSW5pdGlhbGl6ZSBjb250cmFjdCB3aXRoIFNCVCBjb250cmFjdCBhZGRyZXNzCkFsc28gcHJlLWNvbXB1dGVzIHplcm9zIGNhY2hlIHRvIGF2b2lkIGV4cGVuc2l2ZSBpbml0aWFsaXphdGlvbiBkdXJpbmcgZmlyc3QgREFPIGNyZWF0aW9uAAAADV9fY29uc3RydWN0b3IAAAAAAAABAAAAAAAAAAxzYnRfY29udHJhY3QAAAATAAAAAA==",
         "AAAAAAAAAGtJbml0aWFsaXplIGEgdHJlZSBmb3IgYSBzcGVjaWZpYyBEQU8KT25seSBEQU8gYWRtaW4gY2FuIGluaXRpYWxpemUgKHZpYSBTQlQgY29udHJhY3Qgd2hpY2ggY2hlY2tzIHJlZ2lzdHJ5KQAAAAAJaW5pdF90cmVlAAAAAAAAAwAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAVkZXB0aAAAAAAAAAQAAAAAAAAABWFkbWluAAAAAAAAEwAAAAA=",
         "AAAAAAAAAMtJbml0aWFsaXplIHRyZWUgZnJvbSByZWdpc3RyeSBkdXJpbmcgREFPIGluaXRpYWxpemF0aW9uClRoaXMgZnVuY3Rpb24gaXMgY2FsbGVkIGJ5IHRoZSByZWdpc3RyeSBjb250cmFjdCBkdXJpbmcgY3JlYXRlX2FuZF9pbml0X2Rhbwp0byBhdm9pZCByZS1lbnRyYW5jeSBpc3N1ZXMuIFRoZSByZWdpc3RyeSBpcyBhIHRydXN0ZWQgc3lzdGVtIGNvbnRyYWN0LgAAAAAXaW5pdF90cmVlX2Zyb21fcmVnaXN0cnkAAAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAVkZXB0aAAAAAAAAAQAAAAA",
-        "AAAAAAAAAP1SZWdpc3RlciBhIGNvbW1pdG1lbnQgZnJvbSByZWdpc3RyeSBkdXJpbmcgREFPIGluaXRpYWxpemF0aW9uClRoaXMgZnVuY3Rpb24gaXMgY2FsbGVkIGJ5IHRoZSByZWdpc3RyeSBjb250cmFjdCBkdXJpbmcgY3JlYXRlX2FuZF9pbml0X2Rhbwp0byBhdXRvbWF0aWNhbGx5IHJlZ2lzdGVyIHRoZSBjcmVhdG9yJ3MgY29tbWl0bWVudC4KVGhlIHJlZ2lzdHJ5IGlzIHRydXN0ZWQgdG8gaGF2ZSBhbHJlYWR5IHZlcmlmaWVkIFNCVCBvd25lcnNoaXAuAAAAAAAAFnJlZ2lzdGVyX2Zyb21fcmVnaXN0cnkAAAAAAAIAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAAKY29tbWl0bWVudAAAAAAADAAAAAA=",
+        "AAAAAAAAAP1SZWdpc3RlciBhIGNvbW1pdG1lbnQgZnJvbSByZWdpc3RyeSBkdXJpbmcgREFPIGluaXRpYWxpemF0aW9uClRoaXMgZnVuY3Rpb24gaXMgY2FsbGVkIGJ5IHRoZSByZWdpc3RyeSBjb250cmFjdCBkdXJpbmcgY3JlYXRlX2FuZF9pbml0X2Rhbwp0byBhdXRvbWF0aWNhbGx5IHJlZ2lzdGVyIHRoZSBjcmVhdG9yJ3MgY29tbWl0bWVudC4KVGhlIHJlZ2lzdHJ5IGlzIHRydXN0ZWQgdG8gaGF2ZSBhbHJlYWR5IHZlcmlmaWVkIFNCVCBvd25lcnNoaXAuAAAAAAAAFnJlZ2lzdGVyX2Zyb21fcmVnaXN0cnkAAAAAAAMAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAAKY29tbWl0bWVudAAAAAAADAAAAAAAAAAGbWVtYmVyAAAAAAATAAAAAA==",
         "AAAAAAAAAERSZWdpc3RlciBhIGNvbW1pdG1lbnQgd2l0aCBleHBsaWNpdCBjYWxsZXIgKHJlcXVpcmVzIFNCVCBtZW1iZXJzaGlwKQAAABRyZWdpc3Rlcl93aXRoX2NhbGxlcgAAAAMAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAAKY29tbWl0bWVudAAAAAAADAAAAAAAAAAGY2FsbGVyAAAAAAATAAAAAA==",
         "AAAAAAAAABpHZXQgY3VycmVudCByb290IGZvciBhIERBTwAAAAAADGN1cnJlbnRfcm9vdAAAAAEAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAAM",
         "AAAAAAAAADdHZXQgY3VycmVudCByb290IChzaG9ydCBhbGlhcyBmb3IgY3Jvc3MtY29udHJhY3QgY2FsbHMpAAAAAAhnZXRfcm9vdAAAAAEAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAAM",
         "AAAAAAAAACVDaGVjayBpZiBhIHJvb3QgaXMgdmFsaWQgKGluIGhpc3RvcnkpAAAAAAAAB3Jvb3Rfb2sAAAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAARyb290AAAADAAAAAEAAAAB",
         "AAAAAAAAAB9HZXQgbGVhZiBpbmRleCBmb3IgYSBjb21taXRtZW50AAAAAA5nZXRfbGVhZl9pbmRleAAAAAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAApjb21taXRtZW50AAAAAAAMAAAAAQAAAAQ=",
         "AAAAAAAAABdHZXQgdHJlZSBpbmZvIGZvciBhIERBTwAAAAANZ2V0X3RyZWVfaW5mbwAAAAAAAAEAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAPtAAAAAwAAAAQAAAAEAAAADA==",
+        "AAAAAAAAAMNHZXQgTWVya2xlIHBhdGggZm9yIGEgc3BlY2lmaWMgbGVhZiBpbmRleApSZXR1cm5zIChwYXRoRWxlbWVudHMsIHBhdGhJbmRpY2VzKSB3aGVyZToKLSBwYXRoRWxlbWVudHNbaV0gaXMgdGhlIHNpYmxpbmcgaGFzaCBhdCBsZXZlbCBpCi0gcGF0aEluZGljZXNbaV0gaXMgMCBpZiBsZWFmIGlzIGxlZnQgY2hpbGQsIDEgaWYgcmlnaHQgY2hpbGQAAAAAD2dldF9tZXJrbGVfcGF0aAAAAAACAAAAAAAAAAZkYW9faWQAAAAAAAYAAAAAAAAACmxlYWZfaW5kZXgAAAAAAAQAAAABAAAD7QAAAAIAAAPqAAAADAAAA+oAAAAE",
         "AAAAAAAAABhHZXQgU0JUIGNvbnRyYWN0IGFkZHJlc3MAAAAJc2J0X2NvbnRyAAAAAAAAAAAAAAEAAAAT",
-        "AAAAAAAAAKpQcmUtaW5pdGlhbGl6ZSB0aGUgemVyb3MgY2FjaGUgdG8gYXZvaWQgYnVkZ2V0IGlzc3VlcyBkdXJpbmcgZmlyc3QgdHJlZSBvcGVyYXRpb25zLgpUaGlzIHNob3VsZCBiZSBjYWxsZWQgb25jZSBkdXJpbmcgZGVwbG95bWVudCB0byBwcmVjb21wdXRlIHplcm8gdmFsdWVzIGZvciBhbGwgbGV2ZWxzLgAAAAAAEGluaXRfemVyb3NfY2FjaGUAAAAAAAAAAA==" ]),
+        "AAAAAAAAAKpQcmUtaW5pdGlhbGl6ZSB0aGUgemVyb3MgY2FjaGUgdG8gYXZvaWQgYnVkZ2V0IGlzc3VlcyBkdXJpbmcgZmlyc3QgdHJlZSBvcGVyYXRpb25zLgpUaGlzIHNob3VsZCBiZSBjYWxsZWQgb25jZSBkdXJpbmcgZGVwbG95bWVudCB0byBwcmVjb21wdXRlIHplcm8gdmFsdWVzIGZvciBhbGwgbGV2ZWxzLgAAAAAAEGluaXRfemVyb3NfY2FjaGUAAAAAAAAAAA==",
+        "AAAAAAAAAFlSZW1vdmUgYSBtZW1iZXIgYnkgemVyb2luZyB0aGVpciBsZWFmIGFuZCByZWNvbXB1dGluZyB0aGUgcm9vdApPbmx5IGNhbGxhYmxlIGJ5IERBTyBhZG1pbgAAAAAAAA1yZW1vdmVfbWVtYmVyAAAAAAAAAwAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAZtZW1iZXIAAAAAABMAAAAAAAAABWFkbWluAAAAAAAAEwAAAAA=" ]),
       options
     )
   }
@@ -324,7 +379,9 @@ export class Client extends ContractClient {
         root_ok: this.txFromJSON<boolean>,
         get_leaf_index: this.txFromJSON<u32>,
         get_tree_info: this.txFromJSON<readonly [u32, u32, u256]>,
+        get_merkle_path: this.txFromJSON<readonly [Array<u256>, Array<u32>]>,
         sbt_contr: this.txFromJSON<string>,
-        init_zeros_cache: this.txFromJSON<null>
+        init_zeros_cache: this.txFromJSON<null>,
+        remove_member: this.txFromJSON<null>
   }
 }

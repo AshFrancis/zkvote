@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button, Banner } from "@stellar/design-system";
+import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 import { initializeContractClients } from "../lib/contracts";
 import {
   generateVoteProof,
@@ -11,8 +12,10 @@ import { getMerklePath } from "../lib/merkletree";
 
 interface VoteModalProps {
   proposalId: number;
+  eligibleRoot: bigint; // Snapshot of Merkle root when proposal was created
   daoId: number;
   publicKey: string;
+  kit: StellarWalletsKit | null;
   onClose: () => void;
   onComplete: () => void;
 }
@@ -21,8 +24,10 @@ type VoteStep = "select" | "generating" | "submitting" | "success" | "error";
 
 export default function VoteModal({
   proposalId,
+  eligibleRoot,
   daoId,
   publicKey,
+  kit,
   onClose,
   onComplete,
 }: VoteModalProps) {
@@ -38,35 +43,68 @@ export default function VoteModal({
       // Initialize contract clients
       const clients = initializeContractClients(publicKey);
 
-      // Step 1: Load registration data
+      // Step 1: Load registration data (or regenerate from wallet)
       setProgress("Loading voting credentials...");
       const registrationKey = `voting_registration_${daoId}_${publicKey}`;
       const registrationDataStr = localStorage.getItem(registrationKey);
 
+      let secret: string, salt: string, commitment: string, leafIndex: number;
+
       if (!registrationDataStr) {
-        throw new Error("You must register for voting first. Please click 'Register for Voting' button.");
+        // Try to regenerate from wallet signature
+        console.log("[Vote] No cached credentials, attempting to regenerate...");
+
+        if (!kit) {
+          throw new Error("You must register for voting first. Please click 'Register for Voting' button.");
+        }
+
+        setProgress("Regenerating credentials from wallet signature...");
+        const { generateDeterministicZKCredentials } = await import("../lib/zk");
+        const credentials = await generateDeterministicZKCredentials(kit, daoId);
+
+        // Get leaf index from contract
+        const leafIndexResult = await clients.membershipTree.get_leaf_index({
+          dao_id: BigInt(daoId),
+          commitment: BigInt(credentials.commitment),
+        });
+
+        leafIndex = Number(leafIndexResult.result);
+        secret = credentials.secret;
+        salt = credentials.salt;
+        commitment = credentials.commitment;
+
+        // Cache for next time
+        localStorage.setItem(registrationKey, JSON.stringify({
+          secret,
+          salt,
+          commitment,
+          leafIndex,
+          registeredAt: Date.now(),
+        }));
+
+        console.log("[Vote] Credentials regenerated successfully");
+      } else {
+        const registrationData = JSON.parse(registrationDataStr);
+        secret = registrationData.secret;
+        salt = registrationData.salt;
+        commitment = registrationData.commitment;
+        leafIndex = registrationData.leafIndex;
       }
 
-      const registrationData = JSON.parse(registrationDataStr);
-      const { secret, salt, leafIndex } = registrationData;
-
-      console.log("Using stored credentials:");
+      console.log("Using credentials:");
       console.log("Secret:", secret);
       console.log("Salt:", salt);
       console.log("Leaf Index:", leafIndex);
 
-      // Step 2: Get merkle root from tree contract
-      setProgress("Fetching Merkle tree data...");
-      const rootResult = await clients.membershipTree.get_root({
-        dao_id: BigInt(daoId),
-      });
+      // Step 2: Use the proposal's snapshot root (captured at proposal creation)
+      // This ensures only members who were in the DAO at proposal creation can vote
+      setProgress("Using proposal snapshot root...");
+      const root = eligibleRoot;
+      console.log("Proposal snapshot root (eligible_root):", root.toString());
 
-      const root = rootResult.result;
-      console.log("Current root:", root.toString());
-
-      // Step 3: Compute Merkle path
-      setProgress("Computing Merkle path...");
-      const { pathElements, pathIndices } = await getMerklePath(leafIndex);
+      // Step 3: Get Merkle path from contract
+      setProgress("Fetching Merkle path from tree...");
+      const { pathElements, pathIndices } = await getMerklePath(leafIndex, daoId, publicKey);
 
       console.log("Merkle path computed:");
       console.log("Path elements:", pathElements);
@@ -142,7 +180,14 @@ export default function VoteModal({
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to submit vote through relay");
+        const errorMsg = errorData.error || "Failed to submit vote through relay";
+
+        // Detect double-vote error
+        if (errorMsg.includes("already voted") || errorMsg.includes("UnreachableCodeReached")) {
+          throw new Error("You have already voted on this proposal. Each member can only vote once per proposal.");
+        }
+
+        throw new Error(errorMsg);
       }
 
       const result = await response.json();
@@ -154,7 +199,14 @@ export default function VoteModal({
       }, 2000);
     } catch (err) {
       setStep("error");
-      setError(err instanceof Error ? err.message : "Failed to submit vote");
+      let errorMsg = err instanceof Error ? err.message : "Failed to submit vote";
+
+      // Detect Merkle root mismatch (joined after proposal creation)
+      if (errorMsg.includes("Assert Failed") || errorMsg.includes("Error in template Vote")) {
+        errorMsg = "Cannot vote on this proposal. You joined the DAO after this proposal was created. Only members who were present when the proposal was created can vote on it (snapshot voting).";
+      }
+
+      setError(errorMsg);
       console.error("Vote submission failed:", err);
     }
   };

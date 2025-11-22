@@ -68,68 +68,81 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
     loadTreeInfo();
   }, [daoId, isInitializing]);
 
-  // Reload aliases when encryption key becomes available or members change
+  // Load encrypted aliases when members change (for all users)
+  useEffect(() => {
+    console.log('[useEffect] Members changed, loading aliases');
+    if (members.length > 0) {
+      loadEncryptedAliases();
+    }
+  }, [members]);
+
+  // Reload aliases when encryption key becomes available (for decryption)
   useEffect(() => {
     console.log('[useEffect] encryptionKey changed, isAdmin:', isAdmin, 'hasKey:', !!encryptionKey);
-    if (isAdmin && encryptionKey) {
-      console.log('[useEffect] Calling loadAliases()');
-      loadAliases();
+    if (isAdmin && encryptionKey && encryptedAliases.size > 0) {
+      console.log('[useEffect] Calling decryptAliases()');
+      decryptAliases();
     }
-  }, [encryptionKey, members]);
+  }, [encryptionKey, encryptedAliases]);
 
-  const loadAliases = async () => {
-    if (!isAdmin || !publicKey || members.length === 0) return;
+  const loadEncryptedAliases = async () => {
+    if (members.length === 0) return;
 
-    console.log('[loadAliases] Starting, encryptionKey available:', !!encryptionKey);
-    console.log('[loadAliases] Loading aliases for', members.length, 'members');
+    console.log('[loadEncryptedAliases] Loading encrypted aliases for', members.length, 'members');
 
     try {
-      const clients = initializeContractClients(publicKey);
+      // Use read-only client to fetch aliases (doesn't require wallet)
+      const membershipSbt = getReadOnlyMembershipSbt();
       const encrypted = new Map<string, string>();
-      const decrypted = new Map<string, string>();
 
       for (const member of members) {
-        console.log(`[loadAliases] Checking member:`, member.address.substring(0, 8));
+        console.log(`[loadEncryptedAliases] Checking member:`, member.address.substring(0, 8));
         try {
           // Fetch encrypted alias from contract
-          const encryptedAlias = await clients.membershipSbt.get_alias({
+          const encryptedAlias = await membershipSbt.get_alias({
             dao_id: BigInt(daoId),
             member: member.address,
           });
 
-          console.log(`[loadAliases] Contract response for ${member.address.substring(0, 8)}:`, encryptedAlias);
+          console.log(`[loadEncryptedAliases] Contract response for ${member.address.substring(0, 8)}:`, encryptedAlias);
 
           if (encryptedAlias.result) {
-            // Always store the encrypted version
             encrypted.set(member.address, encryptedAlias.result);
-
-            // Try to decrypt if we have the key
-            if (encryptionKey) {
-              console.log(`[loadAliases] Attempting to decrypt for ${member.address.substring(0, 8)}`);
-              const decryptedValue = decryptAlias(encryptedAlias.result, encryptionKey);
-              console.log(`[loadAliases] Decryption result:`, decryptedValue);
-              if (decryptedValue) {
-                decrypted.set(member.address, decryptedValue);
-              } else {
-                console.log(`[loadAliases] Decryption failed for ${member.address.substring(0, 8)}`);
-              }
-            }
           } else {
-            console.log(`[loadAliases] No alias stored for ${member.address.substring(0, 8)}`);
+            console.log(`[loadEncryptedAliases] No alias stored for ${member.address.substring(0, 8)}`);
           }
         } catch (err) {
           // Alias may not exist for this member, skip
-          console.error(`[loadAliases] Error fetching alias for ${member.address}:`, err);
+          console.error(`[loadEncryptedAliases] Error fetching alias for ${member.address}:`, err);
         }
       }
 
-      console.log('[loadAliases] Final encrypted aliases map size:', encrypted.size);
-      console.log('[loadAliases] Final decrypted aliases map size:', decrypted.size);
+      console.log('[loadEncryptedAliases] Final encrypted aliases map size:', encrypted.size);
       setEncryptedAliases(encrypted);
-      setMemberAliases(decrypted);
     } catch (err) {
-      console.error('Failed to load aliases:', err);
+      console.error('Failed to load encrypted aliases:', err);
     }
+  };
+
+  const decryptAliases = () => {
+    if (!encryptionKey || encryptedAliases.size === 0) return;
+
+    console.log('[decryptAliases] Decrypting', encryptedAliases.size, 'aliases');
+    const decrypted = new Map<string, string>();
+
+    for (const [address, encrypted] of encryptedAliases) {
+      console.log(`[decryptAliases] Attempting to decrypt for ${address.substring(0, 8)}`);
+      const decryptedValue = decryptAlias(encrypted, encryptionKey);
+      console.log(`[decryptAliases] Decryption result:`, decryptedValue);
+      if (decryptedValue) {
+        decrypted.set(address, decryptedValue);
+      } else {
+        console.log(`[decryptAliases] Decryption failed for ${address.substring(0, 8)}`);
+      }
+    }
+
+    console.log('[decryptAliases] Final decrypted aliases map size:', decrypted.size);
+    setMemberAliases(decrypted);
   };
 
   const loadMembers = async (admin?: string) => {
@@ -379,7 +392,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
       setError(null);
       const key = await getOrDeriveEncryptionKey(daoId, kit.signMessage.bind(kit));
       if (key) {
-        setEncryptionKey(key);
+        setEncryptionKey(key);  // This will trigger decryptAliases via useEffect
         setAliasesVisible(true);
       } else {
         setError("Failed to unlock aliases - signature was cancelled or failed");

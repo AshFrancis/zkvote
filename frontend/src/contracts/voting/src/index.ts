@@ -31,7 +31,12 @@ if (typeof window !== 'undefined') {
 }
 
 
-
+export const networks = {
+  futurenet: {
+    networkPassphrase: "Test SDF Future Network ; October 2022",
+    contractId: "CBFLVJBDDCBNG64ZBJA2PT5HXMEIG3OH7543IQSTV3EPKMRWV6MRV7G2",
+  }
+} as const
 
 export type DataKey = {tag: "Proposal", values: readonly [u64, u64]} | {tag: "ProposalCount", values: readonly [u64]} | {tag: "Nullifier", values: readonly [u64, u64, u256]} | {tag: "VotingKey", values: readonly [u64]};
 

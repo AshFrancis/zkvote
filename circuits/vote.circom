@@ -59,5 +59,5 @@ template Vote(levels) {
     voteChoice * (voteChoice - 1) === 0;
 }
 
-// Default tree depth of 20 (supports ~1M members)
-component main {public [root, nullifier, daoId, proposalId, voteChoice]} = Vote(20);
+// Default tree depth of 18 (supports ~262K members)
+component main {public [root, nullifier, daoId, proposalId, voteChoice]} = Vote(18);

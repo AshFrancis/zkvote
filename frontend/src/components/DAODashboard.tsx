@@ -43,6 +43,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
   const [minting, setMinting] = useState(false);
   const [showMintForm, setShowMintForm] = useState(false);
   const [registering, setRegistering] = useState(false);
+  const [registrationStatus, setRegistrationStatus] = useState<string | null>(null);
   const [isRegistered, setIsRegistered] = useState(false);
   const [joining, setJoining] = useState(false);
   const [showCreateProposal, setShowCreateProposal] = useState(false);
@@ -60,6 +61,9 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
     loadDAOInfo();
     checkRegistrationStatus();
   }, [daoId, publicKey, isInitializing]);
+
+  // Note: Auto-registration removed - users must manually click "Register for Voting"
+  // This gives users explicit control over when they set up voting credentials
 
   const checkRegistrationStatus = () => {
     const key = `voting_registration_${daoId}_${publicKey}`;
@@ -251,23 +255,47 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
   };
 
   const handleRegisterForVoting = async () => {
+    // Prevent duplicate calls
+    if (registering) {
+      console.log("[Registration] Already in progress, ignoring duplicate call");
+      return;
+    }
+
     try {
       setRegistering(true);
       setError(null);
+      setRegistrationStatus(null);
 
-      // Step 1: Generate secret and salt
-      const secret = generateSecret();
-      const salt = generateSecret();
+      if (!kit) {
+        throw new Error("Wallet kit not available");
+      }
 
-      // Step 2: Compute commitment using Poseidon hash
-      const commitment = await calculateCommitment(secret, salt);
+      // Step 1: Generate deterministic credentials from wallet signature
+      setRegistrationStatus("Step 1/2: Generating secret (sign message)...");
+      console.log("[Registration] Step 1: Generating deterministic credentials from wallet signature...");
+      const { generateDeterministicZKCredentials } = await import("../lib/zk");
 
-      console.log("Generated voting credentials:");
+      let credentials;
+      try {
+        credentials = await generateDeterministicZKCredentials(kit, daoId);
+      } catch (err) {
+        console.error("[Registration] Step 1 failed:", err);
+        throw err;
+      }
+
+      const { secret, salt, commitment } = credentials;
+
+      console.log("[Registration] Step 1 complete - Generated voting credentials:");
       console.log("Secret:", secret);
       console.log("Salt:", salt);
       console.log("Commitment:", commitment);
 
-      // Step 3: Register commitment in Merkle tree
+      // Small delay to ensure Step 1 UI updates before Step 2 popup
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Step 2: Register commitment in Merkle tree
+      setRegistrationStatus("Step 2/2: Registering commitment (sign transaction)...");
+      console.log("[Registration] Step 2: Registering commitment in Merkle tree...");
       const clients = initializeContractClients(publicKey);
 
       const tx = await clients.membershipTree.register_with_caller({
@@ -276,13 +304,19 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
         caller: publicKey,
       });
 
-      if (!kit) {
-        throw new Error("Wallet kit not available");
+      try {
+        console.log("[Registration] Calling signAndSend...");
+        const result = await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+        console.log("[Registration] Step 2 complete - Transaction signed and sent:", result);
+      } catch (err: any) {
+        console.error("[Registration] Step 2 (signAndSend) failed:", err);
+        // Re-throw with more context
+        const enhancedError = new Error(`Transaction signing failed: ${err?.message || 'Unknown error'}`);
+        (enhancedError as any).originalError = err;
+        throw enhancedError;
       }
 
-      await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
-
-      // Step 4: Get the leaf index
+      // Step 3: Get the leaf index
       const leafIndexResult = await clients.membershipTree.get_leaf_index({
         dao_id: BigInt(daoId),
         commitment: BigInt(commitment),
@@ -290,7 +324,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
 
       const leafIndex = Number(leafIndexResult.result);
 
-      // Step 5: Store credentials in localStorage
+      // Step 4: Store credentials in localStorage (cache for convenience)
       const registrationData = {
         secret,
         salt,
@@ -303,10 +337,24 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
       localStorage.setItem(key, JSON.stringify(registrationData));
 
       setIsRegistered(true);
+      setRegistrationStatus("Registration complete!");
       console.log("Registration successful! Leaf index:", leafIndex);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to register for voting");
-      console.error("Registration failed:", err);
+    } catch (err: any) {
+      // Check if user rejected the request (don't show error for intentional cancellation)
+      const isUserRejection =
+        err?.code === -4 ||
+        err?.message?.includes("User rejected") ||
+        err?.message?.includes("user rejected") ||
+        err?.message?.includes("declined");
+
+      if (isUserRejection) {
+        console.log("User cancelled registration");
+        setRegistrationStatus(null);
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to register for voting");
+        console.error("Registration failed:", err);
+        setRegistrationStatus(null);
+      }
     } finally {
       setRegistering(false);
     }
@@ -334,6 +382,8 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
 
       // Reload DAO info to update membership status
       await loadDAOInfo();
+
+      console.log("Successfully joined DAO! Click 'Register for Voting' to set up voting credentials.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to join DAO");
       console.error("Join DAO failed:", err);
@@ -474,7 +524,22 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
                 {joining ? "Joining..." : "Join DAO"}
               </button>
             )}
-            {dao.hasMembership && dao.vkSet && (
+            {dao.hasMembership && !isRegistered && publicKey && (
+              <button
+                onClick={handleRegisterForVoting}
+                disabled={registering}
+                className="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-purple-600 rounded-md hover:bg-purple-700 disabled:bg-purple-400 transition-colors flex items-center gap-2"
+              >
+                {registering && (
+                  <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                )}
+                {registering ? (registrationStatus || "Registering...") : "Register for Voting"}
+              </button>
+            )}
+            {dao.isAdmin && dao.vkSet && (
               <button
                 onClick={() => setShowCreateProposal(true)}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-blue-600 rounded-md hover:bg-blue-700 transition-colors"
@@ -537,6 +602,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
           key={proposalKey}
           publicKey={publicKey}
           daoId={daoId}
+          kit={kit}
           hasMembership={dao.hasMembership}
           vkSet={dao.vkSet}
           isInitializing={isInitializing}

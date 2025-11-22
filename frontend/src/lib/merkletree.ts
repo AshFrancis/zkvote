@@ -1,7 +1,8 @@
 // Merkle tree path computation for Poseidon tree
 import { buildPoseidon } from "circomlibjs";
+import { initializeContractClients } from "./contracts";
 
-const TREE_DEPTH = 20;
+const TREE_DEPTH = 18;
 
 // Cache for zero hashes at each level
 let zeroCache: string[] | null = null;
@@ -104,41 +105,32 @@ export async function getPathForFirstLeaf(): Promise<{ pathElements: string[]; p
 }
 
 /**
- * Get path elements and indices for any leaf index in a sparse tree
- * For a sparse tree with few leaves, we compute the path by:
- * 1. Building a minimal tree with only the known leaves
- * 2. Using zero hashes for empty positions
+ * Get path elements and indices for any leaf index from the on-chain Merkle tree
+ * Queries the MembershipTree contract to get the correct sibling hashes
  *
- * Note: This assumes leaves are added sequentially from index 0
- * For production, query actual leaf values from contract or indexer
+ * @param leafIndex Index of the leaf in the tree
+ * @param daoId DAO identifier
+ * @param publicKey User's public key for contract client initialization
+ * @returns Object with pathElements (sibling hashes) and pathIndices (0=left, 1=right)
  */
 export async function getMerklePath(
   leafIndex: number,
-  totalLeaves?: number
+  daoId: number,
+  publicKey: string
 ): Promise<{ pathElements: string[]; pathIndices: number[] }> {
-  // For first leaf, use optimized path
-  if (leafIndex === 0) {
-    return getPathForFirstLeaf();
-  }
+  // Initialize contract clients
+  const clients = initializeContractClients(publicKey);
 
-  // For sparse tree: all siblings on the path are zeros
-  // This works because we assume sequential insertion and no other leaves exist
-  // in the sibling positions along our path
-  const zeros = await getZeroHashes();
-  const pathElements: string[] = [];
-  const pathIndices: number[] = [];
+  // Call the on-chain get_merkle_path function
+  const result = await clients.membershipTree.get_merkle_path({
+    dao_id: BigInt(daoId),
+    leaf_index: leafIndex,
+  });
 
-  let currentIndex = leafIndex;
-
-  for (let level = 0; level < TREE_DEPTH; level++) {
-    const isLeft = currentIndex % 2 === 0;
-    pathIndices.push(isLeft ? 0 : 1);
-
-    // In a sparse tree with sequential insertions, siblings are typically zero
-    pathElements.push(zeros[level]);
-
-    currentIndex = Math.floor(currentIndex / 2);
-  }
+  // Contract returns (Vec<U256>, Vec<u32>)
+  // Convert to string arrays for circuit input
+  const pathElements = result.result[0].map((elem: bigint) => elem.toString());
+  const pathIndices = result.result[1].map((idx: number) => idx);
 
   return { pathElements, pathIndices };
 }

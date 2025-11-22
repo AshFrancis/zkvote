@@ -390,6 +390,14 @@ impl Voting {
         root: U256,
         proof: Proof,
     ) {
+        // CRITICAL: Check nullifier FIRST before any expensive operations
+        // This prevents proof verification from crashing on duplicate votes
+        // The nullifier check is cheap (just storage lookup) and should fail fast
+        let null_key = DataKey::Nullifier(dao_id, proposal_id, nullifier.clone());
+        if env.storage().persistent().has(&null_key) {
+            panic!("vote rejected: this nullifier has already been used (double-voting prevented)");
+        }
+
         // Get proposal
         let prop_key = DataKey::Proposal(dao_id, proposal_id);
         let mut proposal: ProposalInfo = env
@@ -402,12 +410,6 @@ impl Voting {
         let now = env.ledger().timestamp();
         if now > proposal.end_time {
             panic!("voting period closed");
-        }
-
-        // Check nullifier not used (prevent double voting)
-        let null_key = DataKey::Nullifier(dao_id, proposal_id, nullifier.clone());
-        if env.storage().persistent().has(&null_key) {
-            panic!("already voted");
         }
 
         // Verify root matches the eligible voter set from proposal creation

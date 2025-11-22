@@ -1,11 +1,14 @@
 import { useState, useEffect } from "react";
+import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 import { initializeContractClients } from "../lib/contracts";
 import { getReadOnlyDaoRegistry } from "../lib/readOnlyContracts";
+import { calculateNullifier } from "../lib/zkproof";
 import ProposalCard from "./ProposalCard";
 
 interface ProposalListProps {
   publicKey: string | null;
   daoId: number;
+  kit: StellarWalletsKit | null;
   hasMembership: boolean;
   vkSet: boolean;
   isInitializing?: boolean;
@@ -17,9 +20,10 @@ interface Proposal {
   yesVotes: number;
   noVotes: number;
   hasVoted: boolean;
+  eligibleRoot: bigint; // Snapshot of Merkle root when proposal was created
 }
 
-export default function ProposalList({ publicKey, daoId, hasMembership, vkSet, isInitializing = false }: ProposalListProps) {
+export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkSet, isInitializing = false }: ProposalListProps) {
   const [proposals, setProposals] = useState<Proposal[]>(() => {
     // Initialize with cached data if available
     const cacheKey = `proposals_${daoId}`;
@@ -90,12 +94,42 @@ export default function ProposalList({ publicKey, daoId, hasMembership, vkSet, i
       // Proposal info already includes vote counts in the generated type
       const proposal = proposalResult.result;
 
+      // Check if user has already voted
+      let hasVoted = false;
+      if (publicKey) {
+        try {
+          const registrationKey = `voting_registration_${daoId}_${publicKey}`;
+          const registrationDataStr = localStorage.getItem(registrationKey);
+
+          if (registrationDataStr) {
+            const { secret } = JSON.parse(registrationDataStr);
+            const nullifier = await calculateNullifier(
+              secret,
+              daoId.toString(),
+              proposalId.toString()
+            );
+
+            // Check if this nullifier has been used
+            const nullifierUsedResult = await clients.voting.is_nullifier_used({
+              dao_id: BigInt(daoId),
+              proposal_id: BigInt(proposalId),
+              nullifier: BigInt(nullifier),
+            });
+            hasVoted = nullifierUsedResult.result;
+          }
+        } catch (err) {
+          console.error("Failed to check if voted:", err);
+          // Default to false to allow voting attempt
+        }
+      }
+
       return {
         id: proposalId,
         description: proposal.description,
         yesVotes: Number(proposal.yes_votes),
         noVotes: Number(proposal.no_votes),
-        hasVoted: false, // TODO: Track voted nullifiers
+        hasVoted,
+        eligibleRoot: proposal.eligible_root, // Pass through the snapshot root
       };
     } catch (err) {
       return null;
@@ -125,6 +159,7 @@ export default function ProposalList({ publicKey, daoId, hasMembership, vkSet, i
               proposal={proposal}
               daoId={daoId}
               publicKey={publicKey}
+              kit={kit}
               hasMembership={hasMembership}
               onVoteComplete={loadProposals}
             />

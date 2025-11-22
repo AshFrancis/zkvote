@@ -20,10 +20,10 @@ const circomlibjs = require('circomlibjs');
   console.log('\nNullifier:', nullifier.toString());
   console.log('Nullifier (hex):', '0x' + nullifier.toString(16).padStart(64, '0'));
 
-  // Compute zero values for Merkle tree (depth 20)
+  // Compute zero values for Merkle tree (depth 18)
   const zeros = [0n];
   let currentZero = 0n;
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 18; i++) {
     currentZero = poseidon.F.toObject(poseidon([currentZero, currentZero]));
     zeros.push(currentZero);
   }
@@ -31,7 +31,7 @@ const circomlibjs = require('circomlibjs');
   // Compute root if commitment is at index 0 in empty tree
   let currentHash = commitment;
   let index = 0;
-  const depth = 20;
+  const depth = 18;
 
   for (let i = 0; i < depth; i++) {
     if (index % 2 === 0) {
@@ -56,8 +56,8 @@ const circomlibjs = require('circomlibjs');
     voteChoice: voteChoice.toString(),
     secret: secret.toString(),
     salt: salt.toString(),
-    pathElements: zeros.slice(0, 20).map(z => z.toString()),
-    pathIndices: Array(20).fill("0")
+    pathElements: zeros.slice(0, 18).map(z => z.toString()),
+    pathIndices: Array(18).fill("0")
   };
 
   console.log('\n=== FULL INPUT JSON ===');

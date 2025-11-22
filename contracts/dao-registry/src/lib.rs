@@ -135,6 +135,91 @@ impl DaoRegistry {
         Self::get_dao(env, dao_id).membership_open
     }
 
+    /// Create and initialize DAO without registering creator for voting.
+    /// Creator must register separately using deterministic credentials.
+    /// This calls:
+    /// 1. create_dao (creates registry entry)
+    /// 2. membership_sbt.mint (mints SBT to creator)
+    /// 3. membership_tree.init_tree (initializes Merkle tree)
+    /// 4. voting.set_vk (sets verification key)
+    pub fn create_and_init_dao_no_reg(
+        env: Env,
+        name: String,
+        creator: Address,
+        membership_open: bool,
+        sbt_contract: Address,
+        tree_contract: Address,
+        voting_contract: Address,
+        tree_depth: u32,
+        vk: VerificationKey,
+    ) -> u64 {
+        creator.require_auth();
+
+        // Validate name length to prevent DoS
+        if name.len() > MAX_DAO_NAME_LEN {
+            panic!("DAO name too long");
+        }
+
+        // Step 1: Create DAO registry entry
+        let dao_id = Self::next_dao_id(&env);
+        let info = DaoInfo {
+            id: dao_id,
+            name: name.clone(),
+            admin: creator.clone(),
+            created_at: env.ledger().timestamp(),
+            membership_open,
+        };
+
+        let key = Self::dao_key(dao_id);
+        env.storage().persistent().set(&key, &info);
+
+        DaoCreateEvent {
+            dao_id,
+            admin: creator.clone(),
+            name,
+        }
+        .publish(&env);
+
+        // Step 2: Mint SBT to creator
+        use soroban_sdk::IntoVal;
+        let mint_args = soroban_sdk::vec![
+            &env,
+            dao_id.into_val(&env),
+            creator.clone().into_val(&env)
+        ];
+        env.invoke_contract::<()>(
+            &sbt_contract,
+            &Symbol::new(&env, "mint_from_registry"),
+            mint_args
+        );
+
+        // Step 3: Initialize Merkle tree
+        let init_tree_args = soroban_sdk::vec![
+            &env,
+            dao_id.into_val(&env),
+            tree_depth.into_val(&env)
+        ];
+        env.invoke_contract::<()>(
+            &tree_contract,
+            &Symbol::new(&env, "init_tree_from_registry"),
+            init_tree_args
+        );
+
+        // Step 4: Set verification key
+        let set_vk_args = soroban_sdk::vec![
+            &env,
+            dao_id.into_val(&env),
+            vk.into_val(&env)
+        ];
+        env.invoke_contract::<()>(
+            &voting_contract,
+            &Symbol::new(&env, "set_vk_from_registry"),
+            set_vk_args
+        );
+
+        dao_id
+    }
+
     /// Create and fully initialize a DAO in a single transaction.
     /// This calls:
     /// 1. create_dao (creates registry entry)
@@ -210,7 +295,8 @@ impl DaoRegistry {
         let register_args = soroban_sdk::vec![
             &env,
             dao_id.into_val(&env),
-            creator_commitment.into_val(&env)
+            creator_commitment.into_val(&env),
+            creator.clone().into_val(&env)
         ];
         env.invoke_contract::<()>(
             &tree_contract,

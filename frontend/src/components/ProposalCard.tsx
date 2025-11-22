@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 
 interface ProposalCardProps {
   proposal: {
@@ -7,9 +8,11 @@ interface ProposalCardProps {
     yesVotes: number;
     noVotes: number;
     hasVoted: boolean;
+    eligibleRoot: bigint; // Snapshot of Merkle root when proposal was created
   };
   daoId: number;
   publicKey: string;
+  kit: StellarWalletsKit | null;
   hasMembership: boolean;
   onVoteComplete: () => void;
 }
@@ -18,6 +21,7 @@ export default function ProposalCard({
   proposal,
   daoId,
   publicKey,
+  kit,
   hasMembership,
   onVoteComplete,
 }: ProposalCardProps) {
@@ -47,34 +51,24 @@ export default function ProposalCard({
             </p>
 
             {/* Vote Results */}
-            <div className="space-y-2">
-              <div>
-                <div className="flex items-center justify-between text-sm mb-1">
-                  <span className="text-gray-600 dark:text-gray-400">Yes</span>
-                  <span className="font-medium text-gray-900 dark:text-gray-100">
-                    {proposal.yesVotes} ({yesPercentage.toFixed(1)}%)
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                  <div
-                    className="bg-green-600 h-2 rounded-full transition-all"
-                    style={{ width: `${yesPercentage}%` }}
-                  />
-                </div>
+            <div>
+              <div className="flex items-center justify-between text-sm mb-1">
+                <span className="font-medium text-green-600 dark:text-green-400">
+                  Yes: {proposal.yesVotes}
+                </span>
+                <span className="font-medium text-red-600 dark:text-red-400">
+                  No: {proposal.noVotes}
+                </span>
               </div>
-              <div>
-                <div className="flex items-center justify-between text-sm mb-1">
-                  <span className="text-gray-600 dark:text-gray-400">No</span>
-                  <span className="font-medium text-gray-900 dark:text-gray-100">
-                    {proposal.noVotes} ({noPercentage.toFixed(1)}%)
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                  <div
-                    className="bg-red-600 h-2 rounded-full transition-all"
-                    style={{ width: `${noPercentage}%` }}
-                  />
-                </div>
+              <div className="w-full flex h-3 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
+                <div
+                  className="bg-green-600 transition-all"
+                  style={{ width: `${yesPercentage}%` }}
+                />
+                <div
+                  className="bg-red-600 transition-all"
+                  style={{ width: `${noPercentage}%` }}
+                />
               </div>
             </div>
           </div>
@@ -95,8 +89,10 @@ export default function ProposalCard({
       {showVoteModal && (
         <VoteModal
           proposalId={proposal.id}
+          eligibleRoot={proposal.eligibleRoot}
           daoId={daoId}
           publicKey={publicKey}
+          kit={kit}
           onClose={() => setShowVoteModal(false)}
           onComplete={() => {
             setShowVoteModal(false);
