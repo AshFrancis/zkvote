@@ -555,11 +555,16 @@ impl MembershipTree {
         admin.require_auth();
 
         // Verify admin is the DAO admin via cross-contract call
-        let registry: Address = env.storage().instance().get(&REGISTRY).unwrap();
+        let sbt_contract: Address = env.storage().instance().get(&SBT_CONTRACT).unwrap();
+        let registry: Address = env.invoke_contract(
+            &sbt_contract,
+            &symbol_short!("registry"),
+            soroban_sdk::vec![&env],
+        );
         let dao_admin: Address = env.invoke_contract(
             &registry,
             &symbol_short!("get_admin"),
-            vec![&env, dao_id.into_val(&env)],
+            soroban_sdk::vec![&env, dao_id.into_val(&env)],
         );
 
         if admin != dao_admin {
@@ -593,7 +598,7 @@ impl MembershipTree {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("reinstated"), dao_id),
+            (symbol_short!("reinst"), dao_id),
             (member, reinstated_at),
         );
     }

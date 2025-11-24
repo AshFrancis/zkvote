@@ -37,7 +37,7 @@ use soroban_sdk::{
 const TREE_CONTRACT: Symbol = symbol_short!("tree");
 
 // Maximum allowed IC vector length (num_public_inputs + 1)
-// Our circuit has 5 public signals, so IC should have 6 elements
+// Our circuit has 6 public signals, so IC should have 7 elements
 // Allow some slack for future upgrades (up to 20 public inputs)
 const MAX_IC_LENGTH: u32 = 21;
 
@@ -596,11 +596,21 @@ impl Voting {
         admin.require_auth();
 
         // Verify admin via registry
-        let registry: Address = env.storage().instance().get(&REGISTRY).unwrap();
+        let tree_contract: Address = env.storage().instance().get(&TREE_CONTRACT).unwrap();
+        let sbt_contract: Address = env.invoke_contract(
+            &tree_contract,
+            &symbol_short!("sbt_contr"),
+            soroban_sdk::vec![&env],
+        );
+        let registry: Address = env.invoke_contract(
+            &sbt_contract,
+            &symbol_short!("registry"),
+            soroban_sdk::vec![&env],
+        );
         let dao_admin: Address = env.invoke_contract(
             &registry,
             &symbol_short!("get_admin"),
-            vec![&env, dao_id.into_val(&env)],
+            soroban_sdk::vec![&env, dao_id.into_val(&env)],
         );
 
         if admin != dao_admin {
