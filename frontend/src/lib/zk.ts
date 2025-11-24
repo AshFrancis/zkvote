@@ -10,14 +10,38 @@ export interface ZKCredentials {
 
 // Generate deterministic ZK credentials from wallet signature
 // This allows credentials to be recovered on any device with the same wallet
+//
+// SECURITY WARNING: Deterministic signature-based credentials are vulnerable to phishing!
+// If an attacker tricks a user into signing the same message on a malicious site,
+// they can derive the user's voting credentials and vote on their behalf.
+//
+// FUTURE ENHANCEMENT: Use WebAuthn/Passkeys for deterministic credential generation
+// Passkeys are origin-bound (domain-specific) and cannot be phished across sites.
+// An attacker would need to compromise the user's physical device to steal credentials,
+// rather than just tricking them into signing a message.
+//
+// Implementation plan:
+// 1. Use navigator.credentials.get() to sign a challenge with the passkey
+// 2. Derive secret from the passkey signature (origin-bound by browser)
+// 3. Credentials work only on the legitimate domain
+// 4. Much stronger security without sacrificing deterministic recovery
 export async function generateDeterministicZKCredentials(
   kit: StellarWalletsKit,
   daoId: number
 ): Promise<ZKCredentials> {
   const poseidon = await buildPoseidon();
 
-  // Create deterministic message for this DAO
-  const message = `DaoVote registration for DAO ${daoId}`;
+  // Create deterministic message with strong domain separation
+  // Format: [domain] [action] [context] [unique-id]
+  // This prevents cross-site replay attacks
+  const message = `[DaoVote App - DO NOT SIGN ON OTHER SITES]
+
+Action: Generate anonymous voting credentials
+DAO ID: ${daoId}
+Purpose: This signature creates your secret voting key for this DAO.
+Warning: Only sign this on the official DaoVote application.
+
+By signing, you acknowledge that anyone who obtains this signature can vote on your behalf in DAO ${daoId}.`;
 
   // Sign message with wallet (deterministic per wallet + DAO)
   // Only 1 signature needed - we'll derive both secret and salt from it

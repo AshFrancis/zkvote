@@ -10,7 +10,7 @@ import { useWallet } from "./hooks/useWallet";
 import { useTheme } from "./hooks/useTheme";
 import { initializeContractClients } from "./lib/contracts";
 import { getReadOnlyDaoRegistry } from "./lib/readOnlyContracts";
-import verificationKey from "./lib/verification_key_soroban_le.json";
+import verificationKey from "./lib/verification_key_soroban.json";
 import { CONTRACTS } from "./config/contracts";
 // ZK credentials will be generated deterministically after DAO creation
 
@@ -44,11 +44,9 @@ function DAODetailPage({ publicKey, isConnected, isInitializing }: { publicKey: 
   useEffect(() => {
     // Wait for wallet initialization before loading
     if (isInitializing) {
-      console.log('[DAODetailPage] Waiting for wallet initialization...');
       return;
     }
     if (daoId) {
-      console.log('[DAODetailPage] Loading DAO name for DAO:', daoId, 'publicKey:', publicKey);
       loadDAOName();
     }
   }, [publicKey, daoId, isInitializing]);
@@ -182,11 +180,9 @@ function ManageMembersPage({ publicKey, isConnected, isInitializing }: { publicK
   useEffect(() => {
     // Wait for wallet initialization before loading
     if (isInitializing) {
-      console.log('[ManageMembersPage] Waiting for wallet initialization...');
       return;
     }
     if (daoId) {
-      console.log('[ManageMembersPage] Loading DAO info for DAO:', daoId, 'publicKey:', publicKey);
       loadDAOInfo();
     }
   }, [publicKey, daoId, isInitializing]);
@@ -414,7 +410,7 @@ function App() {
       console.log(`DAO created and fully initialized with ID: ${newDaoId}`);
 
       setSuccess(
-        `DAO "${newDaoName}" created! Click "Register for Voting" to set up your voting credentials.`
+        `DAO "${newDaoName}" created successfully! Redirecting...`
       );
 
       console.log(`DAO "${newDaoName}" (ID: ${newDaoId}) fully initialized!`);

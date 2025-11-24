@@ -18,6 +18,10 @@ pub enum DataKey {
     LeafIndex(u64, U256),             // (dao_id, commitment) -> index
     MemberLeafIndex(u64, Address),    // (dao_id, member) -> index
     LeafValue(u64, u32),              // (dao_id, index) -> commitment (or 0 if removed)
+    NextRootIndex(u64),               // dao_id -> next root index counter
+    RootIndex(u64, U256),             // (dao_id, root) -> root index
+    RevokedAt(u64, U256),             // (dao_id, commitment) -> timestamp when revoked
+    ReinstatedAt(u64, U256),          // (dao_id, commitment) -> timestamp when reinstated
 }
 
 // Typed Events
@@ -28,6 +32,7 @@ pub struct TreeInitEvent {
     pub dao_id: u64,
     pub depth: u32,
     pub empty_root: U256,
+    pub root_index: u32,
 }
 
 #[soroban_sdk::contractevent]
@@ -38,6 +43,7 @@ pub struct CommitEvent {
     pub commitment: U256,
     pub index: u32,
     pub new_root: U256,
+    pub root_index: u32,
 }
 
 #[soroban_sdk::contractevent]
@@ -49,6 +55,7 @@ pub struct RemovalEvent {
     pub member: Address,
     pub index: u32,
     pub new_root: U256,
+    pub root_index: u32,
 }
 
 #[contract]
@@ -102,6 +109,11 @@ impl MembershipTree {
             .persistent()
             .set(&DataKey::NextLeafIndex(dao_id), &0u32);
 
+        // Initialize root index counter
+        env.storage()
+            .persistent()
+            .set(&DataKey::NextRootIndex(dao_id), &0u32);
+
         // Initialize filled subtrees with zeros (use cached zeros for O(1) lookup)
         let mut filled = Vec::new(&env);
         for level in 0..depth {
@@ -119,10 +131,16 @@ impl MembershipTree {
             .persistent()
             .set(&DataKey::Roots(dao_id), &roots);
 
+        // Store root index for empty root
+        env.storage()
+            .persistent()
+            .set(&DataKey::RootIndex(dao_id, empty_root.clone()), &0u32);
+
         TreeInitEvent {
             dao_id,
             depth,
             empty_root,
+            root_index: 0,
         }
         .publish(&env);
     }
@@ -146,6 +164,11 @@ impl MembershipTree {
             .persistent()
             .set(&DataKey::NextLeafIndex(dao_id), &0u32);
 
+        // Initialize root index counter
+        env.storage()
+            .persistent()
+            .set(&DataKey::NextRootIndex(dao_id), &0u32);
+
         // Initialize filled subtrees with zeros (use cached zeros for O(1) lookup)
         let mut filled = Vec::new(&env);
         for level in 0..depth {
@@ -163,10 +186,16 @@ impl MembershipTree {
             .persistent()
             .set(&DataKey::Roots(dao_id), &roots);
 
+        // Store root index for empty root
+        env.storage()
+            .persistent()
+            .set(&DataKey::RootIndex(dao_id, empty_root.clone()), &0u32);
+
         TreeInitEvent {
             dao_id,
             depth,
             empty_root,
+            root_index: 0,
         }
         .publish(&env);
     }
@@ -207,7 +236,7 @@ impl MembershipTree {
         }
 
         // Insert leaf into tree
-        let new_root = Self::insert_leaf(&env, dao_id, commitment.clone(), next_index, depth);
+        let (new_root, root_index) = Self::insert_leaf(&env, dao_id, commitment.clone(), next_index, depth);
 
         // Update next index
         env.storage()
@@ -229,6 +258,7 @@ impl MembershipTree {
             commitment,
             index: next_index,
             new_root,
+            root_index,
         }
         .publish(&env);
     }
@@ -280,7 +310,7 @@ impl MembershipTree {
         }
 
         // Insert leaf into tree
-        let new_root = Self::insert_leaf(&env, dao_id, commitment.clone(), next_index, depth);
+        let (new_root, root_index) = Self::insert_leaf(&env, dao_id, commitment.clone(), next_index, depth);
 
         // Update next index
         env.storage()
@@ -302,6 +332,7 @@ impl MembershipTree {
             commitment,
             index: next_index,
             new_root,
+            root_index,
         }
         .publish(&env);
     }
@@ -335,6 +366,20 @@ impl MembershipTree {
             }
         }
         false
+    }
+
+    /// Get root index for a specific root (for vote mode validation)
+    pub fn root_idx(env: Env, dao_id: u64, root: U256) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::RootIndex(dao_id, root))
+            .expect("root not found")
+    }
+
+    /// Get current root index (for proposal creation)
+    pub fn curr_idx(env: Env, dao_id: u64) -> u32 {
+        let current_root = Self::current_root(env.clone(), dao_id);
+        Self::root_idx(env, dao_id, current_root)
     }
 
     /// Get leaf index for a commitment
@@ -392,28 +437,43 @@ impl MembershipTree {
             let is_left = current_index % 2 == 0;
             path_indices.push_back(if is_left { 0 } else { 1 });
 
-            // Calculate sibling index
+            // Calculate sibling index at THIS LEVEL
             let sibling_index = if is_left {
                 current_index + 1
             } else {
                 current_index - 1
             };
 
-            // Get sibling value from storage or use zero if empty
-            let sibling = if sibling_index < next_index {
-                // Sibling exists, load from storage
-                let leaf_key = DataKey::LeafValue(dao_id, sibling_index);
-                env.storage()
-                    .persistent()
-                    .get(&leaf_key)
-                    .unwrap_or_else(|| Self::zero_at_level(&env, level))
+            // Get sibling value
+            let sibling = if level == 0 {
+                // Level 0: sibling is a raw leaf (commitment value)
+                if sibling_index < next_index {
+                    let leaf_key = DataKey::LeafValue(dao_id, sibling_index);
+                    env.storage()
+                        .persistent()
+                        .get(&leaf_key)
+                        .unwrap_or_else(|| Self::zero_value(&env))
+                } else {
+                    // Sibling leaf doesn't exist, use zero
+                    Self::zero_value(&env)
+                }
             } else {
-                // Sibling doesn't exist (tree is sparse), use zero
-                Self::zero_at_level(&env, level)
+                // Level > 0: sibling is an intermediate hash node
+                // Calculate which leaves this subtree covers
+                let leaves_per_subtree = 1u32 << level; // 2^level
+                let start_leaf = sibling_index * leaves_per_subtree;
+
+                if start_leaf >= next_index {
+                    // Entire subtree is empty
+                    Self::zero_at_level(&env, level)
+                } else {
+                    // Reconstruct the hash by hashing up from stored leaves
+                    Self::reconstruct_subtree(&env, dao_id, sibling_index, level, next_index)
+                }
             };
 
             path_elements.push_back(sibling);
-            current_index /= 2;
+            current_index /= 2; // Move to parent level
         }
 
         (path_elements, path_indices)
@@ -432,6 +492,8 @@ impl MembershipTree {
 
     /// Remove a member by zeroing their leaf and recomputing the root
     /// Only callable by DAO admin
+    /// Remove member by recording revocation timestamp (cheap, no tree update)
+    /// This prevents the member from voting on proposals created after this timestamp
     pub fn remove_member(env: Env, dao_id: u64, member: Address, admin: Address) {
         admin.require_auth();
 
@@ -459,33 +521,139 @@ impl MembershipTree {
             .get(&member_key)
             .expect("member not registered");
 
-        // Get tree depth
-        let depth: u32 = env
+        // Get their commitment from the tree
+        let commitment: U256 = env
             .storage()
             .persistent()
-            .get(&DataKey::TreeDepth(dao_id))
-            .unwrap();
+            .get(&DataKey::LeafValue(dao_id, leaf_index))
+            .expect("commitment not found");
 
-        // CRITICAL FIX: Update leaf value to zero BEFORE recomputing root
-        // Otherwise update_leaf reads the old value from storage and root doesn't change
-        let zero = Self::zero_value(&env);
-        let leaf_value_key = DataKey::LeafValue(dao_id, leaf_index);
-        env.storage().persistent().set(&leaf_value_key, &zero);
+        if commitment == Self::zero_value(&env) {
+            panic!("member already removed");
+        }
 
-        // Now recompute root with the zeroed leaf
-        let new_root = Self::update_leaf(&env, dao_id, leaf_index, zero.clone(), depth);
+        // Record revocation timestamp
+        let revoked_at = env.ledger().timestamp();
+        env.storage().persistent().set(
+            &DataKey::RevokedAt(dao_id, commitment.clone()),
+            &revoked_at,
+        );
 
         RemovalEvent {
             dao_id,
             member,
             index: leaf_index,
-            new_root,
+            new_root: U256::from_u32(&env, 0), // Not updating root
+            root_index: 0, // Not updating root
         }
         .publish(&env);
     }
 
+    /// Reinstate a previously removed member
+    /// Records the reinstatement timestamp, allowing them to vote on future proposals
+    pub fn reinstate_member(env: Env, dao_id: u64, member: Address, admin: Address) {
+        admin.require_auth();
+
+        // Verify admin is the DAO admin via cross-contract call
+        let registry: Address = env.storage().instance().get(&REGISTRY).unwrap();
+        let dao_admin: Address = env.invoke_contract(
+            &registry,
+            &symbol_short!("get_admin"),
+            vec![&env, dao_id.into_val(&env)],
+        );
+
+        if admin != dao_admin {
+            panic!("not admin");
+        }
+
+        // Get member's commitment
+        let leaf_index_key = DataKey::MemberLeafIndex(dao_id, member.clone());
+        let leaf_index: u32 = env
+            .storage()
+            .persistent()
+            .get(&leaf_index_key)
+            .expect("member not registered");
+
+        let commitment: U256 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::LeafValue(dao_id, leaf_index))
+            .expect("commitment not found");
+
+        if commitment == Self::zero_value(&env) {
+            panic!("member not in tree");
+        }
+
+        // Record reinstatement timestamp
+        let reinstated_at = env.ledger().timestamp();
+        env.storage().persistent().set(
+            &DataKey::ReinstatedAt(dao_id, commitment.clone()),
+            &reinstated_at,
+        );
+
+        // Emit event
+        env.events().publish(
+            (symbol_short!("reinstated"), dao_id),
+            (member, reinstated_at),
+        );
+    }
+
+    /// Get revocation timestamp for a commitment (returns None if never revoked)
+    /// Used by voting contract to check if member was revoked
+    pub fn revok_at(env: Env, dao_id: u64, commitment: U256) -> Option<u64> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::RevokedAt(dao_id, commitment))
+    }
+
+    /// Get reinstatement timestamp for a commitment (returns None if never reinstated)
+    /// Used by voting contract to check if member was reinstated after revocation
+    pub fn reinst_at(env: Env, dao_id: u64, commitment: U256) -> Option<u64> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ReinstatedAt(dao_id, commitment))
+    }
+
+    // Internal: Reconstruct the hash of a subtree at a given level and index
+    // This recursively computes the hash from stored leaf values
+    fn reconstruct_subtree(
+        env: &Env,
+        dao_id: u64,
+        subtree_index: u32,
+        level: u32,
+        next_index: u32,
+    ) -> U256 {
+        if level == 0 {
+            // Base case: return the leaf value
+            let leaf_key = DataKey::LeafValue(dao_id, subtree_index);
+            return env
+                .storage()
+                .persistent()
+                .get(&leaf_key)
+                .unwrap_or_else(|| Self::zero_value(env));
+        }
+
+        // Recursive case: hash the two children
+        let left_index = subtree_index * 2;
+        let right_index = left_index + 1;
+
+        let leaves_per_child = 1u32 << (level - 1); // 2^(level-1)
+        let right_start_leaf = right_index * leaves_per_child;
+
+        let left_hash = Self::reconstruct_subtree(env, dao_id, left_index, level - 1, next_index);
+
+        let right_hash = if right_start_leaf >= next_index {
+            // Right subtree is empty
+            Self::zero_at_level(env, level - 1)
+        } else {
+            Self::reconstruct_subtree(env, dao_id, right_index, level - 1, next_index)
+        };
+
+        Self::hash_pair(env, &left_hash, &right_hash)
+    }
+
     // Internal: Insert leaf and update tree
-    fn insert_leaf(env: &Env, dao_id: u64, leaf: U256, index: u32, depth: u32) -> U256 {
+    fn insert_leaf(env: &Env, dao_id: u64, leaf: U256, index: u32, depth: u32) -> (U256, u32) {
         let mut filled: Vec<U256> = env
             .storage()
             .persistent()
@@ -525,7 +693,22 @@ impl MembershipTree {
                 .persistent()
                 .set(&DataKey::Roots(dao_id), &roots);
 
-            return current_hash;
+            // Get and increment root index
+            let root_index: u32 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::NextRootIndex(dao_id))
+                .unwrap();
+            env.storage()
+                .persistent()
+                .set(&DataKey::NextRootIndex(dao_id), &(root_index + 1));
+
+            // Store root index mapping
+            env.storage()
+                .persistent()
+                .set(&DataKey::RootIndex(dao_id, current_hash.clone()), &root_index);
+
+            return (current_hash, root_index);
         }
 
         // General case for index > 0
@@ -574,12 +757,27 @@ impl MembershipTree {
             .persistent()
             .set(&DataKey::Roots(dao_id), &roots);
 
-        current_hash
+        // Get and increment root index
+        let root_index: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::NextRootIndex(dao_id))
+            .unwrap();
+        env.storage()
+            .persistent()
+            .set(&DataKey::NextRootIndex(dao_id), &(root_index + 1));
+
+        // Store root index mapping
+        env.storage()
+            .persistent()
+            .set(&DataKey::RootIndex(dao_id, current_hash.clone()), &root_index);
+
+        (current_hash, root_index)
     }
 
     // Internal: Update an existing leaf and recompute root
     // This rebuilds the entire tree from stored leaves - expensive but correct
-    fn update_leaf(env: &Env, dao_id: u64, _index: u32, _new_value: U256, depth: u32) -> U256 {
+    fn update_leaf(env: &Env, dao_id: u64, _index: u32, _new_value: U256, depth: u32) -> (U256, u32) {
         // Get total number of leaves
         let next_index: u32 = env
             .storage()
@@ -607,7 +805,22 @@ impl MembershipTree {
             }
             env.storage().persistent().set(&DataKey::Roots(dao_id), &roots);
 
-            return empty_root;
+            // Get and increment root index
+            let root_index: u32 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::NextRootIndex(dao_id))
+                .unwrap();
+            env.storage()
+                .persistent()
+                .set(&DataKey::NextRootIndex(dao_id), &(root_index + 1));
+
+            // Store root index mapping
+            env.storage()
+                .persistent()
+                .set(&DataKey::RootIndex(dao_id, empty_root.clone()), &root_index);
+
+            return (empty_root, root_index);
         }
 
         // Rebuild filled subtrees by re-inserting all leaves
@@ -688,7 +901,22 @@ impl MembershipTree {
             .persistent()
             .set(&DataKey::Roots(dao_id), &roots);
 
-        current_hash
+        // Get and increment root index
+        let root_index: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::NextRootIndex(dao_id))
+            .unwrap();
+        env.storage()
+            .persistent()
+            .set(&DataKey::NextRootIndex(dao_id), &(root_index + 1));
+
+        // Store root index mapping
+        env.storage()
+            .persistent()
+            .set(&DataKey::RootIndex(dao_id, current_hash.clone()), &root_index);
+
+        (current_hash, root_index)
     }
 
     // Internal: Poseidon hash of two U256 values

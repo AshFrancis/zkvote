@@ -13,6 +13,7 @@ import { getMerklePath } from "../lib/merkletree";
 interface VoteModalProps {
   proposalId: number;
   eligibleRoot: bigint; // Snapshot of Merkle root when proposal was created
+  voteMode: "Fixed" | "Trailing"; // Vote mode: Fixed (snapshot) or Trailing (dynamic)
   daoId: number;
   publicKey: string;
   kit: StellarWalletsKit | null;
@@ -25,6 +26,7 @@ type VoteStep = "select" | "generating" | "submitting" | "success" | "error";
 export default function VoteModal({
   proposalId,
   eligibleRoot,
+  voteMode,
   daoId,
   publicKey,
   kit,
@@ -96,11 +98,21 @@ export default function VoteModal({
       console.log("Salt:", salt);
       console.log("Leaf Index:", leafIndex);
 
-      // Step 2: Use the proposal's snapshot root (captured at proposal creation)
-      // This ensures only members who were in the DAO at proposal creation can vote
-      setProgress("Using proposal snapshot root...");
-      const root = eligibleRoot;
-      console.log("Proposal snapshot root (eligible_root):", root.toString());
+      // Step 2: Select root based on vote mode
+      // Fixed mode: Use snapshot root from proposal creation
+      // Trailing mode: Use current root (allows new members to vote)
+      let root: bigint;
+      if (voteMode === "Fixed") {
+        setProgress("Using proposal snapshot root (Fixed mode)...");
+        root = eligibleRoot;
+        console.log("Fixed mode - using snapshot root (eligible_root):", root.toString());
+      } else {
+        setProgress("Fetching current root (Trailing mode)...");
+        const currentRootResult = await clients.membershipTree.current_root({ dao_id: BigInt(daoId) });
+        root = currentRootResult.result;
+        console.log("Trailing mode - using current root:", root.toString());
+        console.log("(eligible_root was:", eligibleRoot.toString(), ")");
+      }
 
       // Step 3: Get Merkle path from contract
       setProgress("Fetching Merkle path from tree...");
@@ -131,6 +143,7 @@ export default function VoteModal({
         daoId: daoId.toString(),
         proposalId: proposalId.toString(),
         voteChoice: choice ? "1" : "0",
+        commitment: commitment.toString(), // NEW: allows revocation checks
         // Private signals
         secret: secret.toString(),
         salt: salt.toString(),
@@ -140,7 +153,7 @@ export default function VoteModal({
 
       console.log("=== PROOF INPUT DEBUG ===");
       console.log("Root (eligible_root):", root.toString());
-      console.log("Commitment:", "Poseidon(secret, salt)");
+      console.log("Commitment:", commitment);
       console.log("Secret:", secret);
       console.log("Salt:", salt);
       console.log("LeafIndex:", leafIndex);
@@ -148,11 +161,27 @@ export default function VoteModal({
       console.log("Full proof input:", proofInput);
       console.log("========================");
 
-      const { proof } = await generateVoteProof(
+      const { proof, publicSignals } = await generateVoteProof(
         proofInput,
         wasmPath,
         zkeyPath
       );
+
+      // Step 4.5: Verify proof locally before submitting
+      setProgress("Verifying proof locally...");
+      const { verifyProofLocally } = await import("../lib/zkproof");
+      const isValid = await verifyProofLocally(
+        proof,
+        publicSignals,
+        "/circuits/verification_key.json"
+      );
+
+      console.log("Local proof verification result:", isValid);
+      console.log("Public signals:", publicSignals);
+
+      if (!isValid) {
+        throw new Error("Proof verification failed locally! This indicates a bug in proof generation.");
+      }
 
       // Step 5: Format proof for Soroban
       setProgress("Formatting proof...");
@@ -180,6 +209,7 @@ export default function VoteModal({
           choice: choice,
           nullifier: toHexBE(nullifier),
           root: toHexBE(root),
+          commitment: toHexBE(commitment), // NEW: for revocation checks
           proof: {
             a: proof_a,
             b: proof_b,
@@ -213,7 +243,11 @@ export default function VoteModal({
 
       // Detect Merkle root mismatch (joined after proposal creation)
       if (errorMsg.includes("Assert Failed") || errorMsg.includes("Error in template Vote")) {
-        errorMsg = "Cannot vote on this proposal. You joined the DAO after this proposal was created. Only members who were present when the proposal was created can vote on it (snapshot voting).";
+        if (voteMode === "Fixed") {
+          errorMsg = "Cannot vote on this proposal. You joined the DAO after this proposal was created. Only members who were present when the proposal was created can vote on it (snapshot voting).";
+        } else {
+          errorMsg = "Proof generation failed. This may indicate an issue with your voting credentials or the Merkle tree state. Please try registering for voting again.";
+        }
       }
 
       setError(errorMsg);
@@ -253,6 +287,15 @@ export default function VoteModal({
             <p className="text-gray-600 dark:text-gray-400 mb-6">
               Your vote will be verified using zero-knowledge proofs to ensure anonymity
               while proving you're a DAO member.
+              {voteMode === "Fixed" ? (
+                <span className="block mt-2 text-sm text-yellow-600 dark:text-yellow-400">
+                  Note: Only members who were present when this proposal was created can vote (snapshot voting).
+                </span>
+              ) : (
+                <span className="block mt-2 text-sm text-green-600 dark:text-green-400">
+                  Note: Members can vote even if they joined after this proposal was created.
+                </span>
+              )}
             </p>
             <div className="flex gap-3">
               <button

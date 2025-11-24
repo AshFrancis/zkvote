@@ -55,6 +55,13 @@ pub enum DataKey {
 }
 
 #[contracttype]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VoteMode {
+    Fixed,    // Only members at snapshot can vote
+    Trailing, // Members added after proposal creation can also vote
+}
+
+#[contracttype]
 #[derive(Clone)]
 pub struct ProposalInfo {
     pub id: u64,
@@ -64,8 +71,12 @@ pub struct ProposalInfo {
     pub no_votes: u64,
     pub end_time: u64,
     pub created_by: Address,
+    pub created_at: u64,          // Timestamp when proposal was created (for revocation checks)
     pub vk_hash: BytesN<32>,     // SHA256 hash of VK at proposal creation
     pub eligible_root: U256,      // Merkle root at creation - defines eligible voter set
+    pub vote_mode: VoteMode,      // Fixed or Trailing voting
+    pub earliest_root_index: u32, // For Trailing mode: earliest valid root index
+    pub finalized: bool,          // If true, no more votes can be submitted
 }
 
 /// Groth16 Verification Key for BN254
@@ -279,6 +290,7 @@ impl Voting {
         description: String,
         end_time: u64,
         creator: Address,
+        vote_mode: VoteMode,
     ) -> u64 {
         creator.require_auth();
 
@@ -330,6 +342,13 @@ impl Voting {
             soroban_sdk::vec![&env, dao_id.into_val(&env)],
         );
 
+        // Get current root index for Open mode validation
+        let earliest_root_index: u32 = env.invoke_contract(
+            &tree_contract,
+            &symbol_short!("curr_idx"),
+            soroban_sdk::vec![&env, dao_id.into_val(&env)],
+        );
+
         let proposal_id = Self::next_proposal_id(&env, dao_id);
 
         let proposal = ProposalInfo {
@@ -340,8 +359,12 @@ impl Voting {
             no_votes: 0,
             end_time,
             created_by: creator.clone(),
+            created_at: now,
             vk_hash,
             eligible_root,
+            vote_mode,
+            earliest_root_index,
+            finalized: false,
         };
 
         let key = DataKey::Proposal(dao_id, proposal_id);
@@ -388,6 +411,7 @@ impl Voting {
         vote_choice: bool, // true = yes, false = no
         nullifier: U256,
         root: U256,
+        commitment: U256, // NEW: commitment allows revocation checks
         proof: Proof,
     ) {
         // CRITICAL: Check nullifier FIRST before any expensive operations
@@ -412,10 +436,97 @@ impl Voting {
             panic!("voting period closed");
         }
 
-        // Verify root matches the eligible voter set from proposal creation
-        // This prevents sybil attacks where members are added after proposal creation
-        if root != proposal.eligible_root {
-            panic!("root must match proposal eligible root");
+        // Check if proposal is finalized (blocks further votes)
+        if proposal.finalized {
+            panic!("proposal finalized");
+        }
+
+        // Get tree contract for revocation checks
+        let tree_contract: Address = env.storage().instance().get(&TREE_CONTRACT).unwrap();
+
+        // Check if commitment was revoked
+        // Query tree contract for RevokedAt timestamp
+        let revoked_at_opt: Option<u64> = env.invoke_contract(
+            &tree_contract,
+            &symbol_short!("revok_at"),
+            soroban_sdk::vec![&env, dao_id.into_val(&env), commitment.clone().into_val(&env)],
+        );
+
+        if let Some(revoked_at) = revoked_at_opt {
+            // Member was revoked at some point - check if they were reinstated AFTER revocation
+            let reinstated_at_opt: Option<u64> = env.invoke_contract(
+                &tree_contract,
+                &symbol_short!("reinst_at"),
+                soroban_sdk::vec![&env, dao_id.into_val(&env), commitment.clone().into_val(&env)],
+            );
+
+            // Determine effective status at proposal creation time
+            let was_active_at_creation = match reinstated_at_opt {
+                Some(reinstated_at) if reinstated_at > revoked_at => {
+                    // Member was reinstated - check if reinstatement happened before proposal creation
+                    reinstated_at <= proposal.created_at
+                }
+                _ => {
+                    // Never reinstated, or reinstated before revocation (shouldn't happen)
+                    false
+                }
+            };
+
+            if !was_active_at_creation {
+                panic!("commitment revoked at proposal creation");
+            }
+
+            // Also check they weren't revoked DURING the voting period
+            // If they were revoked after proposal creation but before now, reject
+            if revoked_at > proposal.created_at {
+                // Check if there's a reinstatement after this revocation that happened before now
+                let currently_active = match reinstated_at_opt {
+                    Some(reinstated_at) if reinstated_at > revoked_at => true,
+                    _ => false,
+                };
+
+                if !currently_active {
+                    panic!("commitment revoked during voting period");
+                }
+            }
+        }
+
+        // Verify root based on vote mode
+        match proposal.vote_mode {
+            VoteMode::Fixed => {
+                // Fixed mode: root must exactly match the snapshot at proposal creation
+                // This prevents sybil attacks where members are added after proposal creation
+                if root != proposal.eligible_root {
+                    panic!("root must match proposal eligible root");
+                }
+            }
+            VoteMode::Trailing => {
+                // Trailing mode: root must be in tree history AND not predate proposal creation
+                // This allows new members to vote while preventing removed members from using old roots
+
+                // Get tree contract address
+                let tree_contract: Address = env.storage().instance().get(&TREE_CONTRACT).unwrap();
+
+                // Check root is in valid history
+                let root_valid: bool = env.invoke_contract(
+                    &tree_contract,
+                    &symbol_short!("root_ok"),
+                    soroban_sdk::vec![&env, dao_id.into_val(&env), root.clone().into_val(&env)],
+                );
+                if !root_valid {
+                    panic!("root not in tree history");
+                }
+
+                // Check root index >= earliest_root_index (prevents using roots from before proposal)
+                let root_index: u32 = env.invoke_contract(
+                    &tree_contract,
+                    &symbol_short!("root_idx"),
+                    soroban_sdk::vec![&env, dao_id.into_val(&env), root.clone().into_val(&env)],
+                );
+                if root_index < proposal.earliest_root_index {
+                    panic!("root predates proposal creation");
+                }
+            }
         }
 
         // Get verification key
@@ -434,8 +545,9 @@ impl Voting {
         }
 
         // Verify Groth16 proof
-        // Public signals: [root, nullifier, daoId, proposalId, voteChoice]
+        // Public signals: [root, nullifier, daoId, proposalId, voteChoice, commitment]
         // Note: daoId is included for domain separation (prevents cross-DAO nullifier linkability)
+        // commitment allows revocation checks (makes votes linkable but preserves anonymity)
         let vote_signal = if vote_choice {
             U256::from_u32(&env, 1)
         } else {
@@ -450,7 +562,8 @@ impl Voting {
             nullifier.clone(),
             dao_signal,
             proposal_signal,
-            vote_signal
+            vote_signal,
+            commitment.clone()
         ];
 
         if !Self::verify_groth16(&env, &vk, &proof, &pub_signals) {
@@ -475,6 +588,53 @@ impl Voting {
             nullifier,
         }
         .publish(&env);
+    }
+
+    /// Finalize a proposal (callable by admin after end_time)
+    /// Blocks further votes even if proof generation is slow
+    pub fn finalize_proposal(env: Env, dao_id: u64, proposal_id: u64, admin: Address) {
+        admin.require_auth();
+
+        // Verify admin via registry
+        let registry: Address = env.storage().instance().get(&REGISTRY).unwrap();
+        let dao_admin: Address = env.invoke_contract(
+            &registry,
+            &symbol_short!("get_admin"),
+            vec![&env, dao_id.into_val(&env)],
+        );
+
+        if admin != dao_admin {
+            panic!("not admin");
+        }
+
+        // Get proposal
+        let prop_key = DataKey::Proposal(dao_id, proposal_id);
+        let mut proposal: ProposalInfo = env
+            .storage()
+            .persistent()
+            .get(&prop_key)
+            .expect("proposal not found");
+
+        // Check voting period has ended
+        let now = env.ledger().timestamp();
+        if now <= proposal.end_time {
+            panic!("voting period not ended");
+        }
+
+        // Check not already finalized
+        if proposal.finalized {
+            panic!("already finalized");
+        }
+
+        // Mark as finalized
+        proposal.finalized = true;
+        env.storage().persistent().set(&prop_key, &proposal);
+
+        // Emit event
+        env.events().publish(
+            (symbol_short!("finalized"), dao_id),
+            (proposal_id, now),
+        );
     }
 
     /// Get proposal info
@@ -610,15 +770,14 @@ impl Voting {
 
     // Negate G1 point (flip y-coordinate)
     // For BN254: -P = (x, -y) where -y = field_modulus - y
-    // IMPORTANT: Expects LITTLE-ENDIAN byte order!
+    // Uses LITTLE-ENDIAN byte order (arkworks G1Affine::from_bytes expects LE)
     #[cfg(not(any(test, feature = "testutils")))]
     fn g1_negate(env: &Env, point: &BytesN<64>) -> BytesN<64> {
         let bytes = point.to_array();
 
         // BN254 base field modulus (Fq) in LITTLE-ENDIAN
         // p = 21888242871839275222246405745257275088696311157297823662689037894645226208583
-        // Big-endian: 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47
-        // Little-endian (reversed):
+        // Little-endian: 0x47fd7cd8168c203c8dca7168916a8197...
         let field_modulus: [u8; 32] = [
             0x47, 0xfd, 0x7c, 0xd8, 0x16, 0x8c, 0x20, 0x3c, 0x8d, 0xca, 0x71, 0x68, 0x91, 0x6a,
             0x81, 0x97, 0x5d, 0x58, 0x81, 0x81, 0xb6, 0x45, 0x50, 0xb8, 0x29, 0xa0, 0x31, 0xe1,

@@ -21,6 +21,7 @@ interface Proposal {
   noVotes: number;
   hasVoted: boolean;
   eligibleRoot: bigint; // Snapshot of Merkle root when proposal was created
+  voteMode: "Fixed" | "Trailing"; // Vote mode: Fixed (snapshot) or Trailing (dynamic)
 }
 
 export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkSet, isInitializing = false }: ProposalListProps) {
@@ -28,7 +29,19 @@ export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkS
     // Initialize with cached data if available
     const cacheKey = `proposals_${daoId}`;
     const cached = localStorage.getItem(cacheKey);
-    return cached ? JSON.parse(cached) : [];
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        // Convert eligibleRoot strings back to bigints
+        return parsed.map((p: any) => ({
+          ...p,
+          eligibleRoot: BigInt(p.eligibleRoot)
+        }));
+      } catch {
+        return [];
+      }
+    }
+    return [];
   });
   const [loading, setLoading] = useState(() => {
     // Only show loading indicator if no cache exists
@@ -40,10 +53,8 @@ export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkS
   useEffect(() => {
     // Wait for wallet initialization before loading
     if (isInitializing) {
-      console.log('[ProposalList] Waiting for wallet initialization...');
       return;
     }
-    console.log('[ProposalList] Loading proposals for DAO:', daoId, 'publicKey:', publicKey);
     loadProposals();
   }, [daoId, isInitializing]);
 
@@ -54,9 +65,18 @@ export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkS
       // Load from cache first
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
-        const cachedData = JSON.parse(cached);
-        setProposals(cachedData);
-        setLoading(false);
+        try {
+          const cachedData = JSON.parse(cached);
+          // Convert eligibleRoot strings back to bigints
+          const proposals = cachedData.map((p: any) => ({
+            ...p,
+            eligibleRoot: BigInt(p.eligibleRoot)
+          }));
+          setProposals(proposals);
+          setLoading(false);
+        } catch {
+          // Ignore cache errors
+        }
       }
 
       // For now, load proposals 1-5 (we'll need to track total count in production)
@@ -71,8 +91,12 @@ export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkS
 
       setProposals(loadedProposals);
 
-      // Update cache
-      localStorage.setItem(cacheKey, JSON.stringify(loadedProposals));
+      // Update cache (convert BigInts to strings for serialization)
+      const serializable = loadedProposals.map(p => ({
+        ...p,
+        eligibleRoot: p.eligibleRoot.toString()
+      }));
+      localStorage.setItem(cacheKey, JSON.stringify(serializable));
     } catch (err) {
       console.error("Failed to load proposals:", err);
     } finally {
@@ -130,6 +154,7 @@ export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkS
         noVotes: Number(proposal.no_votes),
         hasVoted,
         eligibleRoot: proposal.eligible_root, // Pass through the snapshot root
+        voteMode: proposal.vote_mode.tag as "Fixed" | "Trailing", // Extract vote mode from enum
       };
     } catch (err) {
       return null;

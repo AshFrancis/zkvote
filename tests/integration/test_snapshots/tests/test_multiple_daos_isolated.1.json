@@ -817,16 +817,16 @@
                       "u256": "11111"
                     },
                     {
-                      "u256": "14241795537118425946793319035791791582877645228958048208491851234678325079824"
+                      "u256": "14744269619966411208579211824598458697587494354926760081771325075741142829156"
                     },
                     {
-                      "u256": "632523348156369209369937253783262638348238471438776651248573855179581417333"
+                      "u256": "7423237065226347324353380772367382631490014989348495481811164164159255474657"
                     },
                     {
-                      "u256": "20311636962186983322441654165506963310668612230486055535128179477464551942397"
+                      "u256": "11286972368698509976183087595462810875513684078608517520839298933882497716792"
                     },
                     {
-                      "u256": "5070007742621557970611826773248916688059119993436991171910663254886962865507"
+                      "u256": "3607627140608796879659380071776844901612302623152076817094415224584923813162"
                     }
                   ]
                 }
@@ -878,16 +878,16 @@
                       "u256": "22222"
                     },
                     {
-                      "u256": "3330150871046911941996547225503366046762174136447672307590514134253965217979"
+                      "u256": "14744269619966411208579211824598458697587494354926760081771325075741142829156"
                     },
                     {
-                      "u256": "14607328037030269461359896623520229733189278261163624615836408477831370651817"
+                      "u256": "7423237065226347324353380772367382631490014989348495481811164164159255474657"
                     },
                     {
-                      "u256": "6416712258653720556514059098935152270417515889233618503634063746865218292917"
+                      "u256": "11286972368698509976183087595462810875513684078608517520839298933882497716792"
                     },
                     {
-                      "u256": "12424734582619561361571774268282050099102277926951943290660632253340705116749"
+                      "u256": "3607627140608796879659380071776844901612302623152076817094415224584923813162"
                     }
                   ]
                 }
@@ -1286,6 +1286,300 @@
                 "durability": "persistent",
                 "val": {
                   "u32": 1
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "NextRootIndex"
+                },
+                {
+                  "u64": "1"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "NextRootIndex"
+                    },
+                    {
+                      "u64": "1"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "u32": 1
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "NextRootIndex"
+                },
+                {
+                  "u64": "2"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "NextRootIndex"
+                    },
+                    {
+                      "u64": "2"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "u32": 1
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "RootIndex"
+                },
+                {
+                  "u64": "1"
+                },
+                {
+                  "u256": "17416337554894379657118133424657160968009819453848019657691586050325753511149"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "RootIndex"
+                    },
+                    {
+                      "u64": "1"
+                    },
+                    {
+                      "u256": "17416337554894379657118133424657160968009819453848019657691586050325753511149"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "u32": 0
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "RootIndex"
+                },
+                {
+                  "u64": "1"
+                },
+                {
+                  "u256": "19712377064642672829441595136074946683621277828620209496774504837737984048981"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "RootIndex"
+                    },
+                    {
+                      "u64": "1"
+                    },
+                    {
+                      "u256": "19712377064642672829441595136074946683621277828620209496774504837737984048981"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "u32": 0
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "RootIndex"
+                },
+                {
+                  "u64": "2"
+                },
+                {
+                  "u256": "2012017418613770800615525568725363466575388032208240423887727566168263914183"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "RootIndex"
+                    },
+                    {
+                      "u64": "2"
+                    },
+                    {
+                      "u256": "2012017418613770800615525568725363466575388032208240423887727566168263914183"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "u32": 0
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "RootIndex"
+                },
+                {
+                  "u64": "2"
+                },
+                {
+                  "u256": "19712377064642672829441595136074946683621277828620209496774504837737984048981"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "RootIndex"
+                    },
+                    {
+                      "u64": "2"
+                    },
+                    {
+                      "u256": "19712377064642672829441595136074946683621277828620209496774504837737984048981"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "u32": 0
                 }
               }
             },

@@ -225,7 +225,7 @@ fn test_real_groth16_proof_verification() {
     let current_time = env.ledger().timestamp();
     let end_time = current_time + 3600; // 1 hour from now
 
-    let proposal_id = voting_client.create_proposal(&dao_id, &description, &end_time, &admin);
+    let proposal_id = voting_client.create_proposal(&dao_id, &description, &end_time, &admin, &voting::VoteMode::Fixed);
     println!("Proposal ID: {}\n", proposal_id);
 
     println!("Step 8: Submitting real Groth16 proof...");

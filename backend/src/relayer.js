@@ -98,11 +98,11 @@ app.get('/health', (req, res) => {
 
 // Submit anonymous vote (with rate limiting)
 app.post('/vote', voteLimiter, async (req, res) => {
-  const { daoId, proposalId, choice, nullifier, root, proof } = req.body;
+  const { daoId, proposalId, choice, nullifier, root, commitment, proof } = req.body;
 
   // Validate required fields
   if (daoId === undefined || proposalId === undefined || choice === undefined ||
-      !nullifier || !root || !proof) {
+      !nullifier || !root || !commitment || !proof) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
@@ -123,6 +123,9 @@ app.post('/vote', voteLimiter, async (req, res) => {
   }
   if (!isValidU256Hex(root)) {
     return res.status(400).json({ error: 'root must be a valid hex string (up to 64 chars)' });
+  }
+  if (!isValidU256Hex(commitment)) {
+    return res.status(400).json({ error: 'commitment must be a valid hex string (up to 64 chars)' });
   }
 
   // Validate proof structure
@@ -152,6 +155,7 @@ app.post('/vote', voteLimiter, async (req, res) => {
       StellarSdk.nativeToScVal(choice, { type: 'bool' }),                  // choice
       u256ToScVal(nullifier),                                              // nullifier
       u256ToScVal(root),                                                   // root
+      u256ToScVal(commitment),                                             // commitment (NEW)
       proofToScVal(proof)                                                  // proof
     ];
 

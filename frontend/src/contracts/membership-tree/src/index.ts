@@ -34,11 +34,11 @@ if (typeof window !== 'undefined') {
 export const networks = {
   futurenet: {
     networkPassphrase: "Test SDF Future Network ; October 2022",
-    contractId: "CAUD425RBSWFZVZUQIGIDEBZM6PNLX375M5K327MQFJGOMRBDYP3IOTZ",
+    contractId: "CCT6MUCZLDBXZNJX2VKR5GVAYPPZEJF26KSCHUT22FOP7XLWZQQE7J2G",
   }
 } as const
 
-export type DataKey = {tag: "TreeDepth", values: readonly [u64]} | {tag: "NextLeafIndex", values: readonly [u64]} | {tag: "FilledSubtrees", values: readonly [u64]} | {tag: "Roots", values: readonly [u64]} | {tag: "LeafIndex", values: readonly [u64, u256]} | {tag: "MemberLeafIndex", values: readonly [u64, string]} | {tag: "LeafValue", values: readonly [u64, u32]};
+export type DataKey = {tag: "TreeDepth", values: readonly [u64]} | {tag: "NextLeafIndex", values: readonly [u64]} | {tag: "FilledSubtrees", values: readonly [u64]} | {tag: "Roots", values: readonly [u64]} | {tag: "LeafIndex", values: readonly [u64, u256]} | {tag: "MemberLeafIndex", values: readonly [u64, string]} | {tag: "LeafValue", values: readonly [u64, u32]} | {tag: "NextRootIndex", values: readonly [u64]} | {tag: "RootIndex", values: readonly [u64, u256]};
 
 
 
@@ -198,6 +198,48 @@ export interface Client {
   }) => Promise<AssembledTransaction<boolean>>
 
   /**
+   * Construct and simulate a root_idx transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Get root index for a specific root (for vote mode validation)
+   */
+  root_idx: ({dao_id, root}: {dao_id: u64, root: u256}, options?: {
+    /**
+     * The fee to pay for the transaction. Default: BASE_FEE
+     */
+    fee?: number;
+
+    /**
+     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
+     */
+    timeoutInSeconds?: number;
+
+    /**
+     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
+     */
+    simulate?: boolean;
+  }) => Promise<AssembledTransaction<u32>>
+
+  /**
+   * Construct and simulate a curr_idx transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Get current root index (for proposal creation)
+   */
+  curr_idx: ({dao_id}: {dao_id: u64}, options?: {
+    /**
+     * The fee to pay for the transaction. Default: BASE_FEE
+     */
+    fee?: number;
+
+    /**
+     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
+     */
+    timeoutInSeconds?: number;
+
+    /**
+     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
+     */
+    simulate?: boolean;
+  }) => Promise<AssembledTransaction<u32>>
+
+  /**
    * Construct and simulate a get_leaf_index transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Get leaf index for a commitment
    */
@@ -348,10 +390,10 @@ export class Client extends ContractClient {
   }
   constructor(public readonly options: ContractClientOptions) {
     super(
-      new ContractSpec([ "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAABwAAAAEAAAAAAAAACVRyZWVEZXB0aAAAAAAAAAEAAAAGAAAAAQAAAAAAAAANTmV4dExlYWZJbmRleAAAAAAAAAEAAAAGAAAAAQAAAAAAAAAORmlsbGVkU3VidHJlZXMAAAAAAAEAAAAGAAAAAQAAAAAAAAAFUm9vdHMAAAAAAAABAAAABgAAAAEAAAAAAAAACUxlYWZJbmRleAAAAAAAAAIAAAAGAAAADAAAAAEAAAAAAAAAD01lbWJlckxlYWZJbmRleAAAAAACAAAABgAAABMAAAABAAAAAAAAAAlMZWFmVmFsdWUAAAAAAAACAAAABgAAAAQ=",
-        "AAAABQAAAAAAAAAAAAAADVRyZWVJbml0RXZlbnQAAAAAAAABAAAAD3RyZWVfaW5pdF9ldmVudAAAAAADAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAAAAAAVkZXB0aAAAAAAAAAQAAAAAAAAAAAAAAAplbXB0eV9yb290AAAAAAAMAAAAAAAAAAI=",
-        "AAAABQAAAAAAAAAAAAAAC0NvbW1pdEV2ZW50AAAAAAEAAAAMY29tbWl0X2V2ZW50AAAABAAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAQAAAAAAAAAKY29tbWl0bWVudAAAAAAADAAAAAAAAAAAAAAABWluZGV4AAAAAAAABAAAAAAAAAAAAAAACG5ld19yb290AAAADAAAAAAAAAAC",
-        "AAAABQAAAAAAAAAAAAAADFJlbW92YWxFdmVudAAAAAEAAAANcmVtb3ZhbF9ldmVudAAAAAAAAAQAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAAAAAAABm1lbWJlcgAAAAAAEwAAAAEAAAAAAAAABWluZGV4AAAAAAAABAAAAAAAAAAAAAAACG5ld19yb290AAAADAAAAAAAAAAC",
+      new ContractSpec([ "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAACQAAAAEAAAAAAAAACVRyZWVEZXB0aAAAAAAAAAEAAAAGAAAAAQAAAAAAAAANTmV4dExlYWZJbmRleAAAAAAAAAEAAAAGAAAAAQAAAAAAAAAORmlsbGVkU3VidHJlZXMAAAAAAAEAAAAGAAAAAQAAAAAAAAAFUm9vdHMAAAAAAAABAAAABgAAAAEAAAAAAAAACUxlYWZJbmRleAAAAAAAAAIAAAAGAAAADAAAAAEAAAAAAAAAD01lbWJlckxlYWZJbmRleAAAAAACAAAABgAAABMAAAABAAAAAAAAAAlMZWFmVmFsdWUAAAAAAAACAAAABgAAAAQAAAABAAAAAAAAAA1OZXh0Um9vdEluZGV4AAAAAAAAAQAAAAYAAAABAAAAAAAAAAlSb290SW5kZXgAAAAAAAACAAAABgAAAAw=",
+        "AAAABQAAAAAAAAAAAAAADVRyZWVJbml0RXZlbnQAAAAAAAABAAAAD3RyZWVfaW5pdF9ldmVudAAAAAAEAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAAAAAAVkZXB0aAAAAAAAAAQAAAAAAAAAAAAAAAplbXB0eV9yb290AAAAAAAMAAAAAAAAAAAAAAAKcm9vdF9pbmRleAAAAAAABAAAAAAAAAAC",
+        "AAAABQAAAAAAAAAAAAAAC0NvbW1pdEV2ZW50AAAAAAEAAAAMY29tbWl0X2V2ZW50AAAABQAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAQAAAAAAAAAKY29tbWl0bWVudAAAAAAADAAAAAAAAAAAAAAABWluZGV4AAAAAAAABAAAAAAAAAAAAAAACG5ld19yb290AAAADAAAAAAAAAAAAAAACnJvb3RfaW5kZXgAAAAAAAQAAAAAAAAAAg==",
+        "AAAABQAAAAAAAAAAAAAADFJlbW92YWxFdmVudAAAAAEAAAANcmVtb3ZhbF9ldmVudAAAAAAAAAUAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAAAAAAABm1lbWJlcgAAAAAAEwAAAAEAAAAAAAAABWluZGV4AAAAAAAABAAAAAAAAAAAAAAACG5ld19yb290AAAADAAAAAAAAAAAAAAACnJvb3RfaW5kZXgAAAAAAAQAAAAAAAAAAg==",
         "AAAAAAAAAJRDb25zdHJ1Y3RvcjogSW5pdGlhbGl6ZSBjb250cmFjdCB3aXRoIFNCVCBjb250cmFjdCBhZGRyZXNzCkFsc28gcHJlLWNvbXB1dGVzIHplcm9zIGNhY2hlIHRvIGF2b2lkIGV4cGVuc2l2ZSBpbml0aWFsaXphdGlvbiBkdXJpbmcgZmlyc3QgREFPIGNyZWF0aW9uAAAADV9fY29uc3RydWN0b3IAAAAAAAABAAAAAAAAAAxzYnRfY29udHJhY3QAAAATAAAAAA==",
         "AAAAAAAAAGtJbml0aWFsaXplIGEgdHJlZSBmb3IgYSBzcGVjaWZpYyBEQU8KT25seSBEQU8gYWRtaW4gY2FuIGluaXRpYWxpemUgKHZpYSBTQlQgY29udHJhY3Qgd2hpY2ggY2hlY2tzIHJlZ2lzdHJ5KQAAAAAJaW5pdF90cmVlAAAAAAAAAwAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAVkZXB0aAAAAAAAAAQAAAAAAAAABWFkbWluAAAAAAAAEwAAAAA=",
         "AAAAAAAAAMtJbml0aWFsaXplIHRyZWUgZnJvbSByZWdpc3RyeSBkdXJpbmcgREFPIGluaXRpYWxpemF0aW9uClRoaXMgZnVuY3Rpb24gaXMgY2FsbGVkIGJ5IHRoZSByZWdpc3RyeSBjb250cmFjdCBkdXJpbmcgY3JlYXRlX2FuZF9pbml0X2Rhbwp0byBhdm9pZCByZS1lbnRyYW5jeSBpc3N1ZXMuIFRoZSByZWdpc3RyeSBpcyBhIHRydXN0ZWQgc3lzdGVtIGNvbnRyYWN0LgAAAAAXaW5pdF90cmVlX2Zyb21fcmVnaXN0cnkAAAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAVkZXB0aAAAAAAAAAQAAAAA",
@@ -360,6 +402,8 @@ export class Client extends ContractClient {
         "AAAAAAAAABpHZXQgY3VycmVudCByb290IGZvciBhIERBTwAAAAAADGN1cnJlbnRfcm9vdAAAAAEAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAAM",
         "AAAAAAAAADdHZXQgY3VycmVudCByb290IChzaG9ydCBhbGlhcyBmb3IgY3Jvc3MtY29udHJhY3QgY2FsbHMpAAAAAAhnZXRfcm9vdAAAAAEAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAAM",
         "AAAAAAAAACVDaGVjayBpZiBhIHJvb3QgaXMgdmFsaWQgKGluIGhpc3RvcnkpAAAAAAAAB3Jvb3Rfb2sAAAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAARyb290AAAADAAAAAEAAAAB",
+        "AAAAAAAAAD1HZXQgcm9vdCBpbmRleCBmb3IgYSBzcGVjaWZpYyByb290IChmb3Igdm90ZSBtb2RlIHZhbGlkYXRpb24pAAAAAAAACHJvb3RfaWR4AAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAARyb290AAAADAAAAAEAAAAE",
+        "AAAAAAAAAC5HZXQgY3VycmVudCByb290IGluZGV4IChmb3IgcHJvcG9zYWwgY3JlYXRpb24pAAAAAAAIY3Vycl9pZHgAAAABAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAABA==",
         "AAAAAAAAAB9HZXQgbGVhZiBpbmRleCBmb3IgYSBjb21taXRtZW50AAAAAA5nZXRfbGVhZl9pbmRleAAAAAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAApjb21taXRtZW50AAAAAAAMAAAAAQAAAAQ=",
         "AAAAAAAAABdHZXQgdHJlZSBpbmZvIGZvciBhIERBTwAAAAANZ2V0X3RyZWVfaW5mbwAAAAAAAAEAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAPtAAAAAwAAAAQAAAAEAAAADA==",
         "AAAAAAAAAMNHZXQgTWVya2xlIHBhdGggZm9yIGEgc3BlY2lmaWMgbGVhZiBpbmRleApSZXR1cm5zIChwYXRoRWxlbWVudHMsIHBhdGhJbmRpY2VzKSB3aGVyZToKLSBwYXRoRWxlbWVudHNbaV0gaXMgdGhlIHNpYmxpbmcgaGFzaCBhdCBsZXZlbCBpCi0gcGF0aEluZGljZXNbaV0gaXMgMCBpZiBsZWFmIGlzIGxlZnQgY2hpbGQsIDEgaWYgcmlnaHQgY2hpbGQAAAAAD2dldF9tZXJrbGVfcGF0aAAAAAACAAAAAAAAAAZkYW9faWQAAAAAAAYAAAAAAAAACmxlYWZfaW5kZXgAAAAAAAQAAAABAAAD7QAAAAIAAAPqAAAADAAAA+oAAAAE",
@@ -377,6 +421,8 @@ export class Client extends ContractClient {
         current_root: this.txFromJSON<u256>,
         get_root: this.txFromJSON<u256>,
         root_ok: this.txFromJSON<boolean>,
+        root_idx: this.txFromJSON<u32>,
+        curr_idx: this.txFromJSON<u32>,
         get_leaf_index: this.txFromJSON<u32>,
         get_tree_info: this.txFromJSON<readonly [u32, u32, u256]>,
         get_merkle_path: this.txFromJSON<readonly [Array<u256>, Array<u32>]>,

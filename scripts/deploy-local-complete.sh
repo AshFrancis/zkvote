@@ -5,8 +5,8 @@ echo "=== Complete DaoVote Deployment Script ==="
 echo "This script will:"
 echo "1. Build all contracts"
 echo "2. Deploy all contracts to local futurenet"
-echo "3. Generate TypeScript bindings"
-echo "4. Update frontend configuration"
+echo "3. Generate and build TypeScript bindings"
+echo "4. Update frontend and backend configuration"
 echo ""
 
 # Configuration
@@ -150,6 +150,24 @@ stellar contract bindings typescript \
   --overwrite
 success "Voting bindings generated"
 
+# Step 3.5: Build bindings
+step "Building TypeScript bindings..."
+echo "Building DAO Registry bindings..."
+(cd frontend/src/contracts/dao-registry && npm install --silent && npm run build) > /dev/null 2>&1
+success "DAO Registry bindings built"
+
+echo "Building Membership SBT bindings..."
+(cd frontend/src/contracts/membership-sbt && npm install --silent && npm run build) > /dev/null 2>&1
+success "Membership SBT bindings built"
+
+echo "Building Membership Tree bindings..."
+(cd frontend/src/contracts/membership-tree && npm install --silent && npm run build) > /dev/null 2>&1
+success "Membership Tree bindings built"
+
+echo "Building Voting bindings..."
+(cd frontend/src/contracts/voting && npm install --silent && npm run build) > /dev/null 2>&1
+success "Voting bindings built"
+
 # Step 4: Update frontend configuration
 step "Updating frontend configuration..."
 cat > frontend/src/config/contracts.ts << EOF
@@ -222,6 +240,19 @@ PORT=3001
 CORS_ORIGIN=http://localhost:5173
 EOF
 success "Backend configuration updated"
+
+# Step 6: Restart relayer if running
+step "Restarting relayer (if running)..."
+# Find and kill any running relayer processes
+RELAYER_PIDS=$(pgrep -f "node src/relayer.js" || true)
+if [ -n "$RELAYER_PIDS" ]; then
+  echo "Stopping existing relayer processes: $RELAYER_PIDS"
+  kill $RELAYER_PIDS 2>/dev/null || true
+  sleep 1
+  success "Relayer stopped"
+else
+  echo "No running relayer found"
+fi
 
 # Summary
 echo ""

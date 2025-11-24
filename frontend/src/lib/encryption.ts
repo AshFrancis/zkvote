@@ -197,10 +197,17 @@ export async function getOrDeriveEncryptionKey(
   }
 
   // Need to derive key from signature
-  const warningMessage = `WARNING: This will reveal aliases of DAO ${daoId} members. Make sure you're using an app you trust and are not screensharing.`;
+  const message = `[DaoVote App - DO NOT SIGN ON OTHER SITES]
+
+Action: Unlock member alias encryption key
+DAO ID: ${daoId}
+Purpose: This signature decrypts member nicknames for DAO admins.
+Warning: Only sign this on the official DaoVote application.
+
+By signing, you acknowledge that this reveals member aliases you've set for DAO ${daoId}.`;
 
   try {
-    const signature = await signMessage(warningMessage);
+    const signature = await signMessage(message);
     const key = await deriveKeyFromSignatureAsync(signature, daoId);
 
     // Store in session

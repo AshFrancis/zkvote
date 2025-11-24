@@ -9,6 +9,7 @@ interface ProposalCardProps {
     noVotes: number;
     hasVoted: boolean;
     eligibleRoot: bigint; // Snapshot of Merkle root when proposal was created
+    voteMode: "Fixed" | "Trailing"; // Vote mode: Fixed (snapshot) or Trailing (dynamic)
   };
   daoId: number;
   publicKey: string;
@@ -30,6 +31,12 @@ export default function ProposalCard({
   const totalVotes = proposal.yesVotes + proposal.noVotes;
   const yesPercentage = totalVotes > 0 ? (proposal.yesVotes / totalVotes) * 100 : 0;
   const noPercentage = totalVotes > 0 ? (proposal.noVotes / totalVotes) * 100 : 0;
+
+  // Check if user is registered for voting
+  const isRegistered = publicKey ? (() => {
+    const registrationKey = `voting_registration_${daoId}_${publicKey}`;
+    return localStorage.getItem(registrationKey) !== null;
+  })() : false;
 
   return (
     <>
@@ -76,12 +83,25 @@ export default function ProposalCard({
 
         {/* Vote Button */}
         {hasMembership && !proposal.hasVoted && (
-          <button
-            onClick={() => setShowVoteModal(true)}
-            className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md transition-colors"
-          >
-            Vote (Anonymous)
-          </button>
+          <>
+            <button
+              onClick={() => setShowVoteModal(true)}
+              disabled={!isRegistered}
+              className={`w-full mt-4 font-medium px-4 py-2 rounded-md transition-colors ${
+                isRegistered
+                  ? "bg-blue-600 hover:bg-blue-700 text-white"
+                  : "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+              }`}
+              title={!isRegistered ? "Please register for voting first" : ""}
+            >
+              Vote (Anonymous)
+            </button>
+            {!isRegistered && (
+              <p className="mt-2 text-sm text-yellow-600 dark:text-yellow-400">
+                You must register for voting before you can vote. Click "Register for Voting" in the DAO dashboard.
+              </p>
+            )}
+          </>
         )}
       </div>
 
@@ -90,6 +110,7 @@ export default function ProposalCard({
         <VoteModal
           proposalId={proposal.id}
           eligibleRoot={proposal.eligibleRoot}
+          voteMode={proposal.voteMode}
           daoId={daoId}
           publicKey={publicKey}
           kit={kit}

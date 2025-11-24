@@ -27,7 +27,6 @@ export function useWallet() {
   });
 
   useEffect(() => {
-    console.log('[useWallet] Initializing wallet...');
     // Initialize kit only once
     if (!globalKit) {
       globalKit = new StellarWalletsKit({
@@ -55,7 +54,6 @@ export function useWallet() {
 
       try {
         // User previously connected, attempt silent reconnect
-        console.log('[useWallet] Attempting auto-reconnect...');
         globalKit!.setWallet(storedWalletId);
         const { address } = await globalKit!.getAddress();
         if (address) {

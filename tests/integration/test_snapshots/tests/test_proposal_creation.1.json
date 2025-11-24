@@ -190,6 +190,13 @@
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
+                },
+                {
+                  "vec": [
+                    {
+                      "symbol": "Fixed"
+                    }
+                  ]
                 }
               ]
             }
@@ -638,6 +645,102 @@
             "key": {
               "vec": [
                 {
+                  "symbol": "NextRootIndex"
+                },
+                {
+                  "u64": "1"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "NextRootIndex"
+                    },
+                    {
+                      "u64": "1"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "u32": 0
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "RootIndex"
+                },
+                {
+                  "u64": "1"
+                },
+                {
+                  "u256": "19712377064642672829441595136074946683621277828620209496774504837737984048981"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "RootIndex"
+                    },
+                    {
+                      "u64": "1"
+                    },
+                    {
+                      "u256": "19712377064642672829441595136074946683621277828620209496774504837737984048981"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "u32": 0
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "vec": [
+                {
                   "symbol": "Roots"
                 },
                 {
@@ -907,6 +1010,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "earliest_root_index"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "eligible_root"
                       },
                       "val": {
@@ -943,6 +1054,18 @@
                       },
                       "val": {
                         "bytes": "c71e2926012280d60acde505fcde151e559b9fc14bdf086de6084318a0e48129"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "vote_mode"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "symbol": "Fixed"
+                          }
+                        ]
                       }
                     },
                     {

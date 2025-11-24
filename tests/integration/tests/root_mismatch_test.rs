@@ -166,6 +166,7 @@ fn test_vote_with_wrong_root_fails() {
         &String::from_str(&env, "Proposal 1"),
         &1000u64,
         &admin,
+        &voting::VoteMode::Fixed,
     );
 
     let proposal_1 = voting_client.get_proposal(&dao_id, &proposal_1_id);
@@ -204,6 +205,7 @@ fn test_vote_with_wrong_root_fails() {
         &String::from_str(&env, "Proposal 2"),
         &2000u64,
         &admin,
+        &voting::VoteMode::Fixed,
     );
 
     let proposal_2 = voting_client.get_proposal(&dao_id, &proposal_2_id);
@@ -277,6 +279,7 @@ fn test_vote_with_correct_root_succeeds() {
         &String::from_str(&env, "Test Proposal"),
         &1000u64,
         &admin,
+        &voting::VoteMode::Fixed,
     );
 
     // Vote with matching root

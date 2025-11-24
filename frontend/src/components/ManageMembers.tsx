@@ -57,6 +57,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
   const [updatingAlias, setUpdatingAlias] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [aliasesVisible, setAliasesVisible] = useState(false);
+  const [aliasInputUnlocked, setAliasInputUnlocked] = useState(false);
 
   useEffect(() => {
     // Wait for wallet initialization before loading
@@ -373,12 +374,11 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
     }
   };
 
+  // Toggle revealing existing member aliases in the list
   const toggleAliasVisibility = async () => {
-    // If currently visible, hide them
+    // If currently visible, just hide them (keep the key for next reveal)
     if (aliasesVisible) {
       setAliasesVisible(false);
-      setMemberAliases(new Map());
-      setEncryptionKey(null);
       return;
     }
 
@@ -390,7 +390,9 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
 
     try {
       setError(null);
+      console.log("[toggleAliasVisibility] Requesting encryption key...");
       const key = await getOrDeriveEncryptionKey(daoId, kit.signMessage.bind(kit));
+      console.log("[toggleAliasVisibility] Got encryption key:", !!key);
       if (key) {
         setEncryptionKey(key);  // This will trigger decryptAliases via useEffect
         setAliasesVisible(true);
@@ -400,6 +402,38 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reveal aliases");
       console.error("Failed to reveal aliases:", err);
+    }
+  };
+
+  // Toggle unlocking the alias input field for adding new aliases
+  const toggleAliasInput = async () => {
+    // If currently unlocked, lock it
+    if (aliasInputUnlocked) {
+      setAliasInputUnlocked(false);
+      setMemberAlias("");
+      return;
+    }
+
+    // If locked, unlock it (get key if needed)
+    if (!kit?.signMessage) {
+      setError("Wallet does not support message signing");
+      return;
+    }
+
+    try {
+      setError(null);
+      console.log("[toggleAliasInput] Requesting encryption key...");
+      const key = await getOrDeriveEncryptionKey(daoId, kit.signMessage.bind(kit));
+      console.log("[toggleAliasInput] Got encryption key:", !!key);
+      if (key) {
+        setEncryptionKey(key);
+        setAliasInputUnlocked(true);
+      } else {
+        setError("Failed to unlock alias input - signature was cancelled or failed");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to unlock alias input");
+      console.error("Failed to unlock alias input:", err);
     }
   };
 
@@ -419,18 +453,31 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
 
       const clients = initializeContractClients(publicKey);
 
-      // Call the revoke contract function
-      const tx = await clients.membershipSbt.revoke({
+      if (!kit) {
+        throw new Error("Wallet kit not available");
+      }
+
+      // Step 1: Revoke the SBT (sets revoked flag)
+      console.log('[handleRemoveMember] Step 1: Revoking SBT...');
+      const revokeTx = await clients.membershipSbt.revoke({
         dao_id: BigInt(daoId),
         member: address,
         admin: publicKey,
       });
 
-      if (!kit) {
-        throw new Error("Wallet kit not available");
-      }
+      await revokeTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+      console.log('[handleRemoveMember] SBT revoked');
 
-      await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+      // Step 2: Remove member from Merkle tree (zeros their leaf)
+      console.log('[handleRemoveMember] Step 2: Removing from Merkle tree...');
+      const removeTx = await clients.membershipTree.remove_member({
+        dao_id: BigInt(daoId),
+        member: address,
+        admin: publicKey,
+      });
+
+      await removeTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+      console.log('[handleRemoveMember] Member removed from tree');
 
       // Update local state
       const updatedMembers = members.filter(m => m.address !== address);
@@ -438,10 +485,13 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
 
       setMembers(updatedMembers);
       setRemovedMembers(updatedRemoved);
-      setSuccess(`Successfully revoked membership for ${address.substring(0, 8)}...`);
+      setSuccess(`Successfully removed ${address.substring(0, 8)}... (SBT revoked + tree updated)`);
+
+      // Reload tree info to show updated root
+      await loadTreeInfo();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to revoke membership");
-      console.error("Failed to revoke membership:", err);
+      setError(err instanceof Error ? err.message : "Failed to remove member");
+      console.error("Failed to remove member:", err);
     }
   };
 
@@ -623,22 +673,26 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             Current Members ({members.length})
           </h3>
-          {isAdmin && (
+          {isAdmin && encryptedAliases.size > 0 && (
             <button
               onClick={toggleAliasVisibility}
-              className="p-2 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
-              title={aliasesVisible ? "Hide aliases" : "Show aliases"}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
             >
               {aliasesVisible ? (
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="w-5 h-5">
-                  <rect width="12" height="8.571" x="6" y="12.071" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" rx="2"/>
-                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16.286 8.643a4.286 4.286 0 0 0-8.572 0v3.428"/>
-                </svg>
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+                  </svg>
+                  Hide Aliases
+                </>
               ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="w-5 h-5">
-                  <rect width="12.526" height="8.947" x="5.737" y="12.053" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" rx="2"/>
-                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7.526 12.053v-3.58a4.474 4.474 0 0 1 8.948 0v3.58"/>
-                </svg>
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Reveal Aliases
+                </>
               )}
             </button>
           )}
@@ -838,12 +892,12 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
                 Member Alias (Optional)
               </label>
               <button
-                onClick={toggleAliasVisibility}
+                onClick={toggleAliasInput}
                 type="button"
                 className="p-1.5 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
-                title={aliasesVisible ? "Hide alias field" : "Show alias field"}
+                title={aliasInputUnlocked ? "Lock alias input" : "Unlock alias input"}
               >
-                {aliasesVisible ? (
+                {aliasInputUnlocked ? (
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="w-4 h-4">
                     <rect width="12" height="8.571" x="6" y="12.071" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" rx="2"/>
                     <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16.286 8.643a4.286 4.286 0 0 0-8.572 0v3.428"/>
@@ -860,12 +914,14 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
               type="text"
               value={memberAlias}
               onChange={(e) => setMemberAlias(e.target.value)}
-              disabled={!aliasesVisible}
+              disabled={!aliasInputUnlocked}
               placeholder="e.g., Alice, Bob, Team Lead..."
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Encrypted and stored on-chain. Only you can decrypt it.
+              {aliasInputUnlocked
+                ? "Encrypted and stored on-chain. Only you can decrypt it."
+                : "Click the lock icon to unlock and add an alias."}
             </p>
           </div>
 

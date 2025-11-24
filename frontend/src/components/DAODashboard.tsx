@@ -45,19 +45,27 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
   const [registering, setRegistering] = useState(false);
   const [registrationStatus, setRegistrationStatus] = useState<string | null>(null);
   const [isRegistered, setIsRegistered] = useState(false);
+  const [hasUnregisteredCredentials, setHasUnregisteredCredentials] = useState(false);
   const [joining, setJoining] = useState(false);
   const [showCreateProposal, setShowCreateProposal] = useState(false);
   const [proposalDescription, setProposalDescription] = useState("");
   const [creatingProposal, setCreatingProposal] = useState(false);
   const [proposalKey, setProposalKey] = useState(0);
+  const [voteMode, setVoteMode] = useState<"fixed" | "trailing">("fixed");
+
+  // Optimistically check registration from cache when publicKey changes
+  useEffect(() => {
+    if (publicKey) {
+      const key = `voting_registration_${daoId}_${publicKey}`;
+      setIsRegistered(!!localStorage.getItem(key));
+    }
+  }, [publicKey, daoId]);
 
   useEffect(() => {
     // Wait for wallet initialization before loading
     if (isInitializing) {
-      console.log('[DAODashboard] Waiting for wallet initialization...');
       return;
     }
-    console.log('[DAODashboard] Loading DAO info for DAO:', daoId, 'publicKey:', publicKey);
     loadDAOInfo();
     checkRegistrationStatus();
   }, [daoId, publicKey, isInitializing]);
@@ -65,10 +73,43 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
   // Note: Auto-registration removed - users must manually click "Register for Voting"
   // This gives users explicit control over when they set up voting credentials
 
-  const checkRegistrationStatus = () => {
+  const checkRegistrationStatus = async () => {
     const key = `voting_registration_${daoId}_${publicKey}`;
     const stored = localStorage.getItem(key);
-    setIsRegistered(!!stored);
+
+    if (!stored) {
+      setIsRegistered(false);
+      setHasUnregisteredCredentials(false);
+      return;
+    }
+
+    // Validate that the cached registration actually exists on-chain
+    // This handles contract redeployments where localStorage has stale data
+    try {
+      const registrationData = JSON.parse(stored);
+      const clients = initializeContractClients(publicKey || "");
+
+      const leafIndexResult = await clients.membershipTree.get_leaf_index({
+        dao_id: BigInt(daoId),
+        commitment: BigInt(registrationData.commitment),
+      });
+
+      const onChainLeafIndex = Number(leafIndexResult.result);
+
+      if (onChainLeafIndex === registrationData.leafIndex) {
+        setIsRegistered(true);
+        setHasUnregisteredCredentials(false);
+      } else {
+        localStorage.removeItem(key);
+        setIsRegistered(false);
+        setHasUnregisteredCredentials(false);
+      }
+    } catch (err) {
+      // If the commitment doesn't exist on-chain, keep the credentials
+      // and show "Complete Registration" button
+      setIsRegistered(false);
+      setHasUnregisteredCredentials(true);
+    }
   };
 
   const loadDAOInfo = async () => {
@@ -270,28 +311,46 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
         throw new Error("Wallet kit not available");
       }
 
-      // Step 1: Generate deterministic credentials from wallet signature
-      setRegistrationStatus("Step 1/2: Generating secret (sign message)...");
-      console.log("[Registration] Step 1: Generating deterministic credentials from wallet signature...");
-      const { generateDeterministicZKCredentials } = await import("../lib/zk");
+      let secret: string, salt: string, commitment: string;
 
-      let credentials;
-      try {
-        credentials = await generateDeterministicZKCredentials(kit, daoId);
-      } catch (err) {
-        console.error("[Registration] Step 1 failed:", err);
-        throw err;
+      // Check if we already have unregistered credentials
+      const key = `voting_registration_${daoId}_${publicKey}`;
+      const stored = localStorage.getItem(key);
+
+      if (hasUnregisteredCredentials && stored) {
+        // Skip Step 1 - we already have credentials!
+        console.log("[Registration] Using existing credentials, skipping signature step");
+        const existingData = JSON.parse(stored);
+        secret = existingData.secret;
+        salt = existingData.salt;
+        commitment = existingData.commitment;
+        setRegistrationStatus("Using existing credentials...");
+      } else {
+        // Step 1: Generate deterministic credentials from wallet signature
+        setRegistrationStatus("Step 1/2: Generating secret (sign message)...");
+        console.log("[Registration] Step 1: Generating deterministic credentials from wallet signature...");
+        const { generateDeterministicZKCredentials } = await import("../lib/zk");
+
+        let credentials;
+        try {
+          credentials = await generateDeterministicZKCredentials(kit, daoId);
+        } catch (err) {
+          console.error("[Registration] Step 1 failed:", err);
+          throw err;
+        }
+
+        secret = credentials.secret;
+        salt = credentials.salt;
+        commitment = credentials.commitment;
+
+        console.log("[Registration] Step 1 complete - Generated voting credentials:");
+        console.log("Secret:", secret);
+        console.log("Salt:", salt);
+        console.log("Commitment:", commitment);
+
+        // Small delay to ensure Step 1 UI updates before Step 2 popup
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
-
-      const { secret, salt, commitment } = credentials;
-
-      console.log("[Registration] Step 1 complete - Generated voting credentials:");
-      console.log("Secret:", secret);
-      console.log("Salt:", salt);
-      console.log("Commitment:", commitment);
-
-      // Small delay to ensure Step 1 UI updates before Step 2 popup
-      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Step 2: Register commitment in Merkle tree
       setRegistrationStatus("Step 2/2: Registering commitment (sign transaction)...");
@@ -333,10 +392,11 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
         registeredAt: Date.now(),
       };
 
-      const key = `voting_registration_${daoId}_${publicKey}`;
+      // Reuse the key variable from above
       localStorage.setItem(key, JSON.stringify(registrationData));
 
       setIsRegistered(true);
+      setHasUnregisteredCredentials(false);
       setRegistrationStatus("Registration complete!");
       console.log("Registration successful! Leaf index:", leafIndex);
     } catch (err: any) {
@@ -412,6 +472,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
         description: proposalDescription,
         end_time: endTime,
         creator: publicKey,
+        vote_mode: { tag: voteMode === "fixed" ? "Fixed" : "Trailing", values: void 0 },
       });
 
       if (!kit) {
@@ -524,21 +585,29 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
                 {joining ? "Joining..." : "Join DAO"}
               </button>
             )}
-            {dao.hasMembership && !isRegistered && publicKey && (
-              <button
-                onClick={handleRegisterForVoting}
-                disabled={registering}
-                className="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-purple-600 rounded-md hover:bg-purple-700 disabled:bg-purple-400 transition-colors flex items-center gap-2"
-              >
-                {registering && (
-                  <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                )}
-                {registering ? (registrationStatus || "Registering...") : "Register for Voting"}
-              </button>
-            )}
+            {(() => {
+              const shouldShowRegisterButton = dao.hasMembership && !isRegistered && publicKey;
+
+              const buttonText = hasUnregisteredCredentials
+                ? "Complete Registration"
+                : "Register to Vote";
+
+              return shouldShowRegisterButton && (
+                <button
+                  onClick={handleRegisterForVoting}
+                  disabled={registering}
+                  className="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-purple-600 rounded-md hover:bg-purple-700 disabled:bg-purple-400 transition-colors flex items-center gap-2"
+                >
+                  {registering && (
+                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  )}
+                  {registering ? (registrationStatus || "Registering...") : buttonText}
+                </button>
+              );
+            })()}
             {dao.isAdmin && dao.vkSet && (
               <button
                 onClick={() => setShowCreateProposal(true)}
@@ -565,6 +634,52 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"
             rows={4}
           />
+
+          {/* Vote Mode Selection */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Voting Set
+            </label>
+            <div className="space-y-2">
+              <label className="flex items-start cursor-pointer">
+                <input
+                  type="radio"
+                  name="voteMode"
+                  value="fixed"
+                  checked={voteMode === "fixed"}
+                  onChange={(e) => setVoteMode(e.target.value as "fixed" | "trailing")}
+                  className="mt-1 mr-3"
+                />
+                <div>
+                  <div className="font-medium text-gray-900 dark:text-gray-100">
+                    Fixed - Only current members
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    Only members at the time of proposal creation can vote
+                  </div>
+                </div>
+              </label>
+              <label className="flex items-start cursor-pointer">
+                <input
+                  type="radio"
+                  name="voteMode"
+                  value="open"
+                  checked={voteMode === "open"}
+                  onChange={(e) => setVoteMode(e.target.value as "fixed" | "trailing")}
+                  className="mt-1 mr-3"
+                />
+                <div>
+                  <div className="font-medium text-gray-900 dark:text-gray-100">
+                    Trailing - Allow future members
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    Members added after proposal creation can also vote
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+
           <div className="flex gap-2">
             <button
               onClick={handleCreateProposal}

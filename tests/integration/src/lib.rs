@@ -10,7 +10,7 @@ mod tests {
     use dao_registry::DaoRegistryClient;
     use membership_sbt::MembershipSbtClient;
     use membership_tree::MembershipTreeClient;
-    use voting::{Proof, VerificationKey, VotingClient};
+    use voting::{Proof, VerificationKey, VoteMode, VotingClient};
 
     /// Helper to setup the full DaoVote system
     struct DaoVoteSystem {
@@ -239,7 +239,7 @@ mod tests {
 
         let proposal_id = system
             .voting_client()
-            .create_proposal(&dao_id, &description, &end_time, &member);
+            .create_proposal(&dao_id, &description, &end_time, &member, &VoteMode::Fixed);
 
         assert_eq!(proposal_id, 1);
 
@@ -297,7 +297,7 @@ mod tests {
 
         let proposal_id = system
             .voting_client()
-            .create_proposal(&dao_id, &description, &end_time, &member1);
+            .create_proposal(&dao_id, &description, &end_time, &member1, &VoteMode::Fixed);
 
         // 8. Cast anonymous votes
         let proof = system.create_test_proof();
@@ -393,7 +393,7 @@ mod tests {
 
         system
             .voting_client()
-            .create_proposal(&dao_id, &description, &end_time, &non_member);
+            .create_proposal(&dao_id, &description, &end_time, &non_member, &VoteMode::Fixed);
     }
 
     #[test]
@@ -428,7 +428,7 @@ mod tests {
         let end_time = now + 86400;
         let proposal_id = system
             .voting_client()
-            .create_proposal(&dao_id, &description, &end_time, &member);
+            .create_proposal(&dao_id, &description, &end_time, &member, &VoteMode::Fixed);
 
         let proof = system.create_test_proof();
         let nullifier = U256::from_u32(&system.env, 99999);
@@ -559,7 +559,7 @@ mod tests {
         let end_time = now + 86400;
         let proposal_id = system
             .voting_client()
-            .create_proposal(&dao_id, &description, &end_time, &member1);
+            .create_proposal(&dao_id, &description, &end_time, &member1, &VoteMode::Fixed);
 
         // Get proposal's eligible root (snapshotted at creation)
         let proposal = system.voting_client().get_proposal(&dao_id, &proposal_id);
@@ -631,6 +631,7 @@ mod tests {
             &String::from_str(&system.env, "Test"),
             &end_time,
             &member1,
+            &VoteMode::Fixed,
         );
 
         // Member 2 registers AFTER proposal creation

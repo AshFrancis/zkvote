@@ -115,6 +115,7 @@ fn test_removed_then_readded_member_cannot_vote_on_proposal_created_while_remove
         &String::from_str(&env, "Proposal 1"),
         &1000u64,
         &admin,
+        &voting::VoteMode::Fixed,
     );
 
     let proposal_1 = voting_client.get_proposal(&dao_id, &proposal_1_id);
@@ -150,6 +151,7 @@ fn test_removed_then_readded_member_cannot_vote_on_proposal_created_while_remove
         &String::from_str(&env, "Proposal 2"),
         &2000u64,
         &admin,
+        &voting::VoteMode::Fixed,
     );
 
     let proposal_2 = voting_client.get_proposal(&dao_id, &proposal_2_id);
@@ -241,6 +243,7 @@ fn test_removed_member_can_still_vote_on_old_proposal() {
         &String::from_str(&env, "Old Proposal"),
         &1000u64,
         &admin,
+        &voting::VoteMode::Fixed,
     );
 
     let proposal = voting_client.get_proposal(&dao_id, &proposal_id);
