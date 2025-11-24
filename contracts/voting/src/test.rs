@@ -131,8 +131,8 @@ fn create_dummy_vk(env: &Env) -> VerificationKey {
         beta: g2.clone(),
         gamma: g2.clone(),
         delta: g2.clone(),
-        // IC vector needs 6 elements for 5 public signals: [root, nullifier, daoId, proposalId, voteChoice]
-        ic: soroban_sdk::vec![env, g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone()],
+        // IC vector needs 7 elements for 6 public signals: [root, nullifier, daoId, proposalId, voteChoice, commitment]
+        ic: soroban_sdk::vec![env, g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone()],
     }
 }
 
@@ -208,8 +208,8 @@ fn test_create_proposal() {
         &1u64,
         &String::from_str(&env, "Test Proposal"),
         &(now + 3600),
-        &member,member,
-        &voting::VoteMode::Fixed,
+        &member,
+        &VoteMode::Fixed,
     );
 
     assert_eq!(proposal_id, 1);
@@ -242,8 +242,8 @@ fn test_create_proposal_without_sbt_fails() {
         &1u64,
         &String::from_str(&env, "Test"),
         &(now + 3600),
-        &member,member,
-        &voting::VoteMode::Fixed,
+        &member,
+        &VoteMode::Fixed,
     );
 }
 
@@ -270,15 +270,15 @@ fn test_multiple_proposals() {
         &1u64,
         &String::from_str(&env, "Proposal 1"),
         &(now + 3600),
-        &member,member,
-        &voting::VoteMode::Fixed,
+        &member,
+        &VoteMode::Fixed,
     );
     let p2 = voting_client.create_proposal(
         &1u64,
         &String::from_str(&env, "Proposal 2"),
         &(now + 7200),
-        &member,member,
-        &voting::VoteMode::Fixed,
+        &member,
+        &VoteMode::Fixed,
     );
 
     assert_eq!(p1, 1);
@@ -309,8 +309,8 @@ fn test_vote_success() {
         &1u64,
         &String::from_str(&env, "Test"),
         &(now + 3600),
-        &member,member,
-        &voting::VoteMode::Fixed,
+        &member,
+        &VoteMode::Fixed,
     );
 
     // Vote with the snapshotted root
@@ -318,7 +318,7 @@ fn test_vote_success() {
     let nullifier = U256::from_u32(&env, 99999);
     let proof = create_dummy_proof(&env);
 
-    voting_client.vote(&1u64, &proposal_id, &true, &nullifier, &proposal.eligible_root, &proof);
+    voting_client.vote(&1u64, &proposal_id, &true, &nullifier, &proposal.eligible_root, &U256::from_u32(&env, 12345), &proof);
 
     let updated_proposal = voting_client.get_proposal(&1u64, &proposal_id);
     assert_eq!(updated_proposal.yes_votes, 1);
@@ -349,16 +349,16 @@ fn test_double_vote_fails() {
         &1u64,
         &String::from_str(&env, "Test"),
         &(now + 3600),
-        &member,member,
-        &voting::VoteMode::Fixed,
+        &member,
+        &VoteMode::Fixed,
     );
 
     let proposal = voting_client.get_proposal(&1u64, &proposal_id);
     let nullifier = U256::from_u32(&env, 99999);
     let proof = create_dummy_proof(&env);
 
-    voting_client.vote(&1u64, &proposal_id, &true, &nullifier, &proposal.eligible_root, &proof);
-    voting_client.vote(&1u64, &proposal_id, &false, &nullifier, &proposal.eligible_root, &proof);
+    voting_client.vote(&1u64, &proposal_id, &true, &nullifier, &proposal.eligible_root, &U256::from_u32(&env, 12345), &proof);
+    voting_client.vote(&1u64, &proposal_id, &false, &nullifier, &proposal.eligible_root, &U256::from_u32(&env, 12345), &proof);
 }
 
 #[test]
@@ -384,8 +384,8 @@ fn test_vote_with_invalid_root_fails() {
         &1u64,
         &String::from_str(&env, "Test"),
         &(now + 3600),
-        &member,member,
-        &voting::VoteMode::Fixed,
+        &member,
+        &VoteMode::Fixed,
     );
 
     // Try to vote with wrong root
@@ -393,7 +393,7 @@ fn test_vote_with_invalid_root_fails() {
     let nullifier = U256::from_u32(&env, 88888);
     let proof = create_dummy_proof(&env);
 
-    voting_client.vote(&1u64, &proposal_id, &true, &nullifier, &invalid_root, &proof);
+    voting_client.vote(&1u64, &proposal_id, &true, &nullifier, &invalid_root, &U256::from_u32(&env, 12345), &proof);
 }
 
 #[test]
@@ -423,15 +423,15 @@ fn test_different_daos_isolated() {
         &1u64,
         &String::from_str(&env, "DAO 1 Proposal"),
         &(now + 3600),
-        &member,member,
-        &voting::VoteMode::Fixed,
+        &member,
+        &VoteMode::Fixed,
     );
     let p2 = voting_client.create_proposal(
         &2u64,
         &String::from_str(&env, "DAO 2 Proposal"),
         &(now + 3600),
-        &member,member,
-        &voting::VoteMode::Fixed,
+        &member,
+        &VoteMode::Fixed,
     );
 
     // Both should be proposal 1 in their respective DAOs
@@ -480,8 +480,8 @@ fn test_get_results() {
         &1u64,
         &String::from_str(&env, "Test"),
         &(now + 3600),
-        &member,member,
-        &voting::VoteMode::Fixed,
+        &member,
+        &VoteMode::Fixed,
     );
 
     // Initial results should be (0, 0)
@@ -493,7 +493,7 @@ fn test_get_results() {
     let proposal = voting_client.get_proposal(&1u64, &proposal_id);
     let nullifier = U256::from_u32(&env, 99999);
     let proof = create_dummy_proof(&env);
-    voting_client.vote(&1u64, &proposal_id, &true, &nullifier, &proposal.eligible_root, &proof);
+    voting_client.vote(&1u64, &proposal_id, &true, &nullifier, &proposal.eligible_root, &U256::from_u32(&env, 12345), &proof);
 
     // Results should be (1, 0)
     let (yes, no) = voting_client.get_results(&1u64, &proposal_id);
@@ -528,8 +528,8 @@ fn test_create_proposal_with_past_end_time_fails() {
         &1u64,
         &String::from_str(&env, "Test"),
         &(now - 1), // end time in the past
-        &member,member,
-        &voting::VoteMode::Fixed,
+        &member,
+        &VoteMode::Fixed,
     );
 }
 
@@ -554,8 +554,8 @@ fn test_vote_after_expiry_fails() {
         &1u64,
         &String::from_str(&env, "Test"),
         &(now + 3600), // 1 hour
-        &member,member,
-        &voting::VoteMode::Fixed,
+        &member,
+        &VoteMode::Fixed,
     );
 
     let proposal = voting_client.get_proposal(&1u64, &proposal_id);
@@ -567,7 +567,7 @@ fn test_vote_after_expiry_fails() {
 
     let nullifier = U256::from_u32(&env, 99999);
     let proof = create_dummy_proof(&env);
-    voting_client.vote(&1u64, &proposal_id, &true, &nullifier, &proposal.eligible_root, &proof);
+    voting_client.vote(&1u64, &proposal_id, &true, &nullifier, &proposal.eligible_root, &U256::from_u32(&env, 12345), &proof);
 }
 
 #[test]
@@ -591,15 +591,15 @@ fn test_nullifier_reusable_across_proposals() {
         &1u64,
         &String::from_str(&env, "Proposal 1"),
         &(now + 3600),
-        &member,member,
-        &voting::VoteMode::Fixed,
+        &member,
+        &VoteMode::Fixed,
     );
     let proposal2 = voting_client.create_proposal(
         &1u64,
         &String::from_str(&env, "Proposal 2"),
         &(now + 7200),
-        &member,member,
-        &voting::VoteMode::Fixed,
+        &member,
+        &VoteMode::Fixed,
     );
 
     // Same nullifier should work for different proposals
@@ -610,8 +610,8 @@ fn test_nullifier_reusable_across_proposals() {
     let nullifier = U256::from_u32(&env, 99999);
     let proof = create_dummy_proof(&env);
 
-    voting_client.vote(&1u64, &proposal1, &true, &nullifier, &prop1.eligible_root, &proof);
-    voting_client.vote(&1u64, &proposal2, &false, &nullifier, &prop2.eligible_root, &proof);
+    voting_client.vote(&1u64, &proposal1, &true, &nullifier, &prop1.eligible_root, &U256::from_u32(&env, 12345), &proof);
+    voting_client.vote(&1u64, &proposal2, &false, &nullifier, &prop2.eligible_root, &U256::from_u32(&env, 12345), &proof);
 
     let (yes1, no1) = voting_client.get_results(&1u64, &proposal1);
     let (yes2, no2) = voting_client.get_results(&1u64, &proposal2);
@@ -683,8 +683,8 @@ fn test_vk_change_after_proposal_creation_fails() {
         &1u64,
         &String::from_str(&env, "Test"),
         &(now + 3600),
-        &member,member,
-        &voting::VoteMode::Fixed,
+        &member,
+        &VoteMode::Fixed,
     );
 
     // Admin changes VK after proposal creation
@@ -704,7 +704,7 @@ fn test_vk_change_after_proposal_creation_fails() {
     let nullifier = U256::from_u32(&env, 99999);
     let proof = create_dummy_proof(&env);
 
-    voting_client.vote(&1u64, &proposal_id, &true, &nullifier, &proposal.eligible_root, &proof);
+    voting_client.vote(&1u64, &proposal_id, &true, &nullifier, &proposal.eligible_root, &U256::from_u32(&env, 12345), &proof);
 }
 
 #[test]
@@ -854,8 +854,8 @@ fn test_create_proposal_description_too_long_fails() {
         &1u64,
         &String::from_str(&env, &long_description),
         &(now + 3600),
-        &member,member,
-        &voting::VoteMode::Fixed,
+        &member,
+        &VoteMode::Fixed,
     );
 }
 
@@ -881,8 +881,8 @@ fn test_create_proposal_max_description_length_succeeds() {
         &1u64,
         &String::from_str(&env, &max_description),
         &(now + 3600),
-        &member,member,
-        &voting::VoteMode::Fixed,
+        &member,
+        &VoteMode::Fixed,
     );
 
     assert_eq!(proposal_id, 1);

@@ -103,7 +103,7 @@ fn test_init_tree() {
     client.init_tree(&1u64, &18u32, &admin);
 
     let (depth, next_index, _root) = client.get_tree_info(&1u64);
-    assert_eq!(depth, 20);
+    assert_eq!(depth, 18);
     assert_eq!(next_index, 0);
 }
 
