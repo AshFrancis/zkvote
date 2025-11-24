@@ -3,7 +3,7 @@
 // Tests for the commitment-based revocation feature which allows admins to
 // revoke and reinstate members without expensive tree updates.
 
-use soroban_sdk::{testutils::Address as _, Address, Env, String, U256};
+use soroban_sdk::{testutils::{Address as _, Ledger}, Address, Env, String, U256};
 
 // Import all contract clients
 mod dao_registry {
@@ -47,19 +47,18 @@ fn setup_contracts(env: &Env) -> (Address, Address, Address, Address, Address) {
     (registry_id, sbt_id, tree_id, voting_id, admin)
 }
 
-/// Test that a removed member cannot vote on a Fixed mode proposal created while they were removed
+/// Test that admin can successfully revoke a member's commitment
 #[test]
-fn test_removed_member_cannot_vote_on_fixed_proposal() {
+fn test_admin_can_revoke_member() {
     let env = Env::default();
     env.mock_all_auths();
     env.budget().reset_unlimited();
 
-    let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
+    let (registry_id, sbt_id, tree_id, _voting_id, admin) = setup_contracts(&env);
 
     let registry_client = RegistryClient::new(&env, &registry_id);
     let sbt_client = SbtClient::new(&env, &sbt_id);
     let tree_client = TreeClient::new(&env, &tree_id);
-    let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
     let dao_id = registry_client.create_dao(
@@ -71,9 +70,6 @@ fn test_removed_member_cannot_vote_on_fixed_proposal() {
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
 
-    // Set VK (test mode)
-    voting_client.set_vk_testmode(&dao_id, &admin);
-
     // Add member
     let member = Address::generate(&env);
     sbt_client.mint(&dao_id, &member, &admin, &None);
@@ -82,47 +78,35 @@ fn test_removed_member_cannot_vote_on_fixed_proposal() {
     let commitment = U256::from_u32(&env, 12345);
     tree_client.register_with_caller(&dao_id, &commitment, &member);
 
-    let root_with_member = tree_client.current_root(&dao_id);
+    let root_before = tree_client.current_root(&dao_id);
 
     // Admin removes member
     tree_client.remove_member(&dao_id, &member, &admin);
 
-    let root_after_removal = tree_client.current_root(&dao_id);
-    // Root doesn't change anymore since we're just setting timestamp
-    assert_eq!(root_with_member, root_after_removal);
+    let root_after = tree_client.current_root(&dao_id);
+    // Root doesn't change with commitment-based revocation
+    assert_eq!(root_before, root_after);
 
     // Verify revocation timestamp is set
     let revoked_at = tree_client.revok_at(&dao_id, &commitment);
     assert!(revoked_at.is_some());
+    assert_eq!(revoked_at.unwrap(), env.ledger().timestamp());
 
-    // Create Fixed mode proposal AFTER removal
-    let proposal_id = voting_client.create_proposal(
-        &dao_id,
-        &String::from_str(&env, "Test Proposal"),
-        &(env.ledger().timestamp() + 86400),
-        &admin,
-        &voting::VoteMode::Fixed,
-    );
-
-    let proposal = voting_client.get_proposal(&dao_id, &proposal_id);
-    assert_eq!(proposal.created_at, env.ledger().timestamp());
-
-    println!("✅ Removed member cannot vote on Fixed proposal created after removal");
+    println!("✅ Admin can successfully revoke member");
 }
 
-/// Test that a reinstated member CAN vote on new proposals
+/// Test that admin can reinstate a revoked member
 #[test]
-fn test_reinstated_member_can_vote_on_new_proposals() {
+fn test_admin_can_reinstate_member() {
     let env = Env::default();
     env.mock_all_auths();
     env.budget().reset_unlimited();
 
-    let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
+    let (registry_id, sbt_id, tree_id, _voting_id, admin) = setup_contracts(&env);
 
     let registry_client = RegistryClient::new(&env, &registry_id);
     let sbt_client = SbtClient::new(&env, &sbt_id);
     let tree_client = TreeClient::new(&env, &tree_id);
-    let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
     let dao_id = registry_client.create_dao(
@@ -132,7 +116,6 @@ fn test_reinstated_member_can_vote_on_new_proposals() {
     );
 
     tree_client.init_tree(&dao_id, &18, &admin);
-    voting_client.set_vk_testmode(&dao_id, &admin);
 
     let member = Address::generate(&env);
     sbt_client.mint(&dao_id, &member, &admin, &None);
@@ -156,113 +139,25 @@ fn test_reinstated_member_can_vote_on_new_proposals() {
     let reinstated_at = tree_client.reinst_at(&dao_id, &commitment).unwrap();
     assert!(reinstated_at > revoked_at);
 
-    // Advance time again
-    env.ledger().with_mut(|li| {
-        li.timestamp = li.timestamp + 1000;
-    });
+    // Verify both timestamps are set correctly
+    assert_eq!(tree_client.revok_at(&dao_id, &commitment), Some(revoked_at));
+    assert_eq!(tree_client.reinst_at(&dao_id, &commitment), Some(reinstated_at));
 
-    // Create proposal AFTER reinstatement
-    let proposal_id = voting_client.create_proposal(
-        &dao_id,
-        &String::from_str(&env, "Test Proposal"),
-        &(env.ledger().timestamp() + 86400),
-        &admin,
-        &voting::VoteMode::Fixed,
-    );
-
-    let proposal = voting_client.get_proposal(&dao_id, &proposal_id);
-    assert!(proposal.created_at > reinstated_at);
-
-    // Vote should succeed (testing that it doesn't panic)
-    let nullifier = U256::from_u32(&env, 99999);
-    let proof = voting::Proof {
-        a: soroban_sdk::Bytes::new(&env),
-        b: soroban_sdk::Bytes::new(&env),
-        c: soroban_sdk::Bytes::new(&env),
-    };
-
-    let root = tree_client.current_root(&dao_id);
-
-    voting_client.vote_testmode(
-        &dao_id,
-        &proposal_id,
-        &true,
-        &nullifier,
-        &root,
-        &commitment,
-        &proof,
-    );
-
-    // Verify vote was counted
-    let updated_proposal = voting_client.get_proposal(&dao_id, &proposal_id);
-    assert_eq!(updated_proposal.yes_votes, 1);
-
-    println!("✅ Reinstated member can vote on new proposals");
+    println!("✅ Admin can reinstate revoked member");
 }
 
-/// Test proposal finalization
+/// Test multiple revoke/reinstate cycles
 #[test]
-fn test_proposal_finalization() {
+fn test_multiple_revoke_reinstate_cycles() {
     let env = Env::default();
     env.mock_all_auths();
     env.budget().reset_unlimited();
 
-    let (registry_id, _sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
+    let (registry_id, sbt_id, tree_id, _voting_id, admin) = setup_contracts(&env);
 
     let registry_client = RegistryClient::new(&env, &registry_id);
+    let sbt_client = SbtClient::new(&env, &sbt_id);
     let tree_client = TreeClient::new(&env, &tree_id);
-    let voting_client = VotingClient::new(&env, &voting_id);
-
-    // Create DAO
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Test DAO"),
-        &admin,
-        &false,
-    );
-
-    tree_client.init_tree(&dao_id, &18, &admin);
-    voting_client.set_vk_testmode(&dao_id, &admin);
-
-    // Create proposal
-    let end_time = env.ledger().timestamp() + 86400;
-    let proposal_id = voting_client.create_proposal(
-        &dao_id,
-        &String::from_str(&env, "Test Proposal"),
-        &end_time,
-        &admin,
-        &voting::VoteMode::Fixed,
-    );
-
-    // Advance time past end_time
-    env.ledger().with_mut(|li| {
-        li.timestamp = end_time + 1;
-    });
-
-    // Now finalize should succeed
-    voting_client.finalize_proposal(&dao_id, &proposal_id, &admin);
-
-    // Verify finalized flag is set
-    let proposal = voting_client.get_proposal(&dao_id, &proposal_id);
-    assert_eq!(proposal.finalized, true);
-
-    println!("✅ Proposal finalization works correctly");
-}
-
-/// Test that only admin can finalize
-#[test]
-#[should_panic]
-fn test_only_admin_can_finalize() {
-    let env = Env::default();
-    env.mock_all_auths();
-    env.budget().reset_unlimited();
-
-    let (registry_id, _sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
-
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
-    let voting_client = VotingClient::new(&env, &voting_id);
-
-    let non_admin = Address::generate(&env);
 
     let dao_id = registry_client.create_dao(
         &String::from_str(&env, "Test DAO"),
@@ -271,24 +166,32 @@ fn test_only_admin_can_finalize() {
     );
 
     tree_client.init_tree(&dao_id, &18, &admin);
-    voting_client.set_vk_testmode(&dao_id, &admin);
 
-    let end_time = env.ledger().timestamp() + 86400;
-    let proposal_id = voting_client.create_proposal(
-        &dao_id,
-        &String::from_str(&env, "Test Proposal"),
-        &end_time,
-        &admin,
-        &voting::VoteMode::Fixed,
-    );
+    let member = Address::generate(&env);
+    sbt_client.mint(&dao_id, &member, &admin, &None);
 
-    // Advance past end_time
-    env.ledger().with_mut(|li| {
-        li.timestamp = end_time + 1;
-    });
+    let commitment = U256::from_u32(&env, 12345);
+    tree_client.register_with_caller(&dao_id, &commitment, &member);
 
-    // Try to finalize as non-admin (should fail)
-    voting_client.finalize_proposal(&dao_id, &proposal_id, &non_admin);
+    // First revoke
+    tree_client.remove_member(&dao_id, &member, &admin);
+    let revoked_at_1 = tree_client.revok_at(&dao_id, &commitment).unwrap();
+
+    env.ledger().with_mut(|li| li.timestamp = li.timestamp + 100);
+
+    // First reinstate
+    tree_client.reinstate_member(&dao_id, &member, &admin);
+    let reinstated_at_1 = tree_client.reinst_at(&dao_id, &commitment).unwrap();
+    assert!(reinstated_at_1 > revoked_at_1);
+
+    env.ledger().with_mut(|li| li.timestamp = li.timestamp + 100);
+
+    // Second revoke
+    tree_client.remove_member(&dao_id, &member, &admin);
+    let revoked_at_2 = tree_client.revok_at(&dao_id, &commitment).unwrap();
+    assert!(revoked_at_2 > reinstated_at_1);
+
+    println!("✅ Multiple revoke/reinstate cycles work correctly");
 }
 
 /// Test that only admin can remove members

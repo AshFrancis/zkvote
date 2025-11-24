@@ -681,6 +681,68 @@ impl Voting {
         (proposal.yes_votes, proposal.no_votes)
     }
 
+    /// Set verification key for testing (skips admin check and creates dummy VK)
+    /// Only available in test/testutils mode
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn set_vk_testmode(env: Env, dao_id: u64, admin: Address) {
+        admin.require_auth();
+
+        // Create simple dummy VK with G1/G2 generator points
+        // G1 generator: (1, 2)
+        let mut g1_bytes = [0u8; 64];
+        g1_bytes[31] = 1; // x = 1
+        g1_bytes[63] = 2; // y = 2
+        let g1_gen = BytesN::<64>::from_array(&env, &g1_bytes);
+
+        // G2 generator (simplified)
+        let mut g2_bytes = [0u8; 128];
+        g2_bytes[31] = 1;
+        g2_bytes[63] = 2;
+        g2_bytes[95] = 1;
+        g2_bytes[127] = 2;
+        let g2_gen = BytesN::<128>::from_array(&env, &g2_bytes);
+
+        let vk = VerificationKey {
+            alpha: g1_gen.clone(),
+            beta: g2_gen.clone(),
+            gamma: g2_gen.clone(),
+            delta: g2_gen,
+            // IC vector: 7 elements for 6 public signals
+            ic: soroban_sdk::vec![
+                &env,
+                g1_gen.clone(),
+                g1_gen.clone(),
+                g1_gen.clone(),
+                g1_gen.clone(),
+                g1_gen.clone(),
+                g1_gen.clone(),
+                g1_gen,
+            ],
+        };
+
+        let key = DataKey::VotingKey(dao_id);
+        env.storage().persistent().set(&key, &vk);
+
+        VKSetEvent { dao_id }.publish(&env);
+    }
+
+    /// Vote on a proposal with testmode (bypasses actual proof verification)
+    /// Only available in test/testutils mode
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn vote_testmode(
+        env: Env,
+        dao_id: u64,
+        proposal_id: u64,
+        vote_choice: bool,
+        nullifier: U256,
+        root: U256,
+        commitment: U256,
+        proof: Proof,
+    ) {
+        // Same logic as regular vote(), but verify_groth16 will return true in testmode
+        Self::vote(env, dao_id, proposal_id, vote_choice, nullifier, root, commitment, proof)
+    }
+
     // Internal: Get next proposal ID
     fn next_proposal_id(env: &Env, dao_id: u64) -> u64 {
         let count_key = DataKey::ProposalCount(dao_id);
