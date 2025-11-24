@@ -486,7 +486,7 @@ GET /proof/:commitment
   returns: { pathElements: [...], pathIndex: [...], root: "0x...", leafIndex: 42 }
 
 GET /tree/state
-  returns: { depth: 20, leafCount: 1000, currentRoot: "0x..." }
+  returns: { depth: 18, leafCount: 1000, currentRoot: "0x..." }
 
 GET /leaves
   returns: { leaves: [...], total: 1000 }

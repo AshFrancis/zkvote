@@ -140,7 +140,7 @@ fn test_fixed_mode_late_joiner_cannot_vote() {
     );
 
     // Initialize tree
-    tree_client.init_tree(&dao_id, &20, &admin);
+    tree_client.init_tree(&dao_id, &18, &admin);
 
     // Set VK
     let vk = create_test_vk(&env);
@@ -200,7 +200,7 @@ fn test_trailing_mode_late_joiner_can_vote() {
     );
 
     // Initialize tree and set VK
-    tree_client.init_tree(&dao_id, &20, &admin);
+    tree_client.init_tree(&dao_id, &18, &admin);
 
     // Create test VK
     let vk = create_test_vk(&env);
@@ -265,7 +265,7 @@ fn test_trailing_mode_removed_member_cannot_vote_on_new_proposal() {
     );
 
     // Initialize tree and set VK
-    tree_client.init_tree(&dao_id, &20, &admin);
+    tree_client.init_tree(&dao_id, &18, &admin);
 
     let vk = create_test_vk(&env);
     voting_client.set_vk(&dao_id, &vk, &admin);
@@ -325,7 +325,7 @@ fn test_trailing_mode_removed_member_can_vote_on_old_proposal() {
     );
 
     // Initialize tree and set VK
-    tree_client.init_tree(&dao_id, &20, &admin);
+    tree_client.init_tree(&dao_id, &18, &admin);
 
     let vk = create_test_vk(&env);
     voting_client.set_vk(&dao_id, &vk, &admin);

@@ -15,7 +15,7 @@
 - ✅ `MAX_DAO_NAME_LEN = 256` enforced in `DAORegistry::create_dao` (contracts/dao-registry/src/lib.rs:53)
 - ✅ `EXPECTED_IC_LENGTH = 6` enforced in `Voting::set_vk` (contracts/voting/src/lib.rs:140)
 - ✅ `MAX_IC_LENGTH = 21` as secondary check (contracts/voting/src/lib.rs:145)
-- ✅ `MAX_TREE_DEPTH = 20` enforced in `MembershipTree::init_tree` (contracts/membership-tree/src/lib.rs:68)
+- ✅ `MAX_TREE_DEPTH = 18` enforced in `MembershipTree::init_tree` (contracts/membership-tree/src/lib.rs:68)
 
 **Test Coverage** (9 new tests):
 - ✅ Voting: description length = 1024 (max valid), 1025 (panic) - 2 tests
@@ -83,7 +83,7 @@
 
 **Medium (4)** - ALL RESOLVED:
 4. ✅ DAO creation: Made permissionless, creator becomes admin
-5. ✅ Tree depth: Enforced MAX_TREE_DEPTH = 20
+5. ✅ Tree depth: Enforced MAX_TREE_DEPTH = 18
 6. ✅ Root verification: Kept strict snapshot (security decision)
 7. ✅ SBT storage: Kept derivation approach (robustness decision)
 

@@ -208,7 +208,8 @@ fn test_create_proposal() {
         &1u64,
         &String::from_str(&env, "Test Proposal"),
         &(now + 3600),
-        &member,
+        &member,member,
+        &voting::VoteMode::Fixed,
     );
 
     assert_eq!(proposal_id, 1);
@@ -241,7 +242,8 @@ fn test_create_proposal_without_sbt_fails() {
         &1u64,
         &String::from_str(&env, "Test"),
         &(now + 3600),
-        &member,
+        &member,member,
+        &voting::VoteMode::Fixed,
     );
 }
 
@@ -268,13 +270,15 @@ fn test_multiple_proposals() {
         &1u64,
         &String::from_str(&env, "Proposal 1"),
         &(now + 3600),
-        &member,
+        &member,member,
+        &voting::VoteMode::Fixed,
     );
     let p2 = voting_client.create_proposal(
         &1u64,
         &String::from_str(&env, "Proposal 2"),
         &(now + 7200),
-        &member,
+        &member,member,
+        &voting::VoteMode::Fixed,
     );
 
     assert_eq!(p1, 1);
@@ -305,7 +309,8 @@ fn test_vote_success() {
         &1u64,
         &String::from_str(&env, "Test"),
         &(now + 3600),
-        &member,
+        &member,member,
+        &voting::VoteMode::Fixed,
     );
 
     // Vote with the snapshotted root
@@ -344,7 +349,8 @@ fn test_double_vote_fails() {
         &1u64,
         &String::from_str(&env, "Test"),
         &(now + 3600),
-        &member,
+        &member,member,
+        &voting::VoteMode::Fixed,
     );
 
     let proposal = voting_client.get_proposal(&1u64, &proposal_id);
@@ -378,7 +384,8 @@ fn test_vote_with_invalid_root_fails() {
         &1u64,
         &String::from_str(&env, "Test"),
         &(now + 3600),
-        &member,
+        &member,member,
+        &voting::VoteMode::Fixed,
     );
 
     // Try to vote with wrong root
@@ -416,13 +423,15 @@ fn test_different_daos_isolated() {
         &1u64,
         &String::from_str(&env, "DAO 1 Proposal"),
         &(now + 3600),
-        &member,
+        &member,member,
+        &voting::VoteMode::Fixed,
     );
     let p2 = voting_client.create_proposal(
         &2u64,
         &String::from_str(&env, "DAO 2 Proposal"),
         &(now + 3600),
-        &member,
+        &member,member,
+        &voting::VoteMode::Fixed,
     );
 
     // Both should be proposal 1 in their respective DAOs
@@ -471,7 +480,8 @@ fn test_get_results() {
         &1u64,
         &String::from_str(&env, "Test"),
         &(now + 3600),
-        &member,
+        &member,member,
+        &voting::VoteMode::Fixed,
     );
 
     // Initial results should be (0, 0)
@@ -518,7 +528,8 @@ fn test_create_proposal_with_past_end_time_fails() {
         &1u64,
         &String::from_str(&env, "Test"),
         &(now - 1), // end time in the past
-        &member,
+        &member,member,
+        &voting::VoteMode::Fixed,
     );
 }
 
@@ -543,7 +554,8 @@ fn test_vote_after_expiry_fails() {
         &1u64,
         &String::from_str(&env, "Test"),
         &(now + 3600), // 1 hour
-        &member,
+        &member,member,
+        &voting::VoteMode::Fixed,
     );
 
     let proposal = voting_client.get_proposal(&1u64, &proposal_id);
@@ -579,13 +591,15 @@ fn test_nullifier_reusable_across_proposals() {
         &1u64,
         &String::from_str(&env, "Proposal 1"),
         &(now + 3600),
-        &member,
+        &member,member,
+        &voting::VoteMode::Fixed,
     );
     let proposal2 = voting_client.create_proposal(
         &1u64,
         &String::from_str(&env, "Proposal 2"),
         &(now + 7200),
-        &member,
+        &member,member,
+        &voting::VoteMode::Fixed,
     );
 
     // Same nullifier should work for different proposals
@@ -669,7 +683,8 @@ fn test_vk_change_after_proposal_creation_fails() {
         &1u64,
         &String::from_str(&env, "Test"),
         &(now + 3600),
-        &member,
+        &member,member,
+        &voting::VoteMode::Fixed,
     );
 
     // Admin changes VK after proposal creation
@@ -839,7 +854,8 @@ fn test_create_proposal_description_too_long_fails() {
         &1u64,
         &String::from_str(&env, &long_description),
         &(now + 3600),
-        &member,
+        &member,member,
+        &voting::VoteMode::Fixed,
     );
 }
 
@@ -865,7 +881,8 @@ fn test_create_proposal_max_description_length_succeeds() {
         &1u64,
         &String::from_str(&env, &max_description),
         &(now + 3600),
-        &member,
+        &member,member,
+        &voting::VoteMode::Fixed,
     );
 
     assert_eq!(proposal_id, 1);

@@ -5,7 +5,7 @@ use soroban_sdk::{
 
 const SBT_CONTRACT: Symbol = symbol_short!("sbt");
 const MAX_ROOTS: u32 = 30;
-const MAX_TREE_DEPTH: u32 = 20;  // Supports ~1M members (2^20 = 1,048,576)
+const MAX_TREE_DEPTH: u32 = 18;  // Supports ~262K members (2^18 = 262,144)
 const ZEROS_CACHE: Symbol = symbol_short!("zeros");
 
 #[contracttype]

@@ -96,7 +96,7 @@ fn test_empty_tree_root() {
     );
 
     // Initialize empty tree with depth 20
-    tree_client.init_tree(&dao_id, &20, &admin);
+    tree_client.init_tree(&dao_id, &18, &admin);
 
     // Get the empty root
     let empty_root = tree_client.current_root(&dao_id);

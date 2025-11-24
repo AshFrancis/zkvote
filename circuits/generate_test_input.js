@@ -54,6 +54,7 @@ const circomlibjs = require('circomlibjs');
     daoId: daoId.toString(),
     proposalId: proposalId.toString(),
     voteChoice: voteChoice.toString(),
+    commitment: commitment.toString(),
     secret: secret.toString(),
     salt: salt.toString(),
     pathElements: zeros.slice(0, 18).map(z => z.toString()),

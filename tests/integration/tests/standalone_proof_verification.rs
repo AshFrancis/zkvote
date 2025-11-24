@@ -183,7 +183,7 @@ fn test_real_groth16_proof_verification() {
     println!("Step 4: Initializing membership tree (depth 20)...");
     println!("===================================================\n");
 
-    tree_client.init_tree(&dao_id, &20, &admin);
+    tree_client.init_tree(&dao_id, &18, &admin);
     println!("✅ Tree initialized\n");
 
     println!("Step 5: Registering commitment...");

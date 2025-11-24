@@ -100,7 +100,7 @@ fn test_init_tree() {
     // Set admin for DAO 1
     registry_client.set_admin(&1u64, &admin);
 
-    client.init_tree(&1u64, &20u32, &admin);
+    client.init_tree(&1u64, &18u32, &admin);
 
     let (depth, next_index, _root) = client.get_tree_info(&1u64);
     assert_eq!(depth, 20);
@@ -115,8 +115,8 @@ fn test_init_tree_twice_fails() {
     let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
 
     registry_client.set_admin(&1u64, &admin);
-    client.init_tree(&1u64, &20u32, &admin);
-    client.init_tree(&1u64, &20u32, &admin);
+    client.init_tree(&1u64, &18u32, &admin);
+    client.init_tree(&1u64, &18u32, &admin);
 }
 
 #[test]
@@ -138,8 +138,8 @@ fn test_init_tree_depth_exceeds_max_fails() {
     let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
 
     registry_client.set_admin(&1u64, &admin);
-    // Depth 21 exceeds MAX_TREE_DEPTH of 20
-    client.init_tree(&1u64, &21u32, &admin);
+    // Depth 19 exceeds MAX_TREE_DEPTH of 18
+    client.init_tree(&1u64, &19u32, &admin);
 }
 
 #[test]

@@ -278,7 +278,7 @@ Private inputs: `[secret, salt, pathElements, pathIndices]`
 - No cross-DAO or cross-proposal linkability
 - Nullifiers stored as: `(symbol_short!("null"), dao_id, proposal_id, nullifier) -> bool`
 
-Tree depth: 20 levels (supports ~1,048,576 members per DAO, 2^20)
+Tree depth: 18 levels (supports ~262,144 members per DAO, 2^18)
 
 ## Groth16 Verification
 

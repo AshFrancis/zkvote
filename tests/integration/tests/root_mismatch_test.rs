@@ -142,7 +142,7 @@ fn test_vote_with_wrong_root_fails() {
         &false,
     );
 
-    tree_client.init_tree(&dao_id, &20, &admin);
+    tree_client.init_tree(&dao_id, &18, &admin);
 
     // Give admin an SBT (needed to create proposals)
     sbt_client.mint(&dao_id, &admin, &admin, &None);
@@ -260,7 +260,7 @@ fn test_vote_with_correct_root_succeeds() {
         &false,
     );
 
-    tree_client.init_tree(&dao_id, &20, &admin);
+    tree_client.init_tree(&dao_id, &18, &admin);
 
     // Give admin an SBT (needed to create proposals)
     sbt_client.mint(&dao_id, &admin, &admin, &None);

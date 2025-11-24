@@ -64,7 +64,7 @@ stellar contract invoke \
 echo "   SBT minted successfully"
 
 # Step 3: Initialize Merkle tree
-echo "3. Initializing Merkle tree (depth=20)..."
+echo "3. Initializing Merkle tree (depth=18)..."
 stellar contract invoke \
     --id $TREE_ID \
     --source $KEY_NAME \

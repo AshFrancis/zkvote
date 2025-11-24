@@ -16,7 +16,7 @@ try {
     // dotenv optional
 }
 
-const TREE_DEPTH = 20;
+const TREE_DEPTH = 18;
 
 async function verifyPoseidonKAT() {
     console.log("Poseidon KAT - Merkle Root Verification");
