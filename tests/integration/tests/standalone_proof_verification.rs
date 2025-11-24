@@ -250,7 +250,7 @@ fn test_real_groth16_proof_verification() {
     println!("Submitting vote with real proof...");
 
     // This is the CRITICAL test - will the real proof verify on-chain?
-    voting_client.vote(&dao_id, &proposal_id, &vote_choice, &nullifier, &root, &proof);
+    voting_client.vote(&dao_id, &proposal_id, &vote_choice, &nullifier, &root, &commitment, &proof);
     println!("✅ VOTE ACCEPTED - Proof verified successfully!\n");
 
     println!("Step 9: Testing double-vote prevention...");
@@ -261,7 +261,7 @@ fn test_real_groth16_proof_verification() {
     // Use should_panic attribute or wrap in an expectation that it fails
     // For now, we'll use a simple expectation that this will panic
     let should_panic = std::panic::AssertUnwindSafe(|| {
-        voting_client.vote(&dao_id, &proposal_id, &vote_choice, &nullifier, &root, &proof);
+        voting_client.vote(&dao_id, &proposal_id, &vote_choice, &nullifier, &root, &commitment, &proof);
     });
 
     let result = std::panic::catch_unwind(should_panic);

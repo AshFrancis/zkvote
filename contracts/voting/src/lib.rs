@@ -43,7 +43,7 @@ const MAX_IC_LENGTH: u32 = 21;
 
 // Size limits to prevent DoS attacks
 const MAX_DESCRIPTION_LEN: u32 = 1024;  // Max proposal description length (1KB)
-const EXPECTED_IC_LENGTH: u32 = 6;      // Exact IC length for vote circuit (5 public signals + 1)
+const EXPECTED_IC_LENGTH: u32 = 7;      // Exact IC length for vote circuit (6 public signals + 1)
 
 #[contracttype]
 #[derive(Clone)]
@@ -174,10 +174,10 @@ impl Voting {
 
         // Validate VK size to prevent DoS attacks
         // IC vector must have exactly num_public_signals + 1 elements
-        // Vote circuit has 5 public signals (root, nullifier, daoId, proposalId, voteChoice)
-        // Therefore IC must have exactly 6 elements
+        // Vote circuit has 6 public signals (root, nullifier, daoId, proposalId, voteChoice, commitment)
+        // Therefore IC must have exactly 7 elements
         if vk.ic.len() != EXPECTED_IC_LENGTH {
-            panic!("VK IC length must be exactly 6 for vote circuit");
+            panic!("VK IC length must be exactly 7 for vote circuit");
         }
 
         // Additional safety check: enforce max limit for any future circuit changes
@@ -264,10 +264,10 @@ impl Voting {
     pub fn set_vk_from_registry(env: Env, dao_id: u64, vk: VerificationKey) {
         // Validate VK size to prevent DoS attacks
         // IC vector must have exactly num_public_signals + 1 elements
-        // Vote circuit has 5 public signals (root, nullifier, daoId, proposalId, voteChoice)
-        // Therefore IC must have exactly 6 elements
+        // Vote circuit has 6 public signals (root, nullifier, daoId, proposalId, voteChoice, commitment)
+        // Therefore IC must have exactly 7 elements
         if vk.ic.len() != EXPECTED_IC_LENGTH {
-            panic!("VK IC length must be exactly 6 for vote circuit");
+            panic!("VK IC length must be exactly 7 for vote circuit");
         }
 
         // Additional safety check: enforce max limit for any future circuit changes

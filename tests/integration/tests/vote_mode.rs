@@ -176,7 +176,7 @@ fn test_fixed_mode_late_joiner_cannot_vote() {
     let proof2 = create_test_proof(&env);
 
     // This should panic with "root must match proposal eligible root"
-    voting_client.vote(&dao_id, &proposal_id, &true, &nullifier2, &new_root, &proof2);
+    voting_client.vote(&dao_id, &proposal_id, &true, &nullifier2, &new_root, &commitment2, &proof2);
 }
 
 #[test]
@@ -234,7 +234,7 @@ fn test_trailing_mode_late_joiner_can_vote() {
     let proof2 = create_test_proof(&env);
 
     // This should succeed in Trailing mode
-    voting_client.vote(&dao_id, &proposal_id, &true, &nullifier2, &new_root, &proof2);
+    voting_client.vote(&dao_id, &proposal_id, &true, &nullifier2, &new_root, &commitment2, &proof2);
 
     // Verify vote counted
     let proposal = voting_client.get_proposal(&dao_id, &proposal_id);
@@ -301,7 +301,7 @@ fn test_trailing_mode_removed_member_cannot_vote_on_new_proposal() {
     let proof1 = create_test_proof(&env);
 
     // This should panic with "root predates proposal creation"
-    voting_client.vote(&dao_id, &proposal_id, &true, &nullifier1, &old_root, &proof1);
+    voting_client.vote(&dao_id, &proposal_id, &true, &nullifier1, &old_root, &commitment1, &proof1);
 }
 
 #[test]
@@ -355,7 +355,7 @@ fn test_trailing_mode_removed_member_can_vote_on_old_proposal() {
     let proof1 = create_test_proof(&env);
 
     // This should succeed
-    voting_client.vote(&dao_id, &proposal_id, &true, &nullifier1, &old_root, &proof1);
+    voting_client.vote(&dao_id, &proposal_id, &true, &nullifier1, &old_root, &commitment1, &proof1);
 
     // Verify vote counted
     let proposal = voting_client.get_proposal(&dao_id, &proposal_id);

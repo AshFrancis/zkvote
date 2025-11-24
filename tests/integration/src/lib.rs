@@ -400,7 +400,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "already voted")]
+    #[should_panic(expected = "double-voting prevented")]
     fn test_double_voting_prevented() {
         let system = DaoVoteSystem::new();
 

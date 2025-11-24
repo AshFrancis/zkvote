@@ -185,6 +185,7 @@ fn test_vote_with_wrong_root_fails() {
         &true,
         &nullifier,
         &root_A, // Correct root
+        &commitment,
         &proof,
     );
 
@@ -226,6 +227,7 @@ fn test_vote_with_wrong_root_fails() {
         &true,
         &nullifier_2,
         &root_A, // ❌ WRONG! Proof claims root_A but proposal has root_B
+        &commitment,
         &proof,
     );
 
@@ -292,6 +294,7 @@ fn test_vote_with_correct_root_succeeds() {
         &true,
         &nullifier,
         &root, // Correct root
+        &commitment,
         &proof,
     );
 
