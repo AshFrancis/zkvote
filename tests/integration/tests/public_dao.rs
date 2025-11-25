@@ -10,27 +10,19 @@ use soroban_sdk::{testutils::Address as _, Address, Env, String, U256};
 
 // Import all contract clients
 mod dao_registry {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/dao_registry.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/dao_registry.wasm");
 }
 
 mod membership_sbt {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/membership_sbt.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_sbt.wasm");
 }
 
 mod membership_tree {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/membership_tree.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_tree.wasm");
 }
 
 mod voting {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/voting.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/voting.wasm");
 }
 
 use dao_registry::Client as RegistryClient;
@@ -64,21 +56,18 @@ fn bn254_g1_generator(env: &Env) -> soroban_sdk::BytesN<64> {
 fn bn254_g2_generator(env: &Env) -> soroban_sdk::BytesN<128> {
     let bytes: [u8; 128] = [
         // x1 (32 bytes)
-        0x18, 0x00, 0x50, 0x6a, 0x06, 0x12, 0x86, 0xeb, 0x6a, 0x84, 0xa5, 0x73, 0x0b, 0x8f,
-        0x10, 0x29, 0x3e, 0x29, 0x81, 0x6c, 0xd1, 0x91, 0x3d, 0x53, 0x38, 0xf7, 0x15, 0xde,
-        0x3e, 0x98, 0xf9, 0xad,
-        // x2 (32 bytes)
-        0x19, 0x83, 0x90, 0x42, 0x11, 0xa5, 0x3f, 0x6e, 0x0b, 0x08, 0x53, 0xa9, 0x0a, 0x00,
-        0xef, 0xbf, 0xf1, 0x70, 0x0c, 0x7b, 0x1d, 0xc0, 0x06, 0x32, 0x4d, 0x85, 0x9d, 0x75,
-        0xe3, 0xca, 0xa5, 0xa2,
-        // y1 (32 bytes)
-        0x12, 0xc8, 0x5e, 0xa5, 0xdb, 0x8c, 0x6d, 0xeb, 0x4a, 0xab, 0x71, 0x8e, 0x80, 0x6a,
-        0x51, 0xa5, 0x66, 0x08, 0x21, 0x4c, 0x3f, 0x62, 0x8b, 0x96, 0x2c, 0xf1, 0x91, 0xea,
-        0xcd, 0xc8, 0x0e, 0x7a,
-        // y2 (32 bytes)
-        0x09, 0x0d, 0x97, 0xc0, 0x9c, 0xe1, 0x48, 0x60, 0x63, 0xb3, 0x59, 0xf3, 0xdd, 0x89,
-        0xb7, 0xc4, 0x3c, 0x5f, 0x18, 0x95, 0x8f, 0xb3, 0xe6, 0xb9, 0x6d, 0xb5, 0x5e, 0x19,
-        0xa3, 0xb7, 0xc0, 0xfb,
+        0x18, 0x00, 0x50, 0x6a, 0x06, 0x12, 0x86, 0xeb, 0x6a, 0x84, 0xa5, 0x73, 0x0b, 0x8f, 0x10,
+        0x29, 0x3e, 0x29, 0x81, 0x6c, 0xd1, 0x91, 0x3d, 0x53, 0x38, 0xf7, 0x15, 0xde, 0x3e, 0x98,
+        0xf9, 0xad, // x2 (32 bytes)
+        0x19, 0x83, 0x90, 0x42, 0x11, 0xa5, 0x3f, 0x6e, 0x0b, 0x08, 0x53, 0xa9, 0x0a, 0x00, 0xef,
+        0xbf, 0xf1, 0x70, 0x0c, 0x7b, 0x1d, 0xc0, 0x06, 0x32, 0x4d, 0x85, 0x9d, 0x75, 0xe3, 0xca,
+        0xa5, 0xa2, // y1 (32 bytes)
+        0x12, 0xc8, 0x5e, 0xa5, 0xdb, 0x8c, 0x6d, 0xeb, 0x4a, 0xab, 0x71, 0x8e, 0x80, 0x6a, 0x51,
+        0xa5, 0x66, 0x08, 0x21, 0x4c, 0x3f, 0x62, 0x8b, 0x96, 0x2c, 0xf1, 0x91, 0xea, 0xcd, 0xc8,
+        0x0e, 0x7a, // y2 (32 bytes)
+        0x09, 0x0d, 0x97, 0xc0, 0x9c, 0xe1, 0x48, 0x60, 0x63, 0xb3, 0x59, 0xf3, 0xdd, 0x89, 0xb7,
+        0xc4, 0x3c, 0x5f, 0x18, 0x95, 0x8f, 0xb3, 0xe6, 0xb9, 0x6d, 0xb5, 0x5e, 0x19, 0xa3, 0xb7,
+        0xc0, 0xfb,
     ];
     soroban_sdk::BytesN::from_array(env, &bytes)
 }
@@ -110,17 +99,13 @@ fn create_test_vk(env: &Env) -> voting::VerificationKey {
 fn test_public_dao_creation() {
     let env = Env::default();
     env.mock_all_auths();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, _, _, _, admin) = setup_contracts(&env);
     let registry_client = RegistryClient::new(&env, &registry_id);
 
     // Create public DAO with membership_open=true
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Public DAO"),
-        &admin,
-        &true,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Public DAO"), &admin, &true);
 
     // Verify DAO exists and has open membership
     assert!(registry_client.dao_exists(&dao_id));
@@ -134,7 +119,7 @@ fn test_public_dao_creation() {
 fn test_self_join_public_dao() {
     let env = Env::default();
     env.mock_all_auths();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, tree_id, _, admin) = setup_contracts(&env);
     let registry_client = RegistryClient::new(&env, &registry_id);
@@ -142,11 +127,7 @@ fn test_self_join_public_dao() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create public DAO
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Public DAO"),
-        &admin,
-        &true,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Public DAO"), &admin, &true);
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -164,18 +145,14 @@ fn test_self_join_public_dao() {
 fn test_self_join_private_dao_fails() {
     let env = Env::default();
     env.mock_all_auths();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, _, _, admin) = setup_contracts(&env);
     let registry_client = RegistryClient::new(&env, &registry_id);
     let sbt_client = SbtClient::new(&env, &sbt_id);
 
     // Create private DAO (membership_open=false)
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Private DAO"),
-        &admin,
-        &false,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Private DAO"), &admin, &false);
 
     // Random user tries to self-join - should fail
     let user = Address::generate(&env);
@@ -186,7 +163,7 @@ fn test_self_join_private_dao_fails() {
 fn test_self_register_public_dao() {
     let env = Env::default();
     env.mock_all_auths();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, tree_id, _, admin) = setup_contracts(&env);
     let registry_client = RegistryClient::new(&env, &registry_id);
@@ -194,11 +171,7 @@ fn test_self_register_public_dao() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create public DAO
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Public DAO"),
-        &admin,
-        &true,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Public DAO"), &admin, &true);
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -221,7 +194,7 @@ fn test_self_register_public_dao() {
 fn test_self_register_private_dao_fails() {
     let env = Env::default();
     env.mock_all_auths();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, tree_id, _, admin) = setup_contracts(&env);
     let registry_client = RegistryClient::new(&env, &registry_id);
@@ -229,11 +202,7 @@ fn test_self_register_private_dao_fails() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create private DAO
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Private DAO"),
-        &admin,
-        &false,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Private DAO"), &admin, &false);
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -251,7 +220,7 @@ fn test_self_register_private_dao_fails() {
 fn test_non_member_creates_proposal_in_public_dao() {
     let env = Env::default();
     env.mock_all_auths();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
     let registry_client = RegistryClient::new(&env, &registry_id);
@@ -260,11 +229,7 @@ fn test_non_member_creates_proposal_in_public_dao() {
     let sbt_client = SbtClient::new(&env, &sbt_id);
 
     // Create public DAO
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Public DAO"),
-        &admin,
-        &true,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Public DAO"), &admin, &true);
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -299,7 +264,7 @@ fn test_non_member_creates_proposal_in_public_dao() {
 fn test_non_member_cannot_create_proposal_in_private_dao() {
     let env = Env::default();
     env.mock_all_auths();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, _, tree_id, voting_id, admin) = setup_contracts(&env);
     let registry_client = RegistryClient::new(&env, &registry_id);
@@ -307,11 +272,7 @@ fn test_non_member_cannot_create_proposal_in_private_dao() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create private DAO
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Private DAO"),
-        &admin,
-        &false,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Private DAO"), &admin, &false);
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -339,7 +300,7 @@ fn test_non_member_cannot_create_proposal_in_private_dao() {
 fn test_full_public_dao_flow() {
     let env = Env::default();
     env.mock_all_auths();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
     let registry_client = RegistryClient::new(&env, &registry_id);
@@ -348,11 +309,7 @@ fn test_full_public_dao_flow() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create public DAO
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Public DAO"),
-        &admin,
-        &true,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Public DAO"), &admin, &true);
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);

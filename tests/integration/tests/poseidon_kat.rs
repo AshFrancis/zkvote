@@ -9,21 +9,15 @@ use soroban_sdk::{testutils::Address as _, Address, Bytes, Env, String, U256};
 
 // Import all contract clients
 mod dao_registry {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/dao_registry.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/dao_registry.wasm");
 }
 
 mod membership_sbt {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/membership_sbt.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_sbt.wasm");
 }
 
 mod membership_tree {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/membership_tree.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_tree.wasm");
 }
 
 use dao_registry::Client as RegistryClient;
@@ -62,7 +56,7 @@ fn test_poseidon_kat_single_commitment() {
     env.mock_all_auths();
 
     // Set unlimited budget for Poseidon operations (expensive cryptographic computations)
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, tree_id, admin) = setup_contracts(&env);
 
@@ -71,11 +65,8 @@ fn test_poseidon_kat_single_commitment() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create test DAO
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Poseidon KAT Test"),
-        &admin,
-        &false,
-    );
+    let dao_id =
+        registry_client.create_dao(&String::from_str(&env, "Poseidon KAT Test"), &admin, &false);
 
     // Initialize tree with depth 18
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -86,15 +77,16 @@ fn test_poseidon_kat_single_commitment() {
     // Known commitment from circomlib: Poseidon(12345, 67890)
     // Hex: 0x1914879b2a4e7f9555f3eb55837243cefb1366a692794a7e5b5b3181fb14b49b
     let commitment_bytes: [u8; 32] = [
-        0x19, 0x14, 0x87, 0x9b, 0x2a, 0x4e, 0x7f, 0x95,
-        0x55, 0xf3, 0xeb, 0x55, 0x83, 0x72, 0x43, 0xce,
-        0xfb, 0x13, 0x66, 0xa6, 0x92, 0x79, 0x4a, 0x7e,
-        0x5b, 0x5b, 0x31, 0x81, 0xfb, 0x14, 0xb4, 0x9b,
+        0x19, 0x14, 0x87, 0x9b, 0x2a, 0x4e, 0x7f, 0x95, 0x55, 0xf3, 0xeb, 0x55, 0x83, 0x72, 0x43,
+        0xce, 0xfb, 0x13, 0x66, 0xa6, 0x92, 0x79, 0x4a, 0x7e, 0x5b, 0x5b, 0x31, 0x81, 0xfb, 0x14,
+        0xb4, 0x9b,
     ];
     let commitment = U256::from_be_bytes(&env, &Bytes::from_array(&env, &commitment_bytes));
 
     println!("Registering commitment: Poseidon(12345, 67890)");
-    println!("Commitment (hex): 0x1914879b2a4e7f9555f3eb55837243cefb1366a692794a7e5b5b3181fb14b49b");
+    println!(
+        "Commitment (hex): 0x1914879b2a4e7f9555f3eb55837243cefb1366a692794a7e5b5b3181fb14b49b"
+    );
 
     // Register the commitment
     tree_client.register_with_caller(&dao_id, &commitment, &admin);
@@ -138,7 +130,7 @@ fn test_poseidon_kat_multiple_commitments() {
     env.mock_all_auths();
 
     // Set unlimited budget for Poseidon operations (expensive cryptographic computations)
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, tree_id, admin) = setup_contracts(&env);
 
@@ -167,20 +159,18 @@ fn test_poseidon_kat_multiple_commitments() {
     // Register multiple known commitments
     // Commitment 1: Poseidon(12345, 67890)
     let commitment1_bytes: [u8; 32] = [
-        0x19, 0x14, 0x87, 0x9b, 0x2a, 0x4e, 0x7f, 0x95,
-        0x55, 0xf3, 0xeb, 0x55, 0x83, 0x72, 0x43, 0xce,
-        0xfb, 0x13, 0x66, 0xa6, 0x92, 0x79, 0x4a, 0x7e,
-        0x5b, 0x5b, 0x31, 0x81, 0xfb, 0x14, 0xb4, 0x9b,
+        0x19, 0x14, 0x87, 0x9b, 0x2a, 0x4e, 0x7f, 0x95, 0x55, 0xf3, 0xeb, 0x55, 0x83, 0x72, 0x43,
+        0xce, 0xfb, 0x13, 0x66, 0xa6, 0x92, 0x79, 0x4a, 0x7e, 0x5b, 0x5b, 0x31, 0x81, 0xfb, 0x14,
+        0xb4, 0x9b,
     ];
     let commitment1 = U256::from_be_bytes(&env, &Bytes::from_array(&env, &commitment1_bytes));
 
     // Commitment 2: Poseidon(11111, 22222)
     // Hex: 0x0c3ac305f6431bade33b2279a8e2598c4347e3e9f77e7c19eb64c7ebadfbd088
     let commitment2_bytes: [u8; 32] = [
-        0x0c, 0x3a, 0xc3, 0x05, 0xf6, 0x43, 0x1b, 0xad,
-        0xe3, 0x3b, 0x22, 0x79, 0xa8, 0xe2, 0x59, 0x8c,
-        0x43, 0x47, 0xe3, 0xe9, 0xf7, 0x7e, 0x7c, 0x19,
-        0xeb, 0x64, 0xc7, 0xeb, 0xad, 0xfb, 0xd0, 0x88,
+        0x0c, 0x3a, 0xc3, 0x05, 0xf6, 0x43, 0x1b, 0xad, 0xe3, 0x3b, 0x22, 0x79, 0xa8, 0xe2, 0x59,
+        0x8c, 0x43, 0x47, 0xe3, 0xe9, 0xf7, 0x7e, 0x7c, 0x19, 0xeb, 0x64, 0xc7, 0xeb, 0xad, 0xfb,
+        0xd0, 0x88,
     ];
     let commitment2 = U256::from_be_bytes(&env, &Bytes::from_array(&env, &commitment2_bytes));
 
@@ -223,12 +213,12 @@ fn test_poseidon_zero_leaf_consistency() {
     env.mock_all_auths();
 
     // Set unlimited budget for Poseidon operations (expensive cryptographic computations)
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, tree_id, admin) = setup_contracts(&env);
 
     let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
+    let _sbt_client = SbtClient::new(&env, &sbt_id);
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create test DAO
@@ -255,8 +245,7 @@ fn test_poseidon_zero_leaf_consistency() {
     // Just verify it's not all zeros
     let zero_u256 = U256::from_u32(&env, 0);
     assert_ne!(
-        empty_root,
-        zero_u256,
+        empty_root, zero_u256,
         "Empty tree root should not be all zeros"
     );
 

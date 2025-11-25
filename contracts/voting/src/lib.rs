@@ -29,12 +29,38 @@
 #![no_std]
 #[allow(unused_imports)]
 use soroban_sdk::{
-    contract, contractimpl, contracttype,
+    contract, contracterror, contractimpl, contracttype,
     crypto::bn254::{Fr, G1Affine, G2Affine},
-    symbol_short, Address, Bytes, BytesN, Env, IntoVal, String, Symbol, Vec, U256,
+    panic_with_error, symbol_short, Address, Bytes, BytesN, Env, IntoVal, String, Symbol, Vec,
+    U256,
 };
 
 const TREE_CONTRACT: Symbol = symbol_short!("tree");
+const VERSION: u32 = 1;
+const VERSION_KEY: Symbol = symbol_short!("ver");
+
+#[contracterror]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum VotingError {
+    NotAdmin = 1,
+    VkIcLengthMismatch = 2,
+    VkIcTooLarge = 3,
+    DescriptionTooLong = 4,
+    NotDaoMember = 5,
+    EndTimeInvalid = 6,
+    NullifierUsed = 7,
+    VotingClosed = 8,
+    CommitmentRevokedAtCreation = 9,
+    CommitmentRevokedDuringVoting = 10,
+    RootMismatch = 11,
+    RootNotInHistory = 12,
+    RootPredatesProposal = 13,
+    VkChanged = 14,
+    InvalidProof = 15,
+    VkNotSet = 16,
+    VkVersionMismatch = 17,
+    AlreadyInitialized = 18,
+}
 
 // Maximum allowed IC vector length (num_public_inputs + 1)
 // Our circuit has 6 public signals, so IC should have 7 elements
@@ -42,16 +68,17 @@ const TREE_CONTRACT: Symbol = symbol_short!("tree");
 const MAX_IC_LENGTH: u32 = 21;
 
 // Size limits to prevent DoS attacks
-const MAX_DESCRIPTION_LEN: u32 = 1024;  // Max proposal description length (1KB)
-const EXPECTED_IC_LENGTH: u32 = 7;      // Exact IC length for vote circuit (6 public signals + 1)
+const MAX_DESCRIPTION_LEN: u32 = 1024; // Max proposal description length (1KB)
+const EXPECTED_IC_LENGTH: u32 = 7; // Exact IC length for vote circuit (6 public signals + 1)
 
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
-    Proposal(u64, u64),           // (dao_id, proposal_id) -> ProposalInfo
-    ProposalCount(u64),           // dao_id -> count
-    Nullifier(u64, u64, U256),    // (dao_id, proposal_id, nullifier) -> bool
-    VotingKey(u64),               // dao_id -> VerificationKey
+    Proposal(u64, u64),        // (dao_id, proposal_id) -> ProposalInfo
+    ProposalCount(u64),        // dao_id -> count
+    Nullifier(u64, u64, U256), // (dao_id, proposal_id, nullifier) -> bool
+    VotingKey(u64),            // dao_id -> VerificationKey
+    VkVersion(u64),            // dao_id -> current VK version
 }
 
 #[contracttype]
@@ -71,10 +98,11 @@ pub struct ProposalInfo {
     pub no_votes: u64,
     pub end_time: u64,
     pub created_by: Address,
-    pub created_at: u64,          // Timestamp when proposal was created (for revocation checks)
-    pub vk_hash: BytesN<32>,     // SHA256 hash of VK at proposal creation
-    pub eligible_root: U256,      // Merkle root at creation - defines eligible voter set
-    pub vote_mode: VoteMode,      // Fixed or Trailing voting
+    pub created_at: u64, // Timestamp when proposal was created (for revocation checks)
+    pub vk_hash: BytesN<32>, // SHA256 hash of VK at proposal creation
+    pub vk_version: u32, // VK version at proposal creation
+    pub eligible_root: U256, // Merkle root at creation - defines eligible voter set
+    pub vote_mode: VoteMode, // Fixed or Trailing voting
     pub earliest_root_index: u32, // For Trailing mode: earliest valid root index
 }
 
@@ -82,20 +110,20 @@ pub struct ProposalInfo {
 #[contracttype]
 #[derive(Clone)]
 pub struct VerificationKey {
-    pub alpha: BytesN<64>,        // G1 point
-    pub beta: BytesN<128>,        // G2 point
-    pub gamma: BytesN<128>,       // G2 point
-    pub delta: BytesN<128>,       // G2 point
-    pub ic: Vec<BytesN<64>>,      // IC points (G1)
+    pub alpha: BytesN<64>,   // G1 point
+    pub beta: BytesN<128>,   // G2 point
+    pub gamma: BytesN<128>,  // G2 point
+    pub delta: BytesN<128>,  // G2 point
+    pub ic: Vec<BytesN<64>>, // IC points (G1)
 }
 
 /// Groth16 Proof
 #[contracttype]
 #[derive(Clone)]
 pub struct Proof {
-    pub a: BytesN<64>,            // G1 point
-    pub b: BytesN<128>,           // G2 point
-    pub c: BytesN<64>,            // G1 point
+    pub a: BytesN<64>,  // G1 point
+    pub b: BytesN<128>, // G2 point
+    pub c: BytesN<64>,  // G1 point
 }
 
 // Typed Events
@@ -128,6 +156,13 @@ pub struct VoteEvent {
     pub nullifier: U256,
 }
 
+#[soroban_sdk::contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContractUpgraded {
+    pub from: u32,
+    pub to: u32,
+}
+
 #[contract]
 pub struct Voting;
 
@@ -135,6 +170,19 @@ pub struct Voting;
 impl Voting {
     /// Constructor: Initialize contract with MembershipTree address
     pub fn __constructor(env: Env, tree_contract: Address) {
+        // Prevent accidental re-initialization
+        if env.storage().instance().has(&VERSION_KEY) {
+            panic_with_error!(&env, VotingError::AlreadyInitialized);
+        }
+
+        // Record contract version and emit upgrade event for observability
+        env.storage().instance().set(&VERSION_KEY, &VERSION);
+        ContractUpgraded {
+            from: 0,
+            to: VERSION,
+        }
+        .publish(&env);
+
         env.storage().instance().set(&TREE_CONTRACT, &tree_contract);
     }
 
@@ -144,7 +192,7 @@ impl Voting {
 
         // Verify admin owns the DAO via tree -> sbt -> registry chain
         // 1) Get tree contract (stored at constructor)
-        let tree_contract: Address = env.storage().instance().get(&TREE_CONTRACT).unwrap();
+        let tree_contract: Address = Self::tree_contract(env.clone());
 
         // 2) From tree, get SBT contract address
         let sbt_contract: Address = env.invoke_contract(
@@ -168,7 +216,7 @@ impl Voting {
         );
 
         if dao_admin != admin {
-            panic!("not admin");
+            panic_with_error!(&env, VotingError::NotAdmin);
         }
 
         // Validate VK size to prevent DoS attacks
@@ -176,12 +224,12 @@ impl Voting {
         // Vote circuit has 6 public signals (root, nullifier, daoId, proposalId, voteChoice, commitment)
         // Therefore IC must have exactly 7 elements
         if vk.ic.len() != EXPECTED_IC_LENGTH {
-            panic!("VK IC length must be exactly 7 for vote circuit");
+            panic_with_error!(&env, VotingError::VkIcLengthMismatch);
         }
 
         // Additional safety check: enforce max limit for any future circuit changes
         if vk.ic.len() > MAX_IC_LENGTH {
-            panic!("VK IC vector too large");
+            panic_with_error!(&env, VotingError::VkIcTooLarge);
         }
 
         // Point Validation Strategy:
@@ -251,6 +299,12 @@ impl Voting {
         // - [Safe Curves](https://safecurves.cr.yp.to/) - Subgroup security criteria
         // - Groth16 paper Section 3.2 - Verification algorithm
 
+        // Bump VK version
+        let version_key = DataKey::VkVersion(dao_id);
+        let current_version: u32 = env.storage().persistent().get(&version_key).unwrap_or(0);
+        let new_version = current_version + 1;
+        env.storage().persistent().set(&version_key, &new_version);
+
         let key = DataKey::VotingKey(dao_id);
         env.storage().persistent().set(&key, &vk);
 
@@ -266,13 +320,19 @@ impl Voting {
         // Vote circuit has 6 public signals (root, nullifier, daoId, proposalId, voteChoice, commitment)
         // Therefore IC must have exactly 7 elements
         if vk.ic.len() != EXPECTED_IC_LENGTH {
-            panic!("VK IC length must be exactly 7 for vote circuit");
+            panic_with_error!(&env, VotingError::VkIcLengthMismatch);
         }
 
         // Additional safety check: enforce max limit for any future circuit changes
         if vk.ic.len() > MAX_IC_LENGTH {
-            panic!("VK IC vector too large");
+            panic_with_error!(&env, VotingError::VkIcTooLarge);
         }
+
+        // Bump VK version
+        let version_key = DataKey::VkVersion(dao_id);
+        let current_version: u32 = env.storage().persistent().get(&version_key).unwrap_or(0);
+        let new_version = current_version + 1;
+        env.storage().persistent().set(&version_key, &new_version);
 
         let key = DataKey::VotingKey(dao_id);
         env.storage().persistent().set(&key, &vk);
@@ -295,11 +355,11 @@ impl Voting {
 
         // Validate description length to prevent DoS
         if description.len() > MAX_DESCRIPTION_LEN {
-            panic!("description too long");
+            panic_with_error!(&env, VotingError::DescriptionTooLong);
         }
 
         // Get tree and sbt contracts
-        let tree_contract: Address = env.storage().instance().get(&TREE_CONTRACT).unwrap();
+        let tree_contract: Address = Self::tree_contract(env.clone());
         let sbt_contract: Address = env.invoke_contract(
             &tree_contract,
             &symbol_short!("sbt_contr"),
@@ -329,7 +389,7 @@ impl Voting {
             );
 
             if !has_sbt {
-                panic!("not DAO member");
+                panic_with_error!(&env, VotingError::NotDaoMember);
             }
         }
         // For public DAOs (membership_open = true), anyone can create proposals
@@ -338,7 +398,7 @@ impl Voting {
 
         // Validate end_time: 0 = no deadline, otherwise must be in the future
         if end_time != 0 && end_time <= now {
-            panic!("end time must be in the future or 0 for no deadline");
+            panic_with_error!(&env, VotingError::EndTimeInvalid);
         }
 
         // Verify VK is set for this DAO and snapshot it
@@ -347,7 +407,15 @@ impl Voting {
             .storage()
             .persistent()
             .get(&vk_key)
-            .expect("VK not set for DAO");
+            .unwrap_or_else(|| panic_with_error!(&env, VotingError::VkNotSet));
+
+        // Snapshot VK version
+        let version_key = DataKey::VkVersion(dao_id);
+        let vk_version: u32 = env
+            .storage()
+            .persistent()
+            .get(&version_key)
+            .unwrap_or_else(|| panic_with_error!(&env, VotingError::VkNotSet));
 
         // Compute VK hash for immutability during proposal lifetime
         let vk_hash = Self::hash_vk(&env, &vk);
@@ -378,6 +446,7 @@ impl Voting {
             created_by: creator.clone(),
             created_at: now,
             vk_hash,
+            vk_version,
             eligible_root,
             vote_mode,
             earliest_root_index,
@@ -435,7 +504,7 @@ impl Voting {
         // The nullifier check is cheap (just storage lookup) and should fail fast
         let null_key = DataKey::Nullifier(dao_id, proposal_id, nullifier.clone());
         if env.storage().persistent().has(&null_key) {
-            panic!("vote rejected: this nullifier has already been used (double-voting prevented)");
+            panic_with_error!(&env, VotingError::NullifierUsed);
         }
 
         // Get proposal
@@ -450,18 +519,22 @@ impl Voting {
         // If end_time is 0, there's no deadline (voting never closes)
         let now = env.ledger().timestamp();
         if proposal.end_time != 0 && now > proposal.end_time {
-            panic!("voting period closed");
+            panic_with_error!(&env, VotingError::VotingClosed);
         }
 
         // Get tree contract for revocation checks
-        let tree_contract: Address = env.storage().instance().get(&TREE_CONTRACT).unwrap();
+        let tree_contract: Address = Self::tree_contract(env.clone());
 
         // Check if commitment was revoked
         // Query tree contract for RevokedAt timestamp
         let revoked_at_opt: Option<u64> = env.invoke_contract(
             &tree_contract,
             &symbol_short!("revok_at"),
-            soroban_sdk::vec![&env, dao_id.into_val(&env), commitment.clone().into_val(&env)],
+            soroban_sdk::vec![
+                &env,
+                dao_id.into_val(&env),
+                commitment.clone().into_val(&env)
+            ],
         );
 
         if let Some(revoked_at) = revoked_at_opt {
@@ -469,7 +542,11 @@ impl Voting {
             let reinstated_at_opt: Option<u64> = env.invoke_contract(
                 &tree_contract,
                 &symbol_short!("reinst_at"),
-                soroban_sdk::vec![&env, dao_id.into_val(&env), commitment.clone().into_val(&env)],
+                soroban_sdk::vec![
+                    &env,
+                    dao_id.into_val(&env),
+                    commitment.clone().into_val(&env)
+                ],
             );
 
             // Determine effective status at proposal creation time
@@ -485,7 +562,7 @@ impl Voting {
             };
 
             if !was_active_at_creation {
-                panic!("commitment revoked at proposal creation");
+                panic_with_error!(&env, VotingError::CommitmentRevokedAtCreation);
             }
 
             // Also check they weren't revoked DURING the voting period
@@ -498,7 +575,7 @@ impl Voting {
                 };
 
                 if !currently_active {
-                    panic!("commitment revoked during voting period");
+                    panic_with_error!(&env, VotingError::CommitmentRevokedDuringVoting);
                 }
             }
         }
@@ -509,7 +586,7 @@ impl Voting {
                 // Fixed mode: root must exactly match the snapshot at proposal creation
                 // This prevents sybil attacks where members are added after proposal creation
                 if root != proposal.eligible_root {
-                    panic!("root must match proposal eligible root");
+                    panic_with_error!(&env, VotingError::RootMismatch);
                 }
             }
             VoteMode::Trailing => {
@@ -517,7 +594,7 @@ impl Voting {
                 // This allows new members to vote while preventing removed members from using old roots
 
                 // Get tree contract address
-                let tree_contract: Address = env.storage().instance().get(&TREE_CONTRACT).unwrap();
+                let tree_contract: Address = Self::tree_contract(env.clone());
 
                 // Check root is in valid history
                 let root_valid: bool = env.invoke_contract(
@@ -526,7 +603,7 @@ impl Voting {
                     soroban_sdk::vec![&env, dao_id.into_val(&env), root.clone().into_val(&env)],
                 );
                 if !root_valid {
-                    panic!("root not in tree history");
+                    panic_with_error!(&env, VotingError::RootNotInHistory);
                 }
 
                 // Check root index >= earliest_root_index (prevents using roots from before proposal)
@@ -536,7 +613,7 @@ impl Voting {
                     soroban_sdk::vec![&env, dao_id.into_val(&env), root.clone().into_val(&env)],
                 );
                 if root_index < proposal.earliest_root_index {
-                    panic!("root predates proposal creation");
+                    panic_with_error!(&env, VotingError::RootPredatesProposal);
                 }
             }
         }
@@ -547,13 +624,24 @@ impl Voting {
             .storage()
             .persistent()
             .get(&vk_key)
-            .expect("VK not set");
+            .unwrap_or_else(|| panic_with_error!(&env, VotingError::VkNotSet));
+
+        // Ensure VK version matches proposal snapshot
+        let version_key = DataKey::VkVersion(dao_id);
+        let current_version: u32 = env
+            .storage()
+            .persistent()
+            .get(&version_key)
+            .unwrap_or_else(|| panic_with_error!(&env, VotingError::VkNotSet));
+        if current_version != proposal.vk_version {
+            panic_with_error!(&env, VotingError::VkVersionMismatch);
+        }
 
         // Verify VK matches the snapshot taken at proposal creation
         // This prevents VK changes from invalidating in-flight votes
         let current_vk_hash = Self::hash_vk(&env, &vk);
         if current_vk_hash != proposal.vk_hash {
-            panic!("VK has changed since proposal creation");
+            panic_with_error!(&env, VotingError::VkChanged);
         }
 
         // Verify Groth16 proof
@@ -579,7 +667,7 @@ impl Voting {
         ];
 
         if !Self::verify_groth16(&env, &vk, &proof, &pub_signals) {
-            panic!("invalid proof");
+            panic_with_error!(&env, VotingError::InvalidProof);
         }
 
         // Mark nullifier as used
@@ -627,7 +715,10 @@ impl Voting {
 
     /// Get tree contract address
     pub fn tree_contract(env: Env) -> Address {
-        env.storage().instance().get(&TREE_CONTRACT).unwrap()
+        env.storage()
+            .instance()
+            .get(&TREE_CONTRACT)
+            .unwrap_or_else(|| panic_with_error!(&env, VotingError::VkNotSet))
     }
 
     /// Get results for a proposal (yes_votes, no_votes)
@@ -636,7 +727,21 @@ impl Voting {
         (proposal.yes_votes, proposal.no_votes)
     }
 
+    /// Contract version for upgrade tracking.
+    pub fn version(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&VERSION_KEY)
+            .unwrap_or(VERSION)
+    }
 
+    /// Get current VK version for a DAO
+    pub fn vk_version(env: Env, dao_id: u64) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::VkVersion(dao_id))
+            .unwrap_or(0)
+    }
 
     // Internal: Get next proposal ID
     fn next_proposal_id(env: &Env, dao_id: u64) -> u64 {
@@ -715,7 +820,7 @@ impl Voting {
 
     // Compute vk_x = IC[0] + sum(pub_signals[i] * IC[i+1])
     #[cfg(not(any(test, feature = "testutils")))]
-    fn compute_vk_x(env: &Env, vk: &VerificationKey, pub_signals: &Vec<U256>) -> BytesN<64> {
+    fn compute_vk_x(_env: &Env, vk: &VerificationKey, pub_signals: &Vec<U256>) -> BytesN<64> {
         // Start with IC[0]
         let mut vk_x = G1Affine::from_bytes(vk.ic.get(0).unwrap());
 
@@ -790,7 +895,6 @@ impl Voting {
         result
     }
 }
-
 
 #[cfg(test)]
 mod test;

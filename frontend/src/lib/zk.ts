@@ -1,11 +1,19 @@
 // ZK credential management for anonymous voting
 import { buildPoseidon } from "circomlibjs";
 import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
+import { CONTRACTS, NETWORK_CONFIG } from "../config/contracts";
 
 export interface ZKCredentials {
   secret: string;
   salt: string;
   commitment: string;
+}
+
+const CREDENTIAL_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const STORAGE_PREFIX = `daovote_${NETWORK_CONFIG.networkName}_${CONTRACTS.VOTING_ID.slice(0, 6)}`;
+
+function credentialKey(daoId: number, publicKey: string) {
+  return `${STORAGE_PREFIX}_voting_registration_${daoId}_${publicKey}`;
 }
 
 // Generate deterministic ZK credentials from wallet signature
@@ -103,7 +111,7 @@ export async function generateRandomZKCredentials(): Promise<ZKCredentials> {
 // Store ZK credentials in localStorage (indexed by DAO ID and public key)
 // Uses the same format as manual registration in DAODashboard
 export function storeZKCredentials(daoId: number, publicKey: string, credentials: ZKCredentials, leafIndex: number = 0) {
-  const key = `voting_registration_${daoId}_${publicKey}`;
+  const key = credentialKey(daoId, publicKey);
   localStorage.setItem(key, JSON.stringify({
     secret: credentials.secret,
     salt: credentials.salt,
@@ -116,12 +124,18 @@ export function storeZKCredentials(daoId: number, publicKey: string, credentials
 
 // Retrieve ZK credentials from localStorage
 export function getZKCredentials(daoId: number, publicKey: string): { secret: string; salt: string; commitment: string; leafIndex: number } | null {
-  const key = `voting_registration_${daoId}_${publicKey}`;
+  const key = credentialKey(daoId, publicKey);
   const stored = localStorage.getItem(key);
   if (!stored) return null;
 
   try {
-    return JSON.parse(stored);
+    const parsed = JSON.parse(stored);
+    if (parsed.registeredAt && Date.now() - parsed.registeredAt > CREDENTIAL_CACHE_TTL_MS) {
+      localStorage.removeItem(key);
+      console.warn(`[ZK] Cached credentials expired for DAO ${daoId}, key cleared`);
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -175,3 +189,4 @@ export async function computeCommitment(secret: string, salt: string): Promise<s
   const commitment = poseidon.F.toString(poseidon([BigInt(secret), BigInt(salt)]));
   return commitment;
 }
+/* eslint-disable @typescript-eslint/no-unused-vars */

@@ -8,6 +8,7 @@ import {
   Address,
 } from "@stellar/stellar-sdk";
 import { NETWORK_CONFIG } from "../config/contracts";
+import axios from "axios";
 
 // Initialize Soroban RPC server
 // allowHttp: true is required for local development on http://localhost
@@ -17,6 +18,18 @@ export const server = new rpc.Server(NETWORK_CONFIG.rpcUrl, {
 
 // Network passphrase
 export const networkPassphrase = NETWORK_CONFIG.networkPassphrase;
+
+// Optional relayer endpoints (if front-end is allowed to call them directly)
+export async function checkRelayerReady(relayerUrl: string, authToken?: string) {
+  const headers: Record<string, string> = {};
+  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+  try {
+    const res = await axios.get(`${relayerUrl}/ready`, { headers });
+    return { ok: res.data?.status === "ready", details: res.data };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || "ready check failed" };
+  }
+}
 
 /**
  * Build and simulate a contract invocation transaction
@@ -158,3 +171,4 @@ export function addressToScVal(address: string) {
 export function isFreighterInstalled(): boolean {
   return typeof window !== "undefined" && "freighter" in window;
 }
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */

@@ -17,7 +17,7 @@ const path = require('path');
 const VOTING_CONTRACT_ID = process.env.VOTING_CONTRACT_ID || 'CDDJZIZVRYOHVDRWBFICTWMQPY4QJTWXO6AHAWSEZN5E3GURWWAS2ZCE';
 const RPC_URL = process.env.SOROBAN_RPC_URL || 'http://localhost:8000/soroban/rpc';
 const NETWORK_PASSPHRASE = process.env.NETWORK_PASSPHRASE || 'Test SDF Future Network ; October 2022';
-const SECRET_KEY = process.env.SECRET_KEY || 'SCRQUW53C3DE664SG7DOTHZI5NDKYIGDOWMI7QGUCOKQM77NAYO25ER5'; // mykey
+const SECRET_KEY = process.env.SECRET_KEY || 'REPLACE_ME_RELAYER_SECRET';
 
 // Load verification key
 const vkPath = path.join(__dirname, '../frontend/src/lib/verification_key_soroban.json');

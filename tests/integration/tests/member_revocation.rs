@@ -3,37 +3,31 @@
 // Tests for the commitment-based revocation feature which allows admins to
 // revoke and reinstate members without expensive tree updates.
 
-use soroban_sdk::{testutils::{Address as _, Ledger}, Address, Env, String, U256};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    Address, Env, String, U256,
+};
 
 // Import all contract clients
 mod dao_registry {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/dao_registry.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/dao_registry.wasm");
 }
 
 mod membership_sbt {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/membership_sbt.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_sbt.wasm");
 }
 
 mod membership_tree {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/membership_tree.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_tree.wasm");
 }
 
 mod voting {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/voting.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/voting.wasm");
 }
 
 use dao_registry::Client as RegistryClient;
 use membership_sbt::Client as SbtClient;
 use membership_tree::Client as TreeClient;
-use voting::Client as VotingClient;
 
 fn setup_contracts(env: &Env) -> (Address, Address, Address, Address, Address) {
     // Deploy contracts
@@ -52,7 +46,7 @@ fn setup_contracts(env: &Env) -> (Address, Address, Address, Address, Address) {
 fn test_admin_can_revoke_member() {
     let env = Env::default();
     env.mock_all_auths();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, tree_id, _voting_id, admin) = setup_contracts(&env);
 
@@ -61,11 +55,7 @@ fn test_admin_can_revoke_member() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Test DAO"),
-        &admin,
-        &false,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -100,7 +90,7 @@ fn test_admin_can_revoke_member() {
 fn test_admin_can_reinstate_member() {
     let env = Env::default();
     env.mock_all_auths();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, tree_id, _voting_id, admin) = setup_contracts(&env);
 
@@ -109,11 +99,7 @@ fn test_admin_can_reinstate_member() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Test DAO"),
-        &admin,
-        &false,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
 
     tree_client.init_tree(&dao_id, &18, &admin);
 
@@ -141,7 +127,10 @@ fn test_admin_can_reinstate_member() {
 
     // Verify both timestamps are set correctly
     assert_eq!(tree_client.revok_at(&dao_id, &commitment), Some(revoked_at));
-    assert_eq!(tree_client.reinst_at(&dao_id, &commitment), Some(reinstated_at));
+    assert_eq!(
+        tree_client.reinst_at(&dao_id, &commitment),
+        Some(reinstated_at)
+    );
 
     println!("✅ Admin can reinstate revoked member");
 }
@@ -151,7 +140,7 @@ fn test_admin_can_reinstate_member() {
 fn test_multiple_revoke_reinstate_cycles() {
     let env = Env::default();
     env.mock_all_auths();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, tree_id, _voting_id, admin) = setup_contracts(&env);
 
@@ -159,11 +148,7 @@ fn test_multiple_revoke_reinstate_cycles() {
     let sbt_client = SbtClient::new(&env, &sbt_id);
     let tree_client = TreeClient::new(&env, &tree_id);
 
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Test DAO"),
-        &admin,
-        &false,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
 
     tree_client.init_tree(&dao_id, &18, &admin);
 
@@ -177,14 +162,16 @@ fn test_multiple_revoke_reinstate_cycles() {
     tree_client.remove_member(&dao_id, &member, &admin);
     let revoked_at_1 = tree_client.revok_at(&dao_id, &commitment).unwrap();
 
-    env.ledger().with_mut(|li| li.timestamp = li.timestamp + 100);
+    env.ledger()
+        .with_mut(|li| li.timestamp = li.timestamp + 100);
 
     // First reinstate
     tree_client.reinstate_member(&dao_id, &member, &admin);
     let reinstated_at_1 = tree_client.reinst_at(&dao_id, &commitment).unwrap();
     assert!(reinstated_at_1 > revoked_at_1);
 
-    env.ledger().with_mut(|li| li.timestamp = li.timestamp + 100);
+    env.ledger()
+        .with_mut(|li| li.timestamp = li.timestamp + 100);
 
     // Second revoke
     tree_client.remove_member(&dao_id, &member, &admin);
@@ -200,7 +187,7 @@ fn test_multiple_revoke_reinstate_cycles() {
 fn test_only_admin_can_remove_member() {
     let env = Env::default();
     env.mock_all_auths();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, tree_id, _voting_id, admin) = setup_contracts(&env);
 
@@ -211,11 +198,7 @@ fn test_only_admin_can_remove_member() {
     let non_admin = Address::generate(&env);
     let member = Address::generate(&env);
 
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Test DAO"),
-        &admin,
-        &false,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
 
     tree_client.init_tree(&dao_id, &18, &admin);
 
@@ -233,7 +216,7 @@ fn test_only_admin_can_remove_member() {
 fn test_only_admin_can_reinstate_member() {
     let env = Env::default();
     env.mock_all_auths();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, tree_id, _voting_id, admin) = setup_contracts(&env);
 
@@ -244,11 +227,7 @@ fn test_only_admin_can_reinstate_member() {
     let non_admin = Address::generate(&env);
     let member = Address::generate(&env);
 
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Test DAO"),
-        &admin,
-        &false,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
 
     tree_client.init_tree(&dao_id, &18, &admin);
 

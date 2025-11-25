@@ -6,31 +6,26 @@
 // 3. end_time = 0 means no deadline (voting never closes)
 // 4. Creating proposal with past end_time fails
 
-use soroban_sdk::{testutils::{Address as _, Ledger}, Address, Env, String, U256};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    Address, Env, String, U256,
+};
 
 // Import all contract clients
 mod dao_registry {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/dao_registry.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/dao_registry.wasm");
 }
 
 mod membership_sbt {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/membership_sbt.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_sbt.wasm");
 }
 
 mod membership_tree {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/membership_tree.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_tree.wasm");
 }
 
 mod voting {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/voting.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/voting.wasm");
 }
 
 use dao_registry::Client as RegistryClient;
@@ -63,11 +58,7 @@ fn test_create_proposal_with_future_deadline() {
     let voting = VotingClient::new(&env, &voting_id);
 
     // Create DAO with admin
-    let dao_id = registry.create_dao(
-        &String::from_str(&env, "Test DAO"),
-        &admin,
-        &false,
-    );
+    let dao_id = registry.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
 
     // Mint SBT for admin (required for init_tree)
     sbt.mint(&dao_id, &admin, &admin, &None);
@@ -135,11 +126,7 @@ fn test_create_proposal_with_past_deadline_fails() {
     let voting = VotingClient::new(&env, &voting_id);
 
     // Create DAO with admin
-    let dao_id = registry.create_dao(
-        &String::from_str(&env, "Test DAO"),
-        &admin,
-        &false,
-    );
+    let dao_id = registry.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
 
     // Mint SBT for admin (required for init_tree)
     sbt.mint(&dao_id, &admin, &admin, &None);
@@ -209,11 +196,7 @@ fn test_create_proposal_with_no_deadline() {
     let voting = VotingClient::new(&env, &voting_id);
 
     // Create DAO with admin
-    let dao_id = registry.create_dao(
-        &String::from_str(&env, "Test DAO"),
-        &admin,
-        &false,
-    );
+    let dao_id = registry.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
 
     // Mint SBT for admin (required for init_tree)
     sbt.mint(&dao_id, &admin, &admin, &None);

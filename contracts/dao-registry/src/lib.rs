@@ -1,10 +1,22 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
+    BytesN, Env, String, Symbol, Vec,
+};
 
 const DAO_COUNT: Symbol = symbol_short!("dao_cnt");
+const VERSION: u32 = 1;
+const VERSION_KEY: Symbol = symbol_short!("ver");
+
+#[contracterror]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum RegistryError {
+    NameTooLong = 1,
+    DaoNotFound = 2,
+}
 
 // Size limit to prevent DoS attacks
-const MAX_DAO_NAME_LEN: u32 = 256;  // Max DAO name length (256 chars)
+const MAX_DAO_NAME_LEN: u32 = 256; // Max DAO name length (256 chars)
 
 #[contracttype]
 #[derive(Clone)]
@@ -20,11 +32,11 @@ pub struct DaoInfo {
 #[contracttype]
 #[derive(Clone)]
 pub struct VerificationKey {
-    pub alpha: BytesN<64>,        // G1 point
-    pub beta: BytesN<128>,        // G2 point
-    pub gamma: BytesN<128>,       // G2 point
-    pub delta: BytesN<128>,       // G2 point
-    pub ic: Vec<BytesN<64>>,      // IC points (G1)
+    pub alpha: BytesN<64>,   // G1 point
+    pub beta: BytesN<128>,   // G2 point
+    pub gamma: BytesN<128>,  // G2 point
+    pub delta: BytesN<128>,  // G2 point
+    pub ic: Vec<BytesN<64>>, // IC points (G1)
 }
 
 // Typed Events
@@ -46,6 +58,13 @@ pub struct AdminXferEvent {
     pub new_admin: Address,
 }
 
+#[soroban_sdk::contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContractUpgraded {
+    pub from: u32,
+    pub to: u32,
+}
+
 #[contract]
 pub struct DaoRegistry;
 
@@ -59,7 +78,7 @@ impl DaoRegistry {
 
         // Validate name length to prevent DoS
         if name.len() > MAX_DAO_NAME_LEN {
-            panic!("DAO name too long");
+            panic_with_error!(&env, RegistryError::NameTooLong);
         }
 
         let dao_id = Self::next_dao_id(&env);
@@ -92,7 +111,7 @@ impl DaoRegistry {
         env.storage()
             .persistent()
             .get(&key)
-            .expect("DAO not found")
+            .unwrap_or_else(|| panic_with_error!(&env, RegistryError::DaoNotFound))
     }
 
     /// Check if DAO exists
@@ -109,7 +128,11 @@ impl DaoRegistry {
     /// Transfer admin rights (current admin only)
     pub fn transfer_admin(env: Env, dao_id: u64, new_admin: Address) {
         let key = Self::dao_key(dao_id);
-        let mut info: DaoInfo = env.storage().persistent().get(&key).expect("DAO not found");
+        let mut info: DaoInfo = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| panic_with_error!(&env, RegistryError::DaoNotFound));
 
         info.admin.require_auth();
 
@@ -157,7 +180,7 @@ impl DaoRegistry {
 
         // Validate name length to prevent DoS
         if name.len() > MAX_DAO_NAME_LEN {
-            panic!("DAO name too long");
+            panic_with_error!(&env, RegistryError::NameTooLong);
         }
 
         // Step 1: Create DAO registry entry
@@ -182,39 +205,29 @@ impl DaoRegistry {
 
         // Step 2: Mint SBT to creator
         use soroban_sdk::IntoVal;
-        let mint_args = soroban_sdk::vec![
-            &env,
-            dao_id.into_val(&env),
-            creator.clone().into_val(&env)
-        ];
+        let mint_args =
+            soroban_sdk::vec![&env, dao_id.into_val(&env), creator.clone().into_val(&env)];
         env.invoke_contract::<()>(
             &sbt_contract,
             &Symbol::new(&env, "mint_from_registry"),
-            mint_args
+            mint_args,
         );
 
         // Step 3: Initialize Merkle tree
-        let init_tree_args = soroban_sdk::vec![
-            &env,
-            dao_id.into_val(&env),
-            tree_depth.into_val(&env)
-        ];
+        let init_tree_args =
+            soroban_sdk::vec![&env, dao_id.into_val(&env), tree_depth.into_val(&env)];
         env.invoke_contract::<()>(
             &tree_contract,
             &Symbol::new(&env, "init_tree_from_registry"),
-            init_tree_args
+            init_tree_args,
         );
 
         // Step 4: Set verification key
-        let set_vk_args = soroban_sdk::vec![
-            &env,
-            dao_id.into_val(&env),
-            vk.into_val(&env)
-        ];
+        let set_vk_args = soroban_sdk::vec![&env, dao_id.into_val(&env), vk.into_val(&env)];
         env.invoke_contract::<()>(
             &voting_contract,
             &Symbol::new(&env, "set_vk_from_registry"),
-            set_vk_args
+            set_vk_args,
         );
 
         dao_id
@@ -268,27 +281,21 @@ impl DaoRegistry {
 
         // Step 2: Mint SBT to creator (using mint_from_registry to avoid re-entrancy)
         use soroban_sdk::IntoVal;
-        let mint_args = soroban_sdk::vec![
-            &env,
-            dao_id.into_val(&env),
-            creator.clone().into_val(&env)
-        ];
+        let mint_args =
+            soroban_sdk::vec![&env, dao_id.into_val(&env), creator.clone().into_val(&env)];
         env.invoke_contract::<()>(
             &sbt_contract,
             &Symbol::new(&env, "mint_from_registry"),
-            mint_args
+            mint_args,
         );
 
         // Step 3: Initialize Merkle tree (using init_tree_from_registry to avoid re-entrancy)
-        let init_tree_args = soroban_sdk::vec![
-            &env,
-            dao_id.into_val(&env),
-            tree_depth.into_val(&env)
-        ];
+        let init_tree_args =
+            soroban_sdk::vec![&env, dao_id.into_val(&env), tree_depth.into_val(&env)];
         env.invoke_contract::<()>(
             &tree_contract,
             &Symbol::new(&env, "init_tree_from_registry"),
-            init_tree_args
+            init_tree_args,
         );
 
         // Step 4: Register creator's commitment in the tree
@@ -301,27 +308,41 @@ impl DaoRegistry {
         env.invoke_contract::<()>(
             &tree_contract,
             &Symbol::new(&env, "register_from_registry"),
-            register_args
+            register_args,
         );
 
         // Step 5: Set verification key (using set_vk_from_registry to avoid re-entrancy)
-        let set_vk_args = soroban_sdk::vec![
-            &env,
-            dao_id.into_val(&env),
-            vk.into_val(&env)
-        ];
+        let set_vk_args = soroban_sdk::vec![&env, dao_id.into_val(&env), vk.into_val(&env)];
         env.invoke_contract::<()>(
             &voting_contract,
             &Symbol::new(&env, "set_vk_from_registry"),
-            set_vk_args
+            set_vk_args,
         );
 
         dao_id
     }
 
+    /// Contract version for upgrade tracking.
+    pub fn version(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&VERSION_KEY)
+            .unwrap_or(VERSION)
+    }
+
     // Internal helpers
 
     fn next_dao_id(env: &Env) -> u64 {
+        // Lazily record contract version on first mutation
+        if !env.storage().instance().has(&VERSION_KEY) {
+            env.storage().instance().set(&VERSION_KEY, &VERSION);
+            ContractUpgraded {
+                from: 0,
+                to: VERSION,
+            }
+            .publish(env);
+        }
+
         let count: u64 = env.storage().instance().get(&DAO_COUNT).unwrap_or(0);
         let new_id = count + 1;
         env.storage().instance().set(&DAO_COUNT, &new_id);

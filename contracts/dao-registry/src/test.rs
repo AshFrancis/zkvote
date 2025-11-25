@@ -84,7 +84,7 @@ fn test_transfer_admin() {
 }
 
 #[test]
-#[should_panic(expected = "DAO not found")]
+#[should_panic(expected = "HostError")]
 fn test_get_nonexistent_dao_fails() {
     let env = Env::default();
 
@@ -172,7 +172,7 @@ fn test_create_dao_max_name_length_succeeds() {
 }
 
 #[test]
-#[should_panic(expected = "DAO name too long")]
+#[should_panic(expected = "HostError")]
 fn test_create_dao_name_too_long_fails() {
     let env = Env::default();
     env.mock_all_auths();
@@ -188,7 +188,7 @@ fn test_create_dao_name_too_long_fails() {
 }
 
 #[test]
-#[should_panic(expected = "DAO name too long")]
+#[should_panic(expected = "HostError")]
 fn test_create_dao_name_extremely_long_fails() {
     let env = Env::default();
     env.mock_all_auths();

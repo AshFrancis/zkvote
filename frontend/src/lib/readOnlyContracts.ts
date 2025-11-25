@@ -1,6 +1,7 @@
 import { Client as DaoRegistryClient } from "../contracts/dao-registry/dist/index.js";
 import { Client as MembershipSbtClient } from "../contracts/membership-sbt/dist/index.js";
 import { Client as MembershipTreeClient } from "../contracts/membership-tree/dist/index.js";
+import { Client as VotingClient } from "../contracts/voting/dist/index.js";
 import { NETWORK_CONFIG, CONTRACTS } from "../config/contracts";
 
 // Create read-only contract clients (no wallet needed)
@@ -25,6 +26,15 @@ export function getReadOnlyMembershipSbt() {
 export function getReadOnlyMembershipTree() {
   return new MembershipTreeClient({
     contractId: CONTRACTS.TREE_ID,
+    rpcUrl: NETWORK_CONFIG.rpcUrl,
+    networkPassphrase: NETWORK_CONFIG.networkPassphrase,
+    allowHttp: true,
+  });
+}
+
+export function getReadOnlyVoting() {
+  return new VotingClient({
+    contractId: CONTRACTS.VOTING_ID,
     rpcUrl: NETWORK_CONFIG.rpcUrl,
     networkPassphrase: NETWORK_CONFIG.networkPassphrase,
     allowHttp: true,

@@ -19,9 +19,7 @@ mod mock_tree {
     #[contractimpl]
     impl MockTree {
         pub fn set_sbt_contract(env: Env, sbt: Address) {
-            env.storage()
-                .persistent()
-                .set(&DataKey::SbtContract, &sbt);
+            env.storage().persistent().set(&DataKey::SbtContract, &sbt);
         }
 
         pub fn sbt_contr(env: Env) -> Address {
@@ -80,19 +78,29 @@ mod mock_registry {
     #[contractimpl]
     impl MockRegistry {
         pub fn set_admin(env: Env, dao_id: u64, admin: Address) {
-            env.storage().persistent().set(&DataKey::Admin(dao_id), &admin);
+            env.storage()
+                .persistent()
+                .set(&DataKey::Admin(dao_id), &admin);
         }
 
         pub fn get_admin(env: Env, dao_id: u64) -> Address {
-            env.storage().persistent().get(&DataKey::Admin(dao_id)).unwrap()
+            env.storage()
+                .persistent()
+                .get(&DataKey::Admin(dao_id))
+                .unwrap()
         }
 
         pub fn set_membership_open(env: Env, dao_id: u64, is_open: bool) {
-            env.storage().persistent().set(&DataKey::MembershipOpen(dao_id), &is_open);
+            env.storage()
+                .persistent()
+                .set(&DataKey::MembershipOpen(dao_id), &is_open);
         }
 
         pub fn is_membership_open(env: Env, dao_id: u64) -> bool {
-            env.storage().persistent().get(&DataKey::MembershipOpen(dao_id)).unwrap_or(false)
+            env.storage()
+                .persistent()
+                .get(&DataKey::MembershipOpen(dao_id))
+                .unwrap_or(false)
         }
     }
 }
@@ -164,7 +172,16 @@ fn create_dummy_vk(env: &Env) -> VerificationKey {
         gamma: g2.clone(),
         delta: g2.clone(),
         // IC vector needs 7 elements for 6 public signals: [root, nullifier, daoId, proposalId, voteChoice, commitment]
-        ic: soroban_sdk::vec![env, g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone()],
+        ic: soroban_sdk::vec![
+            env,
+            g1.clone(),
+            g1.clone(),
+            g1.clone(),
+            g1.clone(),
+            g1.clone(),
+            g1.clone(),
+            g1.clone()
+        ],
     }
 }
 
@@ -189,16 +206,15 @@ fn bn254_g1_generator(env: &Env) -> BytesN<64> {
 // BN254 G2 generator
 fn bn254_g2_generator(env: &Env) -> BytesN<128> {
     let bytes: [u8; 128] = [
-        0x18, 0x00, 0x50, 0x6a, 0x06, 0x12, 0x86, 0xeb, 0x6a, 0x84, 0xa5, 0x73, 0x0b, 0x8f,
-        0x10, 0x29, 0x3e, 0x29, 0x81, 0x6c, 0xd1, 0x91, 0x3d, 0x53, 0x38, 0xf7, 0x15, 0xde,
-        0x3e, 0x98, 0xf9, 0xad, 0x19, 0x83, 0x90, 0x42, 0x11, 0xa5, 0x3f, 0x6e, 0x0b, 0x08,
-        0x53, 0xa9, 0x0a, 0x00, 0xef, 0xbf, 0xf1, 0x70, 0x0c, 0x7b, 0x1d, 0xc0, 0x06, 0x32,
-        0x4d, 0x85, 0x9d, 0x75, 0xe3, 0xca, 0xa5, 0xa2, 0x12, 0xc8, 0x5e, 0xa5, 0xdb, 0x8c,
-        0x6d, 0xeb, 0x4a, 0xab, 0x71, 0x8e, 0x80, 0x6a, 0x51, 0xa5, 0x66, 0x08, 0x21, 0x4c,
-        0x3f, 0x62, 0x8b, 0x96, 0x2c, 0xf1, 0x91, 0xea, 0xcd, 0xc8, 0x0e, 0x7a, 0x09, 0x0d,
-        0x97, 0xc0, 0x9c, 0xe1, 0x48, 0x60, 0x63, 0xb3, 0x59, 0xf3, 0xdd, 0x89, 0xb7, 0xc4,
-        0x3c, 0x5f, 0x18, 0x95, 0x8f, 0xb3, 0xe6, 0xb9, 0x6d, 0xb5, 0x5e, 0x19, 0xa3, 0xb7,
-        0xc0, 0xfb,
+        0x18, 0x00, 0x50, 0x6a, 0x06, 0x12, 0x86, 0xeb, 0x6a, 0x84, 0xa5, 0x73, 0x0b, 0x8f, 0x10,
+        0x29, 0x3e, 0x29, 0x81, 0x6c, 0xd1, 0x91, 0x3d, 0x53, 0x38, 0xf7, 0x15, 0xde, 0x3e, 0x98,
+        0xf9, 0xad, 0x19, 0x83, 0x90, 0x42, 0x11, 0xa5, 0x3f, 0x6e, 0x0b, 0x08, 0x53, 0xa9, 0x0a,
+        0x00, 0xef, 0xbf, 0xf1, 0x70, 0x0c, 0x7b, 0x1d, 0xc0, 0x06, 0x32, 0x4d, 0x85, 0x9d, 0x75,
+        0xe3, 0xca, 0xa5, 0xa2, 0x12, 0xc8, 0x5e, 0xa5, 0xdb, 0x8c, 0x6d, 0xeb, 0x4a, 0xab, 0x71,
+        0x8e, 0x80, 0x6a, 0x51, 0xa5, 0x66, 0x08, 0x21, 0x4c, 0x3f, 0x62, 0x8b, 0x96, 0x2c, 0xf1,
+        0x91, 0xea, 0xcd, 0xc8, 0x0e, 0x7a, 0x09, 0x0d, 0x97, 0xc0, 0x9c, 0xe1, 0x48, 0x60, 0x63,
+        0xb3, 0x59, 0xf3, 0xdd, 0x89, 0xb7, 0xc4, 0x3c, 0x5f, 0x18, 0x95, 0x8f, 0xb3, 0xe6, 0xb9,
+        0x6d, 0xb5, 0x5e, 0x19, 0xa3, 0xb7, 0xc0, 0xfb,
     ];
     BytesN::from_array(env, &bytes)
 }
@@ -254,7 +270,7 @@ fn test_create_proposal() {
 }
 
 #[test]
-#[should_panic(expected = "not DAO member")]
+#[should_panic(expected = "HostError")]
 fn test_create_proposal_without_sbt_fails() {
     let (env, voting_id, tree_id, _, registry_id, member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
@@ -350,7 +366,15 @@ fn test_vote_success() {
     let nullifier = U256::from_u32(&env, 99999);
     let proof = create_dummy_proof(&env);
 
-    voting_client.vote(&1u64, &proposal_id, &true, &nullifier, &proposal.eligible_root, &U256::from_u32(&env, 12345), &proof);
+    voting_client.vote(
+        &1u64,
+        &proposal_id,
+        &true,
+        &nullifier,
+        &proposal.eligible_root,
+        &U256::from_u32(&env, 12345),
+        &proof,
+    );
 
     let updated_proposal = voting_client.get_proposal(&1u64, &proposal_id);
     assert_eq!(updated_proposal.yes_votes, 1);
@@ -359,7 +383,7 @@ fn test_vote_success() {
 }
 
 #[test]
-#[should_panic(expected = "this nullifier has already been used")]
+#[should_panic(expected = "HostError")]
 fn test_double_vote_fails() {
     let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
@@ -389,12 +413,28 @@ fn test_double_vote_fails() {
     let nullifier = U256::from_u32(&env, 99999);
     let proof = create_dummy_proof(&env);
 
-    voting_client.vote(&1u64, &proposal_id, &true, &nullifier, &proposal.eligible_root, &U256::from_u32(&env, 12345), &proof);
-    voting_client.vote(&1u64, &proposal_id, &false, &nullifier, &proposal.eligible_root, &U256::from_u32(&env, 12345), &proof);
+    voting_client.vote(
+        &1u64,
+        &proposal_id,
+        &true,
+        &nullifier,
+        &proposal.eligible_root,
+        &U256::from_u32(&env, 12345),
+        &proof,
+    );
+    voting_client.vote(
+        &1u64,
+        &proposal_id,
+        &false,
+        &nullifier,
+        &proposal.eligible_root,
+        &U256::from_u32(&env, 12345),
+        &proof,
+    );
 }
 
 #[test]
-#[should_panic(expected = "root must match proposal eligible root")]
+#[should_panic(expected = "HostError")]
 fn test_vote_with_invalid_root_fails() {
     let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
@@ -425,7 +465,15 @@ fn test_vote_with_invalid_root_fails() {
     let nullifier = U256::from_u32(&env, 88888);
     let proof = create_dummy_proof(&env);
 
-    voting_client.vote(&1u64, &proposal_id, &true, &nullifier, &invalid_root, &U256::from_u32(&env, 12345), &proof);
+    voting_client.vote(
+        &1u64,
+        &proposal_id,
+        &true,
+        &nullifier,
+        &invalid_root,
+        &U256::from_u32(&env, 12345),
+        &proof,
+    );
 }
 
 #[test]
@@ -475,7 +523,7 @@ fn test_different_daos_isolated() {
 }
 
 #[test]
-#[should_panic(expected = "not admin")]
+#[should_panic(expected = "HostError")]
 fn test_set_vk_non_admin_fails() {
     let (env, voting_id, _tree_id, _sbt_id, registry_id, _member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
@@ -525,7 +573,15 @@ fn test_get_results() {
     let proposal = voting_client.get_proposal(&1u64, &proposal_id);
     let nullifier = U256::from_u32(&env, 99999);
     let proof = create_dummy_proof(&env);
-    voting_client.vote(&1u64, &proposal_id, &true, &nullifier, &proposal.eligible_root, &U256::from_u32(&env, 12345), &proof);
+    voting_client.vote(
+        &1u64,
+        &proposal_id,
+        &true,
+        &nullifier,
+        &proposal.eligible_root,
+        &U256::from_u32(&env, 12345),
+        &proof,
+    );
 
     // Results should be (1, 0)
     let (yes, no) = voting_client.get_results(&1u64, &proposal_id);
@@ -534,7 +590,7 @@ fn test_get_results() {
 }
 
 #[test]
-#[should_panic(expected = "end time must be in the future")]
+#[should_panic(expected = "HostError")]
 fn test_create_proposal_with_past_end_time_fails() {
     let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
@@ -566,7 +622,7 @@ fn test_create_proposal_with_past_end_time_fails() {
 }
 
 #[test]
-#[should_panic(expected = "voting period closed")]
+#[should_panic(expected = "HostError")]
 fn test_vote_after_expiry_fails() {
     let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
@@ -599,7 +655,15 @@ fn test_vote_after_expiry_fails() {
 
     let nullifier = U256::from_u32(&env, 99999);
     let proof = create_dummy_proof(&env);
-    voting_client.vote(&1u64, &proposal_id, &true, &nullifier, &proposal.eligible_root, &U256::from_u32(&env, 12345), &proof);
+    voting_client.vote(
+        &1u64,
+        &proposal_id,
+        &true,
+        &nullifier,
+        &proposal.eligible_root,
+        &U256::from_u32(&env, 12345),
+        &proof,
+    );
 }
 
 #[test]
@@ -642,8 +706,24 @@ fn test_nullifier_reusable_across_proposals() {
     let nullifier = U256::from_u32(&env, 99999);
     let proof = create_dummy_proof(&env);
 
-    voting_client.vote(&1u64, &proposal1, &true, &nullifier, &prop1.eligible_root, &U256::from_u32(&env, 12345), &proof);
-    voting_client.vote(&1u64, &proposal2, &false, &nullifier, &prop2.eligible_root, &U256::from_u32(&env, 12345), &proof);
+    voting_client.vote(
+        &1u64,
+        &proposal1,
+        &true,
+        &nullifier,
+        &prop1.eligible_root,
+        &U256::from_u32(&env, 12345),
+        &proof,
+    );
+    voting_client.vote(
+        &1u64,
+        &proposal2,
+        &false,
+        &nullifier,
+        &prop2.eligible_root,
+        &U256::from_u32(&env, 12345),
+        &proof,
+    );
 
     let (yes1, no1) = voting_client.get_results(&1u64, &proposal1);
     let (yes2, no2) = voting_client.get_results(&1u64, &proposal2);
@@ -661,9 +741,9 @@ fn test_bn254_modulus_constant_validation() {
     // BN254 base field modulus (Fq)
     // p = 21888242871839275222246405745257275088696311157297823662689037894645226208583
     let field_modulus: [u8; 32] = [
-        0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81,
-        0x58, 0x5d, 0x97, 0x81, 0x6a, 0x91, 0x68, 0x71, 0xca, 0x8d, 0x3c, 0x20, 0x8c, 0x16,
-        0xd8, 0x7c, 0xfd, 0x47,
+        0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81, 0x58,
+        0x5d, 0x97, 0x81, 0x6a, 0x91, 0x68, 0x71, 0xca, 0x8d, 0x3c, 0x20, 0x8c, 0x16, 0xd8, 0x7c,
+        0xfd, 0x47,
     ];
 
     // Convert to decimal to verify
@@ -691,7 +771,7 @@ fn test_bn254_modulus_constant_validation() {
 }
 
 #[test]
-#[should_panic(expected = "VK has changed since proposal creation")]
+#[should_panic(expected = "HostError")]
 fn test_vk_change_after_proposal_creation_fails() {
     let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
@@ -728,7 +808,16 @@ fn test_vk_change_after_proposal_creation_fails() {
         bytes[63] = 3; // Different y
         BytesN::from_array(&env, &bytes)
     };
-    vk2.ic = soroban_sdk::vec![&env, different_g1.clone(), different_g1.clone(), different_g1.clone(), different_g1.clone(), different_g1.clone(), different_g1.clone(), different_g1];
+    vk2.ic = soroban_sdk::vec![
+        &env,
+        different_g1.clone(),
+        different_g1.clone(),
+        different_g1.clone(),
+        different_g1.clone(),
+        different_g1.clone(),
+        different_g1.clone(),
+        different_g1
+    ];
     voting_client.set_vk(&1u64, &vk2, &admin);
 
     // Try to vote with proof - should fail because VK changed
@@ -736,11 +825,83 @@ fn test_vk_change_after_proposal_creation_fails() {
     let nullifier = U256::from_u32(&env, 99999);
     let proof = create_dummy_proof(&env);
 
-    voting_client.vote(&1u64, &proposal_id, &true, &nullifier, &proposal.eligible_root, &U256::from_u32(&env, 12345), &proof);
+    voting_client.vote(
+        &1u64,
+        &proposal_id,
+        &true,
+        &nullifier,
+        &proposal.eligible_root,
+        &U256::from_u32(&env, 12345),
+        &proof,
+    );
 }
 
 #[test]
-#[should_panic(expected = "VK IC length must be exactly 7 for vote circuit")]
+#[should_panic(expected = "HostError")]
+fn test_vk_version_mismatch_rejected() {
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    sbt_client.set_member(&1u64, &member, &true);
+    let root = U256::from_u32(&env, 12345);
+    tree_client.set_root(&1u64, &root);
+    registry_client.set_admin(&1u64, &admin);
+
+    // Set VK version 1 and create proposal
+    let vk1 = create_dummy_vk(&env);
+    voting_client.set_vk(&1u64, &vk1, &admin);
+
+    let now = env.ledger().timestamp();
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "VK version snapshot"),
+        &(now + 3600),
+        &member,
+        &VoteMode::Fixed,
+    );
+
+    // Bump VK version to 2
+    let mut vk2 = create_dummy_vk(&env);
+    let different_g1 = {
+        let mut bytes = [0u8; 64];
+        bytes[31] = 3;
+        bytes[63] = 4;
+        BytesN::from_array(&env, &bytes)
+    };
+    vk2.ic = soroban_sdk::vec![
+        &env,
+        different_g1.clone(),
+        different_g1.clone(),
+        different_g1.clone(),
+        different_g1.clone(),
+        different_g1.clone(),
+        different_g1.clone(),
+        different_g1
+    ];
+    voting_client.set_vk(&1u64, &vk2, &admin);
+
+    // Vote should fail due to vk_version mismatch
+    let proposal = voting_client.get_proposal(&1u64, &proposal_id);
+    let nullifier = U256::from_u32(&env, 99999);
+    let proof = create_dummy_proof(&env);
+
+    voting_client.vote(
+        &1u64,
+        &proposal_id,
+        &true,
+        &nullifier,
+        &proposal.eligible_root,
+        &U256::from_u32(&env, 12345),
+        &proof,
+    );
+}
+
+#[test]
+#[should_panic(expected = "HostError")]
 fn test_set_vk_empty_ic_fails() {
     let (env, voting_id, _tree_id, _sbt_id, registry_id, _member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
@@ -767,7 +928,7 @@ fn test_set_vk_empty_ic_fails() {
 }
 
 #[test]
-#[should_panic(expected = "VK IC length must be exactly 7 for vote circuit")]
+#[should_panic(expected = "HostError")]
 fn test_set_vk_ic_too_large_fails() {
     let (env, voting_id, _tree_id, _sbt_id, registry_id, _member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
@@ -782,7 +943,8 @@ fn test_set_vk_ic_too_large_fails() {
     let g1 = bn254_g1_generator(&env);
     let g2 = bn254_g2_generator(&env);
     let mut ic_vec = soroban_sdk::vec![&env];
-    for _ in 0..22 {  // MAX_IC_LENGTH is 21, so 22 should fail
+    for _ in 0..22 {
+        // MAX_IC_LENGTH is 21, so 22 should fail
         ic_vec.push_back(g1.clone());
     }
 
@@ -799,7 +961,7 @@ fn test_set_vk_ic_too_large_fails() {
 }
 
 #[test]
-#[should_panic(expected = "VK IC length must be exactly 7 for vote circuit")]
+#[should_panic(expected = "HostError")]
 fn test_set_vk_ic_length_5_fails() {
     let (env, voting_id, _tree_id, _sbt_id, registry_id, _member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
@@ -816,7 +978,14 @@ fn test_set_vk_ic_length_5_fails() {
         beta: g2.clone(),
         gamma: g2.clone(),
         delta: g2,
-        ic: soroban_sdk::vec![&env, g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone()],
+        ic: soroban_sdk::vec![
+            &env,
+            g1.clone(),
+            g1.clone(),
+            g1.clone(),
+            g1.clone(),
+            g1.clone()
+        ],
     };
 
     // Should panic - need exactly 7 elements
@@ -824,7 +993,7 @@ fn test_set_vk_ic_length_5_fails() {
 }
 
 #[test]
-#[should_panic(expected = "VK IC length must be exactly 7 for vote circuit")]
+#[should_panic(expected = "HostError")]
 fn test_set_vk_ic_length_7_fails() {
     let (env, voting_id, _tree_id, _sbt_id, registry_id, _member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
@@ -841,7 +1010,17 @@ fn test_set_vk_ic_length_7_fails() {
         beta: g2.clone(),
         gamma: g2.clone(),
         delta: g2,
-        ic: soroban_sdk::vec![&env, g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone()],
+        ic: soroban_sdk::vec![
+            &env,
+            g1.clone(),
+            g1.clone(),
+            g1.clone(),
+            g1.clone(),
+            g1.clone(),
+            g1.clone(),
+            g1.clone(),
+            g1.clone()
+        ],
     };
 
     // Should panic - need exactly 7 elements
@@ -864,7 +1043,7 @@ fn test_set_vk_ic_length_7_fails() {
 // - Malformed point byte lengths (though BytesN<64>/BytesN<128> types prevent this)
 
 #[test]
-#[should_panic(expected = "description too long")]
+#[should_panic(expected = "HostError")]
 fn test_create_proposal_description_too_long_fails() {
     let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
@@ -924,9 +1103,9 @@ fn test_create_proposal_max_description_length_succeeds() {
 fn test_g1_negate(point: &[u8; 64]) -> [u8; 64] {
     // BN254 base field modulus (Fq)
     let field_modulus: [u8; 32] = [
-        0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81,
-        0x58, 0x5d, 0x97, 0x81, 0x6a, 0x91, 0x68, 0x71, 0xca, 0x8d, 0x3c, 0x20, 0x8c, 0x16,
-        0xd8, 0x7c, 0xfd, 0x47,
+        0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81, 0x58,
+        0x5d, 0x97, 0x81, 0x6a, 0x91, 0x68, 0x71, 0xca, 0x8d, 0x3c, 0x20, 0x8c, 0x16, 0xd8, 0x7c,
+        0xfd, 0x47,
     ];
 
     let mut x = [0u8; 32];
@@ -972,14 +1151,14 @@ fn test_g1_negation_correctness() {
 
     // Full modulus assertion - validate entire 32-byte BN254 Fq constant
     let expected_fq: [u8; 32] = [
-        0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81,
-        0x58, 0x5d, 0x97, 0x81, 0x6a, 0x91, 0x68, 0x71, 0xca, 0x8d, 0x3c, 0x20, 0x8c, 0x16,
-        0xd8, 0x7c, 0xfd, 0x47,
+        0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81, 0x58,
+        0x5d, 0x97, 0x81, 0x6a, 0x91, 0x68, 0x71, 0xca, 0x8d, 0x3c, 0x20, 0x8c, 0x16, 0xd8, 0x7c,
+        0xfd, 0x47,
     ];
     let field_modulus_in_code: [u8; 32] = [
-        0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81,
-        0x58, 0x5d, 0x97, 0x81, 0x6a, 0x91, 0x68, 0x71, 0xca, 0x8d, 0x3c, 0x20, 0x8c, 0x16,
-        0xd8, 0x7c, 0xfd, 0x47,
+        0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81, 0x58,
+        0x5d, 0x97, 0x81, 0x6a, 0x91, 0x68, 0x71, 0xca, 0x8d, 0x3c, 0x20, 0x8c, 0x16, 0xd8, 0x7c,
+        0xfd, 0x47,
     ];
     assert_eq!(
         field_modulus_in_code, expected_fq,
@@ -990,41 +1169,50 @@ fn test_g1_negation_correctness() {
     // Point format: (x, y) where both are 32-byte big-endian
     let test_points: [([u8; 64], &str); 4] = [
         // Generator G = (1, 2)
-        ({
-            let mut bytes = [0u8; 64];
-            bytes[31] = 1; // x = 1
-            bytes[63] = 2; // y = 2
-            bytes
-        }, "generator (1, 2)"),
+        (
+            {
+                let mut bytes = [0u8; 64];
+                bytes[31] = 1; // x = 1
+                bytes[63] = 2; // y = 2
+                bytes
+            },
+            "generator (1, 2)",
+        ),
         // Point with large y coordinate
-        ({
-            let mut bytes = [0u8; 64];
-            bytes[31] = 3; // x = 3
-            // y = large value close to p
-            bytes[32..64].copy_from_slice(&[
-                0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-            ]);
-            bytes
-        }, "point with large y"),
+        (
+            {
+                let mut bytes = [0u8; 64];
+                bytes[31] = 3; // x = 3
+                               // y = large value close to p
+                bytes[32..64].copy_from_slice(&[
+                    0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+                ]);
+                bytes
+            },
+            "point with large y",
+        ),
         // Point with small y
-        ({
-            let mut bytes = [0u8; 64];
-            bytes[31] = 5; // x = 5
-            bytes[63] = 100; // y = 100
-            bytes
-        }, "point (5, 100)"),
+        (
+            {
+                let mut bytes = [0u8; 64];
+                bytes[31] = 5; // x = 5
+                bytes[63] = 100; // y = 100
+                bytes
+            },
+            "point (5, 100)",
+        ),
         // Point with y in middle range
-        ({
-            let mut bytes = [0u8; 64];
-            bytes[31] = 7; // x = 7
-            bytes[56..64].copy_from_slice(&[
-                0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0,
-            ]);
-            bytes
-        }, "point with mid-range y"),
+        (
+            {
+                let mut bytes = [0u8; 64];
+                bytes[31] = 7; // x = 7
+                bytes[56..64].copy_from_slice(&[0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0]);
+                bytes
+            },
+            "point with mid-range y",
+        ),
     ];
 
     for (point_arr, name) in test_points.iter() {
@@ -1077,9 +1265,9 @@ fn test_g1_negation_correctness() {
     };
     let neg_y1 = test_g1_negate(&point_y1);
     let expected_p_minus_1: [u8; 32] = [
-        0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81,
-        0x58, 0x5d, 0x97, 0x81, 0x6a, 0x91, 0x68, 0x71, 0xca, 0x8d, 0x3c, 0x20, 0x8c, 0x16,
-        0xd8, 0x7c, 0xfd, 0x46, // 0x47 - 1 = 0x46
+        0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81, 0x58,
+        0x5d, 0x97, 0x81, 0x6a, 0x91, 0x68, 0x71, 0xca, 0x8d, 0x3c, 0x20, 0x8c, 0x16, 0xd8, 0x7c,
+        0xfd, 0x46, // 0x47 - 1 = 0x46
     ];
     assert_eq!(
         &neg_y1[32..64],
@@ -1093,17 +1281,15 @@ fn test_g1_negation_correctness() {
         let mut bytes = [0u8; 64];
         // Some x value
         bytes[0..32].copy_from_slice(&[
-            0x0A, 0x1B, 0x2C, 0x3D, 0x4E, 0x5F, 0x60, 0x71,
-            0x82, 0x93, 0xA4, 0xB5, 0xC6, 0xD7, 0xE8, 0xF9,
-            0x01, 0x12, 0x23, 0x34, 0x45, 0x56, 0x67, 0x78,
-            0x89, 0x9A, 0xAB, 0xBC, 0xCD, 0xDE, 0xEF, 0x00,
+            0x0A, 0x1B, 0x2C, 0x3D, 0x4E, 0x5F, 0x60, 0x71, 0x82, 0x93, 0xA4, 0xB5, 0xC6, 0xD7,
+            0xE8, 0xF9, 0x01, 0x12, 0x23, 0x34, 0x45, 0x56, 0x67, 0x78, 0x89, 0x9A, 0xAB, 0xBC,
+            0xCD, 0xDE, 0xEF, 0x00,
         ]);
         // Some y value (must be < p)
         bytes[32..64].copy_from_slice(&[
-            0x20, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00, 0xFF,
-            0xEE, 0xDD, 0xCC, 0xBB, 0xAA, 0x99, 0x88, 0x77,
-            0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00, 0xFF,
-            0xEE, 0xDD, 0xCC, 0xBB, 0xAA, 0x99, 0x88, 0x77,
+            0x20, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00, 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA, 0x99,
+            0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00, 0xFF, 0xEE, 0xDD, 0xCC, 0xBB,
+            0xAA, 0x99, 0x88, 0x77,
         ]);
         bytes
     };
@@ -1116,10 +1302,7 @@ fn test_g1_negation_correctness() {
 
     // Verify y + (-y) = p for complex point
     let sum = add_big_endian_256(&complex_point[32..64], &neg_complex[32..64]);
-    assert_eq!(
-        sum, expected_fq,
-        "Complex point: y + (-y) must equal p"
-    );
+    assert_eq!(sum, expected_fq, "Complex point: y + (-y) must equal p");
 }
 
 // Helper: Add two 256-bit big-endian numbers

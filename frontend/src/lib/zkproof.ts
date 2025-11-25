@@ -14,6 +14,7 @@ export interface ProofInput {
   commitment: string; // NEW: identity commitment for revocation checks
   pathElements: string[];
   pathIndices: number[];
+  vkVersion?: string;
 }
 
 export interface GeneratedProof {
@@ -35,7 +36,7 @@ export async function generateVoteProof(
 ): Promise<GeneratedProof> {
   try {
     // Format input for circuit - matches vote.circom signal names
-    const circuitInput = {
+    const circuitInput: any = {
       // Public signals
       root: input.root,
       nullifier: input.nullifier,
@@ -49,6 +50,10 @@ export async function generateVoteProof(
       pathElements: input.pathElements,
       pathIndices: input.pathIndices,
     };
+
+    if (input.vkVersion !== undefined) {
+      circuitInput.vkVersion = input.vkVersion;
+    }
 
     console.log("Circuit input:", circuitInput);
 

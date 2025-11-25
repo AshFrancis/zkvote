@@ -25,7 +25,7 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 const VOTING_CONTRACT_ID = process.env.VOTING_CONTRACT_ID;
 const RPC_URL = process.env.SOROBAN_RPC_URL;
 const NETWORK_PASSPHRASE = process.env.NETWORK_PASSPHRASE;
-const SECRET_KEY = 'SCRQUW53C3DE664SG7DOTHZI5NDKYIGDOWMI7QGUCOKQM77NAYO25ER5'; // mykey from setup
+const SECRET_KEY = process.env.SECRET_KEY || 'REPLACE_ME_RELAYER_SECRET';
 
 // Load verification key
 const vkPath = path.join(__dirname, '../../frontend/src/lib/verification_key_soroban.json');

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { initializeContractClients } from '../lib/contracts';
-import { getReadOnlyDaoRegistry, getReadOnlyMembershipSbt, getReadOnlyMembershipTree } from '../lib/readOnlyContracts';
+import { getReadOnlyDaoRegistry, getReadOnlyMembershipSbt, getReadOnlyMembershipTree, getReadOnlyVoting } from '../lib/readOnlyContracts';
 import { useWallet } from '../hooks/useWallet';
 import {
   getOrDeriveEncryptionKey,
@@ -21,6 +21,7 @@ interface TreeInfo {
   depth: number;
   leafCount: number;
   root: string;
+  vkVersion: number | null;
 }
 
 interface Member {
@@ -58,6 +59,15 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
   const [leaving, setLeaving] = useState(false);
   const [aliasesVisible, setAliasesVisible] = useState(false);
   const [aliasInputUnlocked, setAliasInputUnlocked] = useState(false);
+
+  const signMessage = async (message: string): Promise<string | Uint8Array<ArrayBufferLike>> => {
+    if (!kit?.signMessage) {
+      throw new Error("Wallet does not support message signing");
+    }
+    const res = await kit.signMessage(message);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (res as any).signedMessage ?? res;
+  };
 
   useEffect(() => {
     // Wait for wallet initialization before loading
@@ -219,7 +229,12 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
 
       if (cachedTreeInfo) {
         const cached = JSON.parse(cachedTreeInfo);
-        setTreeInfo(cached.treeInfo);
+        setTreeInfo({
+          depth: cached.treeInfo.depth,
+          leafCount: cached.treeInfo.leafCount,
+          root: cached.treeInfo.root,
+          vkVersion: cached.treeInfo.vkVersion ?? null,
+        });
         setAdminAddress(cached.adminAddress);
         setLoading(false);
       }
@@ -231,6 +246,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
       // Fetch fresh data
       let result;
       let daoResult;
+      let vkResult;
 
       // Try wallet client first if publicKey is available
       if (publicKey) {
@@ -245,6 +261,11 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
           daoResult = await clients.daoRegistry.get_dao({
             dao_id: BigInt(daoId),
           });
+
+          const votingClient: any = clients.voting;
+          vkResult = await votingClient.vk_version({
+            dao_id: BigInt(daoId),
+          });
         } catch (err) {
           // Account not found - fallback to read-only
           const errorMessage = err instanceof Error ? err.message : String(err);
@@ -252,6 +273,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
 
           const membershipTree = getReadOnlyMembershipTree();
           const daoRegistry = getReadOnlyDaoRegistry();
+          const voting: any = getReadOnlyVoting();
 
           result = await membershipTree.get_tree_info({
             dao_id: BigInt(daoId),
@@ -260,17 +282,26 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
           daoResult = await daoRegistry.get_dao({
             dao_id: BigInt(daoId),
           });
+
+          vkResult = await voting.vk_version({
+            dao_id: BigInt(daoId),
+          });
         }
       } else {
         // No wallet connected - use read-only
         const membershipTree = getReadOnlyMembershipTree();
         const daoRegistry = getReadOnlyDaoRegistry();
+        const voting: any = getReadOnlyVoting();
 
         result = await membershipTree.get_tree_info({
           dao_id: BigInt(daoId),
         });
 
         daoResult = await daoRegistry.get_dao({
+          dao_id: BigInt(daoId),
+        });
+
+        vkResult = await voting.vk_version({
           dao_id: BigInt(daoId),
         });
       }
@@ -280,6 +311,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
         depth: Number(result.result[0]),
         leafCount: Number(result.result[1]),
         root: result.result[2].toString(),
+        vkVersion: vkResult?.result !== undefined ? Number(vkResult.result) : null,
       };
       setTreeInfo(freshTreeInfo);
 
@@ -331,11 +363,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
       // Get or derive encryption key and encrypt alias if provided
       let encryptedAlias: string | undefined = undefined;
       if (memberAlias.trim()) {
-        if (!kit?.signMessage) {
-          throw new Error("Wallet does not support message signing");
-        }
-
-        const key = await getOrDeriveEncryptionKey(daoId, kit.signMessage.bind(kit));
+        const key = await getOrDeriveEncryptionKey(daoId, signMessage);
         if (!key) {
           setError("Failed to derive encryption key");
           setMinting(false);
@@ -383,15 +411,10 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
     }
 
     // If not visible, show them (get key if needed)
-    if (!kit?.signMessage) {
-      setError("Wallet does not support message signing");
-      return;
-    }
-
     try {
       setError(null);
       console.log("[toggleAliasVisibility] Requesting encryption key...");
-      const key = await getOrDeriveEncryptionKey(daoId, kit.signMessage.bind(kit));
+      const key = await getOrDeriveEncryptionKey(daoId, signMessage);
       console.log("[toggleAliasVisibility] Got encryption key:", !!key);
       if (key) {
         setEncryptionKey(key);  // This will trigger decryptAliases via useEffect
@@ -415,15 +438,10 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
     }
 
     // If locked, unlock it (get key if needed)
-    if (!kit?.signMessage) {
-      setError("Wallet does not support message signing");
-      return;
-    }
-
     try {
       setError(null);
       console.log("[toggleAliasInput] Requesting encryption key...");
-      const key = await getOrDeriveEncryptionKey(daoId, kit.signMessage.bind(kit));
+      const key = await getOrDeriveEncryptionKey(daoId, signMessage);
       console.log("[toggleAliasInput] Got encryption key:", !!key);
       if (key) {
         setEncryptionKey(key);
@@ -551,12 +569,8 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
       setError(null);
       setSuccess(null);
 
-      if (!kit?.signMessage) {
-        throw new Error("Wallet does not support message signing");
-      }
-
       // Get or derive encryption key
-      const key = await getOrDeriveEncryptionKey(daoId, kit.signMessage.bind(kit));
+      const key = await getOrDeriveEncryptionKey(daoId, signMessage);
       if (!key) {
         setError("Failed to derive encryption key");
         setUpdatingAlias(false);
@@ -619,10 +633,13 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
         <p className="text-sm text-gray-600 dark:text-gray-400">
           {daoName} (DAO #{daoId})
         </p>
+        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+          Verifying key version: {treeInfo?.vkVersion ?? 'N/A'}
+        </p>
       </div>
 
       {/* Statistics Dashboard */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
           <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
             Merkle Tree Depth
@@ -653,6 +670,18 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
             Maximum members
+          </p>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+          <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+            Verifying Key Version
+          </h3>
+          <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
+            {treeInfo?.vkVersion ?? 'N/A'}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+            Proofs must match this version
           </p>
         </div>
       </div>
@@ -959,3 +988,4 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
     </div>
   );
 }
+/* eslint-disable @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps */

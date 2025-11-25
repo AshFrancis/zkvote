@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { initializeContractClients } from "../lib/contracts";
-import { getReadOnlyDaoRegistry, getReadOnlyMembershipSbt, getReadOnlyMembershipTree } from "../lib/readOnlyContracts";
+import { getReadOnlyDaoRegistry, getReadOnlyMembershipSbt, getReadOnlyMembershipTree, getReadOnlyVoting } from "../lib/readOnlyContracts";
 import { useWallet } from "../hooks/useWallet";
 import ProposalList from "./ProposalList";
+import { getZKCredentials, storeZKCredentials, generateDeterministicZKCredentials } from "../lib/zk";
 
 interface PublicVotesProps {
   publicKey: string | null;
@@ -17,6 +18,7 @@ interface DAOInfo {
   hasMembership: boolean;
   isRegistered: boolean;
   memberCount: number;
+  vkVersion: number | null;
 }
 
 export default function PublicVotes({ publicKey, isConnected, isInitializing = false }: PublicVotesProps) {
@@ -47,12 +49,14 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
       const publicDaoId = 1;
 
       let result;
+      let vkResult;
       if (publicKey) {
         try {
           const clients = initializeContractClients(publicKey);
           result = await clients.daoRegistry.get_dao({
             dao_id: BigInt(publicDaoId),
           });
+          vkResult = await (clients.voting as any).vk_version({ dao_id: BigInt(publicDaoId) });
         } catch (err: any) {
           const errorMessage = err instanceof Error ? err.message : String(err);
           if (errorMessage.includes('Account not found') || errorMessage.includes('does not exist')) {
@@ -60,6 +64,8 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
             result = await registry.get_dao({
               dao_id: BigInt(publicDaoId),
             });
+            const voting = getReadOnlyVoting() as any;
+            vkResult = await voting.vk_version({ dao_id: BigInt(publicDaoId) });
           } else {
             throw err;
           }
@@ -69,6 +75,8 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
         result = await registry.get_dao({
           dao_id: BigInt(publicDaoId),
         });
+        const voting = getReadOnlyVoting() as any;
+        vkResult = await voting.vk_version({ dao_id: BigInt(publicDaoId) });
       }
 
       if (!result.result.membership_open) {
@@ -113,39 +121,34 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
           }
 
           // Check registration status
-          const key = `voting_registration_${publicDaoId}_${publicKey}`;
-          const stored = localStorage.getItem(key);
-          if (stored) {
+          const cached = publicKey ? getZKCredentials(publicDaoId, publicKey) : null;
+          if (cached && publicKey) {
             // Validate that the cached registration actually exists on-chain
             try {
-              const registrationData = JSON.parse(stored);
-              if (publicKey) {
-                try {
-                  const clients = initializeContractClients(publicKey);
-                  const leafIndexResult = await clients.membershipTree.get_leaf_index({
+              try {
+                const clients = initializeContractClients(publicKey);
+                const leafIndexResult = await clients.membershipTree.get_leaf_index({
+                  dao_id: BigInt(publicDaoId),
+                  commitment: BigInt(cached.commitment),
+                });
+                const onChainLeafIndex = Number(leafIndexResult.result);
+                isRegistered = onChainLeafIndex === cached.leafIndex;
+              } catch (err: any) {
+                const errorMessage = err instanceof Error ? err.message : String(err);
+                if (errorMessage.includes('Account not found') || errorMessage.includes('does not exist')) {
+                  const tree = getReadOnlyMembershipTree();
+                  const leafIndexResult = await tree.get_leaf_index({
                     dao_id: BigInt(publicDaoId),
-                    commitment: BigInt(registrationData.commitment),
+                    commitment: BigInt(cached.commitment),
                   });
                   const onChainLeafIndex = Number(leafIndexResult.result);
-                  isRegistered = onChainLeafIndex === registrationData.leafIndex;
-                } catch (err: any) {
-                  const errorMessage = err instanceof Error ? err.message : String(err);
-                  if (errorMessage.includes('Account not found') || errorMessage.includes('does not exist')) {
-                    const tree = getReadOnlyMembershipTree();
-                    const leafIndexResult = await tree.get_leaf_index({
-                      dao_id: BigInt(publicDaoId),
-                      commitment: BigInt(registrationData.commitment),
-                    });
-                    const onChainLeafIndex = Number(leafIndexResult.result);
-                    isRegistered = onChainLeafIndex === registrationData.leafIndex;
-                  } else {
-                    throw err;
-                  }
+                  isRegistered = onChainLeafIndex === cached.leafIndex;
+                } else {
+                  throw err;
                 }
               }
             } catch (err) {
               console.log("Cached registration invalid, clearing...");
-              localStorage.removeItem(key);
               isRegistered = false;
             }
           }
@@ -194,6 +197,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
         hasMembership,
         isRegistered,
         memberCount,
+        vkVersion: vkResult?.result !== undefined ? Number(vkResult.result) : null,
       });
     } catch (err) {
       console.error("Failed to load public DAO:", err);
@@ -259,8 +263,6 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
 
       // Step 1: Generate deterministic ZK credentials from wallet signature
       console.log("[Registration] Step 1: Generating deterministic credentials from wallet signature...");
-      const { generateDeterministicZKCredentials } = await import("../lib/zk");
-
       try {
         const credentials = await generateDeterministicZKCredentials(kit, dao.id);
         secret = credentials.secret;
@@ -306,17 +308,8 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
 
       const leafIndex = Number(leafIndexResult.result);
 
-      // Step 4: Store credentials in localStorage
-      const registrationData = {
-        secret,
-        salt,
-        commitment,
-        leafIndex,
-        registeredAt: Date.now(),
-      };
-
-      const key = `voting_registration_${dao.id}_${publicKey}`;
-      localStorage.setItem(key, JSON.stringify(registrationData));
+      // Step 4: Store credentials in localStorage (namespaced + TTL via helper)
+      storeZKCredentials(dao.id, publicKey, { secret, salt, commitment }, leafIndex);
 
       console.log("[Registration] Registration successful! Leaf index:", leafIndex);
 
@@ -425,7 +418,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
               {dao?.name || "Public Votes"}
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Open DAO • {dao?.memberCount || 0} members • Anyone can join and vote
+              Open DAO • {dao?.memberCount || 0} members • VK v{dao?.vkVersion ?? "?"} • Anyone can join and vote
             </p>
           </div>
           {isConnected && dao && dao.isRegistered && (
@@ -548,3 +541,4 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
     </div>
   );
 }
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps */

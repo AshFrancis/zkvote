@@ -199,3 +199,4 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
     </div>
   );
 }
+/* eslint-disable react-hooks/exhaustive-deps */

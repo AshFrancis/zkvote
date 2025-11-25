@@ -6,25 +6,19 @@
 // 3. Nullifier reuse across DAOs (should succeed - different domains)
 
 use soroban_sdk::{
-    testutils::Address as _, Address, Bytes, BytesN, Env, String, U256, Vec as SdkVec,
+    testutils::Address as _, Address, Bytes, BytesN, Env, String, Vec as SdkVec, U256,
 };
 
 mod dao_registry {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/dao_registry.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/dao_registry.wasm");
 }
 
 mod membership_sbt {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/membership_sbt.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_sbt.wasm");
 }
 
 mod membership_tree {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/membership_tree.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_tree.wasm");
 }
 
 mod voting {
@@ -129,7 +123,8 @@ fn get_different_vk(env: &Env) -> voting::VerificationKey {
     }
 }
 
-const REAL_COMMITMENT_HEX: &str = "2536d01521137bf7b39e3fd26c1376f456ce46a45993a5d7c3c158a450fd7329";
+const REAL_COMMITMENT_HEX: &str =
+    "2536d01521137bf7b39e3fd26c1376f456ce46a45993a5d7c3c158a450fd7329";
 const REAL_NULLIFIER_HEX: &str = "0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a50";
 
 fn setup_contracts(env: &Env) -> (Address, Address, Address, Address, Address) {
@@ -159,11 +154,7 @@ fn test_corrupted_proof_fails() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO (dao_id = 1 to match proof)
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Test DAO"),
-        &admin,
-        &false,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
     assert_eq!(dao_id, 1);
 
     // Initialize tree with depth 18
@@ -223,11 +214,7 @@ fn test_wrong_vk_fails() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Test DAO"),
-        &admin,
-        &false,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -289,16 +276,8 @@ fn test_nullifier_reusable_across_daos() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create TWO DAOs
-    let dao_id_1 = registry_client.create_dao(
-        &String::from_str(&env, "DAO 1"),
-        &admin,
-        &false,
-    );
-    let dao_id_2 = registry_client.create_dao(
-        &String::from_str(&env, "DAO 2"),
-        &admin,
-        &false,
-    );
+    let dao_id_1 = registry_client.create_dao(&String::from_str(&env, "DAO 1"), &admin, &false);
+    let dao_id_2 = registry_client.create_dao(&String::from_str(&env, "DAO 2"), &admin, &false);
     assert_eq!(dao_id_1, 1);
     assert_eq!(dao_id_2, 2);
 
@@ -324,8 +303,8 @@ fn test_nullifier_reusable_across_daos() {
     tree_client.register_with_caller(&dao_id_2, &commitment2, &member);
 
     // Get roots
-    let root1 = tree_client.current_root(&dao_id_1);
-    let root2 = tree_client.current_root(&dao_id_2);
+    let _root1 = tree_client.current_root(&dao_id_1);
+    let _root2 = tree_client.current_root(&dao_id_2);
 
     // Create proposals in both DAOs
     let prop_id_1 = voting_client.create_proposal(
@@ -382,16 +361,8 @@ fn test_proof_for_wrong_dao_fails() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create TWO DAOs - we'll try to use a proof for DAO 1 on DAO 2
-    let _dao_id_1 = registry_client.create_dao(
-        &String::from_str(&env, "DAO 1"),
-        &admin,
-        &false,
-    );
-    let dao_id_2 = registry_client.create_dao(
-        &String::from_str(&env, "DAO 2"),
-        &admin,
-        &false,
-    );
+    let _dao_id_1 = registry_client.create_dao(&String::from_str(&env, "DAO 1"), &admin, &false);
+    let dao_id_2 = registry_client.create_dao(&String::from_str(&env, "DAO 2"), &admin, &false);
 
     // Initialize tree for DAO 2
     tree_client.init_tree(&dao_id_2, &18, &admin);
@@ -449,11 +420,7 @@ fn test_proof_for_wrong_proposal_fails() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO (dao_id = 1 to match proof)
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Test DAO"),
-        &admin,
-        &false,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);

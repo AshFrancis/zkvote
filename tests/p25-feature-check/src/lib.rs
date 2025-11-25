@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, symbol_short, vec, Env, Symbol, U256};
+use soroban_sdk::{contract, contractimpl, vec, Env, Symbol, U256};
 
 /// Minimal contract to test P25 feature availability:
 /// - Poseidon hashing (BN254 field)

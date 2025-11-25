@@ -4,6 +4,12 @@ import { initializeContractClients } from "../lib/contracts";
 import { getReadOnlyDaoRegistry, getReadOnlyMembershipSbt, getReadOnlyMembershipTree } from "../lib/readOnlyContracts";
 import { useWallet } from "../hooks/useWallet";
 import { generateSecret, calculateCommitment } from "../lib/zkproof";
+import {
+  generateRandomZKCredentials,
+  generateDeterministicZKCredentials,
+  getZKCredentials,
+  storeZKCredentials,
+} from "../lib/zk";
 import ProposalList from "./ProposalList";
 
 interface DAODashboardProps {
@@ -57,8 +63,8 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
   // Optimistically check registration from cache when publicKey changes
   useEffect(() => {
     if (publicKey) {
-      const key = `voting_registration_${daoId}_${publicKey}`;
-      setIsRegistered(!!localStorage.getItem(key));
+      const cached = getZKCredentials(daoId, publicKey);
+      setIsRegistered(!!cached);
     }
   }, [publicKey, daoId]);
 
@@ -75,10 +81,9 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
   // This gives users explicit control over when they set up voting credentials
 
   const checkRegistrationStatus = async () => {
-    const key = `voting_registration_${daoId}_${publicKey}`;
-    const stored = localStorage.getItem(key);
+    const cached = publicKey ? getZKCredentials(daoId, publicKey) : null;
 
-    if (!stored) {
+    if (!cached) {
       setIsRegistered(false);
       setHasUnregisteredCredentials(false);
       return;
@@ -87,21 +92,24 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
     // Validate that the cached registration actually exists on-chain
     // This handles contract redeployments where localStorage has stale data
     try {
-      const registrationData = JSON.parse(stored);
       const clients = initializeContractClients(publicKey || "");
 
       const leafIndexResult = await clients.membershipTree.get_leaf_index({
         dao_id: BigInt(daoId),
-        commitment: BigInt(registrationData.commitment),
+        commitment: BigInt(cached.commitment),
       });
 
       const onChainLeafIndex = Number(leafIndexResult.result);
 
-      if (onChainLeafIndex === registrationData.leafIndex) {
+      if (onChainLeafIndex === cached.leafIndex) {
         setIsRegistered(true);
         setHasUnregisteredCredentials(false);
       } else {
-        localStorage.removeItem(key);
+        // stale cache; clear
+        if (publicKey) {
+          const legacyKey = `voting_registration_${daoId}_${publicKey}`;
+          localStorage.removeItem(legacyKey);
+        }
         setIsRegistered(false);
         setHasUnregisteredCredentials(false);
       }
@@ -275,6 +283,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
         dao_id: BigInt(daoId),
         to: mintAddress,
         admin: publicKey,
+        encrypted_alias: "",
       });
 
       if (!kit) {
@@ -315,23 +324,19 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
       let secret: string, salt: string, commitment: string;
 
       // Check if we already have unregistered credentials
-      const key = `voting_registration_${daoId}_${publicKey}`;
-      const stored = localStorage.getItem(key);
+      const cached = publicKey ? getZKCredentials(daoId, publicKey) : null;
 
-      if (hasUnregisteredCredentials && stored) {
+      if (hasUnregisteredCredentials && cached) {
         // Skip Step 1 - we already have credentials!
         console.log("[Registration] Using existing credentials, skipping signature step");
-        const existingData = JSON.parse(stored);
-        secret = existingData.secret;
-        salt = existingData.salt;
-        commitment = existingData.commitment;
+        secret = cached.secret;
+        salt = cached.salt;
+        commitment = cached.commitment;
         setRegistrationStatus("Using existing credentials...");
       } else {
         // Step 1: Generate deterministic credentials from wallet signature
         setRegistrationStatus("Step 1/2: Generating secret (sign message)...");
         console.log("[Registration] Step 1: Generating deterministic credentials from wallet signature...");
-        const { generateDeterministicZKCredentials } = await import("../lib/zk");
-
         let credentials;
         try {
           credentials = await generateDeterministicZKCredentials(kit, daoId);
@@ -385,16 +390,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
       const leafIndex = Number(leafIndexResult.result);
 
       // Step 4: Store credentials in localStorage (cache for convenience)
-      const registrationData = {
-        secret,
-        salt,
-        commitment,
-        leafIndex,
-        registeredAt: Date.now(),
-      };
-
-      // Reuse the key variable from above
-      localStorage.setItem(key, JSON.stringify(registrationData));
+      storeZKCredentials(daoId, publicKey || "", { secret, salt, commitment }, leafIndex);
 
       setIsRegistered(true);
       setHasUnregisteredCredentials(false);
@@ -678,8 +674,8 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
                 <input
                   type="radio"
                   name="voteMode"
-                  value="open"
-                  checked={voteMode === "open"}
+                  value="trailing"
+                  checked={voteMode === "trailing"}
                   onChange={(e) => setVoteMode(e.target.value as "fixed" | "trailing")}
                   className="mt-1 mr-3"
                 />
@@ -826,3 +822,4 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
     </div>
   );
 }
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps */

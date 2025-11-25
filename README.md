@@ -15,6 +15,12 @@ DaoVote enables anonymous voting for decentralized autonomous organizations (DAO
 - **Anonymous voting** - Vote without revealing identity or choice linkage
 - **Backend relayer** - Transaction anonymity layer (Launchtube planned for mainnet)
 
+### Verifying Key Versioning
+
+- Each DAO tracks a `vk_version` in the voting contract. Proposals snapshot the active version at creation, and votes must prove against that version.
+- The frontend surfaces vk version in Members, proposal cards, and the public votes page so users see the expected verifier.
+- When rotating circuits/VKs, set the new vk on-chain and confirm the UI shows the incremented version before accepting proofs.
+
 ## Architecture
 
 ```

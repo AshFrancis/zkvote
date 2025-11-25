@@ -9300,6 +9300,14 @@
                       },
                       {
                         "key": {
+                          "symbol": "ver"
+                        },
+                        "val": {
+                          "u32": 1
+                        }
+                      },
+                      {
+                        "key": {
                           "symbol": "zeros"
                         },
                         "val": {

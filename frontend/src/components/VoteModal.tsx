@@ -9,11 +9,17 @@ import {
   type ProofInput,
 } from "../lib/zkproof";
 import { getMerklePath } from "../lib/merkletree";
+import {
+  generateDeterministicZKCredentials,
+  getZKCredentials,
+  storeZKCredentials,
+} from "../lib/zk";
 
 interface VoteModalProps {
   proposalId: number;
   eligibleRoot: bigint; // Snapshot of Merkle root when proposal was created
   voteMode: "Fixed" | "Trailing"; // Vote mode: Fixed (snapshot) or Trailing (dynamic)
+  vkVersion?: number | null;
   daoId: number;
   publicKey: string;
   kit: StellarWalletsKit | null;
@@ -27,6 +33,7 @@ export default function VoteModal({
   proposalId,
   eligibleRoot,
   voteMode,
+  vkVersion,
   daoId,
   publicKey,
   kit,
@@ -47,12 +54,11 @@ export default function VoteModal({
 
       // Step 1: Load registration data (or regenerate from wallet)
       setProgress("Loading voting credentials...");
-      const registrationKey = `voting_registration_${daoId}_${publicKey}`;
-      const registrationDataStr = localStorage.getItem(registrationKey);
-
       let secret: string, salt: string, commitment: string, leafIndex: number;
 
-      if (!registrationDataStr) {
+      const cached = getZKCredentials(daoId, publicKey);
+
+      if (!cached) {
         // Try to regenerate from wallet signature
         console.log("[Vote] No cached credentials, attempting to regenerate...");
 
@@ -61,7 +67,6 @@ export default function VoteModal({
         }
 
         setProgress("Regenerating credentials from wallet signature...");
-        const { generateDeterministicZKCredentials } = await import("../lib/zk");
         const credentials = await generateDeterministicZKCredentials(kit, daoId);
 
         // Get leaf index from contract
@@ -76,21 +81,14 @@ export default function VoteModal({
         commitment = credentials.commitment;
 
         // Cache for next time
-        localStorage.setItem(registrationKey, JSON.stringify({
-          secret,
-          salt,
-          commitment,
-          leafIndex,
-          registeredAt: Date.now(),
-        }));
+        storeZKCredentials(daoId, publicKey, credentials, leafIndex);
 
         console.log("[Vote] Credentials regenerated successfully");
       } else {
-        const registrationData = JSON.parse(registrationDataStr);
-        secret = registrationData.secret;
-        salt = registrationData.salt;
-        commitment = registrationData.commitment;
-        leafIndex = registrationData.leafIndex;
+        secret = cached.secret;
+        salt = cached.salt;
+        commitment = cached.commitment;
+        leafIndex = cached.leafIndex;
       }
 
       console.log("Using credentials:");
@@ -144,6 +142,7 @@ export default function VoteModal({
         proposalId: proposalId.toString(),
         voteChoice: choice ? "1" : "0",
         commitment: commitment.toString(), // NEW: allows revocation checks
+        vkVersion: vkVersion?.toString() ?? undefined,
         // Private signals
         secret: secret.toString(),
         salt: salt.toString(),

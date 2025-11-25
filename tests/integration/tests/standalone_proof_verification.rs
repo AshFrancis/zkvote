@@ -21,26 +21,17 @@
 // NOTE: Proofs are LE-encoded (proof_soroban_le.json). After BE migration,
 // need to regenerate using proof_soroban_be.json and verification_key_soroban_be.json
 
-use soroban_sdk::{
-    testutils::Address as _,
-    Address, Bytes, BytesN, Env, String, Vec, U256,
-};
+use soroban_sdk::{testutils::Address as _, Address, Bytes, BytesN, Env, String, Vec, U256};
 
 // Import contract clients
 mod dao_registry {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/dao_registry.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/dao_registry.wasm");
 }
 mod membership_sbt {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/membership_sbt.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_sbt.wasm");
 }
 mod membership_tree {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/membership_tree.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_tree.wasm");
 }
 mod voting {
     soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/voting.wasm");
@@ -201,9 +192,14 @@ fn test_real_groth16_proof_verification() {
 
     // Test commitment: Poseidon(123456789, 987654321)
     // Hex: 0x2536d01521137bf7b39e3fd26c1376f456ce46a45993a5d7c3c158a450fd7329
-    let commitment = hex_str_to_u256(&env, "2536d01521137bf7b39e3fd26c1376f456ce46a45993a5d7c3c158a450fd7329");
+    let commitment = hex_str_to_u256(
+        &env,
+        "2536d01521137bf7b39e3fd26c1376f456ce46a45993a5d7c3c158a450fd7329",
+    );
 
-    println!("Commitment: 16832421271961222550979173996485995711342823810308835997146707681980704453417");
+    println!(
+        "Commitment: 16832421271961222550979173996485995711342823810308835997146707681980704453417"
+    );
 
     tree_client.register_with_caller(&dao_id, &commitment, &admin);
     println!("✅ Commitment registered at index 0\n");
@@ -212,13 +208,19 @@ fn test_real_groth16_proof_verification() {
     let actual_root = tree_client.current_root(&dao_id);
     // Expected root hex: 0x25e451cc98d0ff49117b5aee305d896da857c2a74c7084332a510fd03e0299f0
     // With depth 18 (not 20), commitment at index 0
-    let expected_root = hex_str_to_u256(&env, "25e451cc98d0ff49117b5aee305d896da857c2a74c7084332a510fd03e0299f0");
+    let expected_root = hex_str_to_u256(
+        &env,
+        "25e451cc98d0ff49117b5aee305d896da857c2a74c7084332a510fd03e0299f0",
+    );
 
     println!("Expected root: 17138981085726982929815047770222948937180916992196016628536485002859509881328");
     println!("Actual root:   {:?}\n", actual_root);
 
     // Verify roots match
-    assert_eq!(actual_root, expected_root, "Root mismatch! Poseidon or Merkle tree incorrect");
+    assert_eq!(
+        actual_root, expected_root,
+        "Root mismatch! Poseidon or Merkle tree incorrect"
+    );
     println!("✅ Root matches! Tree is correctly constructed.\n");
 
     println!("Step 6: Setting verification key...");
@@ -236,7 +238,13 @@ fn test_real_groth16_proof_verification() {
     let current_time = env.ledger().timestamp();
     let end_time = current_time + 3600; // 1 hour from now
 
-    let proposal_id = voting_client.create_proposal(&dao_id, &description, &end_time, &admin, &voting::VoteMode::Fixed);
+    let proposal_id = voting_client.create_proposal(
+        &dao_id,
+        &description,
+        &end_time,
+        &admin,
+        &voting::VoteMode::Fixed,
+    );
     println!("Proposal ID: {}\n", proposal_id);
 
     println!("Step 8: Submitting real Groth16 proof...");
@@ -246,7 +254,10 @@ fn test_real_groth16_proof_verification() {
 
     // Nullifier from test
     // Hex: 0x0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a50
-    let nullifier = hex_str_to_u256(&env, "0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a50");
+    let nullifier = hex_str_to_u256(
+        &env,
+        "0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a50",
+    );
 
     let root = actual_root; // Use the root we just computed
     let vote_choice = true; // YES vote
@@ -261,7 +272,15 @@ fn test_real_groth16_proof_verification() {
     println!("Submitting vote with real proof...");
 
     // This is the CRITICAL test - will the real proof verify on-chain?
-    voting_client.vote(&dao_id, &proposal_id, &vote_choice, &nullifier, &root, &commitment, &proof);
+    voting_client.vote(
+        &dao_id,
+        &proposal_id,
+        &vote_choice,
+        &nullifier,
+        &root,
+        &commitment,
+        &proof,
+    );
     println!("✅ VOTE ACCEPTED - Proof verified successfully!\n");
 
     println!("Step 9: Testing double-vote prevention...");
@@ -272,7 +291,15 @@ fn test_real_groth16_proof_verification() {
     // Use should_panic attribute or wrap in an expectation that it fails
     // For now, we'll use a simple expectation that this will panic
     let should_panic = std::panic::AssertUnwindSafe(|| {
-        voting_client.vote(&dao_id, &proposal_id, &vote_choice, &nullifier, &root, &commitment, &proof);
+        voting_client.vote(
+            &dao_id,
+            &proposal_id,
+            &vote_choice,
+            &nullifier,
+            &root,
+            &commitment,
+            &proof,
+        );
     });
 
     let result = std::panic::catch_unwind(should_panic);

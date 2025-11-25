@@ -10,26 +10,17 @@
 //
 // Run with: cargo test --test pairing_security_boundary -- --nocapture
 
-use soroban_sdk::{
-    testutils::Address as _,
-    Address, Bytes, BytesN, Env, String, Vec, U256,
-};
+use soroban_sdk::{testutils::Address as _, Address, Bytes, BytesN, Env, String, Vec, U256};
 
 // Import contract clients
 mod dao_registry {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/dao_registry.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/dao_registry.wasm");
 }
 mod membership_sbt {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/membership_sbt.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_sbt.wasm");
 }
 mod membership_tree {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/membership_tree.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_tree.wasm");
 }
 mod voting {
     soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/voting.wasm");
@@ -150,12 +141,18 @@ fn test_pairing_security_boundary() {
     tree_client.init_tree(&dao_id, &18, &admin);
 
     println!("Registering commitment...\n");
-    let commitment = hex_str_to_u256(&env, "2536d01521137bf7b39e3fd26c1376f456ce46a45993a5d7c3c158a450fd7329");
+    let commitment = hex_str_to_u256(
+        &env,
+        "2536d01521137bf7b39e3fd26c1376f456ce46a45993a5d7c3c158a450fd7329",
+    );
     tree_client.register_with_caller(&dao_id, &commitment, &admin);
 
     let root = tree_client.current_root(&dao_id);
     let proof = get_real_proof(&env);
-    let nullifier = hex_str_to_u256(&env, "0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a50");
+    let nullifier = hex_str_to_u256(
+        &env,
+        "0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a50",
+    );
 
     println!("==========================================");
     println!("Test 1: Valid VK + Real Proof (Control)");
@@ -213,7 +210,10 @@ fn test_pairing_security_boundary() {
     println!("✅ Proposal created: {}\n", proposal_id2);
 
     println!("Submitting vote with real proof (should fail)...");
-    let nullifier2 = hex_str_to_u256(&env, "0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a51");
+    let nullifier2 = hex_str_to_u256(
+        &env,
+        "0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a51",
+    );
 
     // This should panic due to pairing check failure
     let should_panic = std::panic::AssertUnwindSafe(|| {

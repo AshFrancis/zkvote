@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
+import { getZKCredentials } from "../lib/zk";
 
 interface ProposalCardProps {
   proposal: {
@@ -8,10 +9,11 @@ interface ProposalCardProps {
     yesVotes: number;
     noVotes: number;
     hasVoted: boolean;
-    eligibleRoot: bigint; // Snapshot of Merkle root when proposal was created
-    voteMode: "Fixed" | "Trailing"; // Vote mode: Fixed (snapshot) or Trailing (dynamic)
-    endTime: number; // Unix timestamp in seconds
-  };
+  eligibleRoot: bigint; // Snapshot of Merkle root when proposal was created
+  voteMode: "Fixed" | "Trailing"; // Vote mode: Fixed (snapshot) or Trailing (dynamic)
+  endTime: number; // Unix timestamp in seconds
+  vkVersion?: number | null;
+};
   daoId: number;
   publicKey: string;
   kit: StellarWalletsKit | null;
@@ -34,10 +36,7 @@ export default function ProposalCard({
   const noPercentage = totalVotes > 0 ? (proposal.noVotes / totalVotes) * 100 : 0;
 
   // Check if user is registered for voting
-  const isRegistered = publicKey ? (() => {
-    const registrationKey = `voting_registration_${daoId}_${publicKey}`;
-    return localStorage.getItem(registrationKey) !== null;
-  })() : false;
+  const isRegistered = publicKey ? !!getZKCredentials(daoId, publicKey) : false;
 
   // Deadline logic
   const now = Math.floor(Date.now() / 1000); // Current time in seconds
@@ -82,6 +81,11 @@ export default function ProposalCard({
               <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
                 Proposal #{proposal.id}
               </span>
+              {proposal.vkVersion !== undefined && proposal.vkVersion !== null && (
+                <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200">
+                  VK v{proposal.vkVersion}
+                </span>
+              )}
               {proposal.hasVoted && (
                 <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200">
                   Voted
@@ -157,6 +161,7 @@ export default function ProposalCard({
           proposalId={proposal.id}
           eligibleRoot={proposal.eligibleRoot}
           voteMode={proposal.voteMode}
+          vkVersion={proposal.vkVersion}
           daoId={daoId}
           publicKey={publicKey}
           kit={kit}
@@ -173,3 +178,4 @@ export default function ProposalCard({
 
 // Import VoteModal (will be created next)
 import VoteModal from "./VoteModal";
+/* eslint-disable react-hooks/purity, @typescript-eslint/no-unused-vars */

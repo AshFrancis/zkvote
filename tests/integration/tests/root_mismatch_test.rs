@@ -5,24 +5,17 @@
 // The vote MUST fail with "root must match proposal eligible root".
 
 use soroban_sdk::{
-    testutils::Address as _,
-    Address, Bytes, BytesN, Env, String, Vec as SdkVec, U256,
+    testutils::Address as _, Address, Bytes, BytesN, Env, String, Vec as SdkVec, U256,
 };
 
 mod dao_registry {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/dao_registry.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/dao_registry.wasm");
 }
 mod membership_sbt {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/membership_sbt.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_sbt.wasm");
 }
 mod membership_tree {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/membership_tree.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_tree.wasm");
 }
 mod voting {
     soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/voting.wasm");
@@ -111,11 +104,7 @@ fn test_vote_with_wrong_root_fails() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Test DAO"),
-        &admin,
-        &false,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
 
     tree_client.init_tree(&dao_id, &18, &admin);
 
@@ -127,13 +116,16 @@ fn test_vote_with_wrong_root_fails() {
 
     // Use the commitment from circuits/build/public.json (secret=123456789, salt=987654321)
     // commitment = 16832421271961222550979173996485995711342823810308835997146707681980704453417
-    let commitment = hex_str_to_u256(&env, "2536d01521137bf7b39e3fd26c1376f456ce46a45993a5d7c3c158a450fd7329");
+    let commitment = hex_str_to_u256(
+        &env,
+        "2536d01521137bf7b39e3fd26c1376f456ce46a45993a5d7c3c158a450fd7329",
+    );
     tree_client.register_with_caller(&dao_id, &commitment, &member);
 
-    let root_A = tree_client.current_root(&dao_id);
-    println!("Root A (with commitment): {:?}", root_A);
+    let root_a = tree_client.current_root(&dao_id);
+    println!("Root A (with commitment): {:?}", root_a);
 
-    // Set VK and create Proposal 1 with root_A as eligible_root
+    // Set VK and create Proposal 1 with root_a as eligible_root
     let vk = get_verification_key(&env);
     voting_client.set_vk(&dao_id, &vk, &admin);
 
@@ -146,40 +138,52 @@ fn test_vote_with_wrong_root_fails() {
     );
 
     let proposal_1 = voting_client.get_proposal(&dao_id, &proposal_1_id);
-    assert_eq!(proposal_1.eligible_root, root_A, "Proposal 1 should have root_A");
+    assert_eq!(
+        proposal_1.eligible_root, root_a,
+        "Proposal 1 should have root_a"
+    );
 
     // Use nullifier from circuits/build/public.json
     // nullifier = 5760508796108392755529358167294721063592787938597807569861628631651201858128
-    let nullifier = hex_str_to_u256(&env, "0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a50");
+    let nullifier = hex_str_to_u256(
+        &env,
+        "0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a50",
+    );
 
-    // Get the real proof (generated for root_A)
+    // Get the real proof (generated for root_a)
     let proof = get_real_proof(&env);
 
-    // Vote should SUCCEED with correct root (root_A)
+    // Vote should SUCCEED with correct root (root_a)
     voting_client.vote(
         &dao_id,
         &proposal_1_id,
         &true,
         &nullifier,
-        &root_A, // Correct root
+        &root_a, // Correct root
         &commitment,
         &proof,
     );
 
     let proposal_after = voting_client.get_proposal(&dao_id, &proposal_1_id);
-    assert_eq!(proposal_after.yes_votes, 1, "Vote with correct root should succeed");
+    assert_eq!(
+        proposal_after.yes_votes, 1,
+        "Vote with correct root should succeed"
+    );
     println!("✅ Vote with correct root succeeded");
 
     // Now create Proposal 2 with a DIFFERENT eligible_root
     // Add a new member to change the root
     let member2 = Address::generate(&env);
     sbt_client.mint(&dao_id, &member2, &admin, &None);
-    let commitment2 = hex_str_to_u256(&env, "1111111111111111111111111111111111111111111111111111111111111111");
+    let commitment2 = hex_str_to_u256(
+        &env,
+        "1111111111111111111111111111111111111111111111111111111111111111",
+    );
     tree_client.register_with_caller(&dao_id, &commitment2, &member2);
 
-    let root_B = tree_client.current_root(&dao_id);
-    assert_ne!(root_A, root_B, "Roots must be different");
-    println!("Root B (with new member): {:?}", root_B);
+    let root_b = tree_client.current_root(&dao_id);
+    assert_ne!(root_a, root_b, "Roots must be different");
+    println!("Root B (with new member): {:?}", root_b);
 
     let proposal_2_id = voting_client.create_proposal(
         &dao_id,
@@ -190,15 +194,21 @@ fn test_vote_with_wrong_root_fails() {
     );
 
     let proposal_2 = voting_client.get_proposal(&dao_id, &proposal_2_id);
-    assert_eq!(proposal_2.eligible_root, root_B, "Proposal 2 should have root_B");
+    assert_eq!(
+        proposal_2.eligible_root, root_b,
+        "Proposal 2 should have root_b"
+    );
 
-    // Try to vote on Proposal 2 with the SAME proof (which was generated for root_A)
-    // But the proposal has eligible_root = root_B
+    // Try to vote on Proposal 2 with the SAME proof (which was generated for root_a)
+    // But the proposal has eligible_root = root_b
     // This simulates the frontend bug: passing wrong root to contract
 
-    let nullifier_2 = hex_str_to_u256(&env, "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef");
+    let nullifier_2 = hex_str_to_u256(
+        &env,
+        "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    );
 
-    println!("🔍 Attempting vote with WRONG root (proof for root_A, but proposal has root_B)...");
+    println!("🔍 Attempting vote with WRONG root (proof for root_a, but proposal has root_b)...");
 
     // This MUST fail with "root must match proposal eligible root"
     voting_client.vote(
@@ -206,7 +216,7 @@ fn test_vote_with_wrong_root_fails() {
         &proposal_2_id,
         &true,
         &nullifier_2,
-        &root_A, // ❌ WRONG! Proof claims root_A but proposal has root_B
+        &root_a, // ❌ WRONG! Proof claims root_a but proposal has root_b
         &commitment,
         &proof,
     );
@@ -236,11 +246,7 @@ fn test_vote_with_correct_root_succeeds() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Test DAO"),
-        &admin,
-        &false,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
 
     tree_client.init_tree(&dao_id, &18, &admin);
 
@@ -250,7 +256,10 @@ fn test_vote_with_correct_root_succeeds() {
     // Add member and register with the commitment from BE proof
     // commitment = 16832421271961222550979173996485995711342823810308835997146707681980704453417
     sbt_client.mint(&dao_id, &member, &admin, &None);
-    let commitment = hex_str_to_u256(&env, "2536d01521137bf7b39e3fd26c1376f456ce46a45993a5d7c3c158a450fd7329");
+    let commitment = hex_str_to_u256(
+        &env,
+        "2536d01521137bf7b39e3fd26c1376f456ce46a45993a5d7c3c158a450fd7329",
+    );
     tree_client.register_with_caller(&dao_id, &commitment, &member);
 
     let root = tree_client.current_root(&dao_id);
@@ -269,7 +278,10 @@ fn test_vote_with_correct_root_succeeds() {
 
     // Vote with matching root
     // nullifier = 5760508796108392755529358167294721063592787938597807569861628631651201858128
-    let nullifier = hex_str_to_u256(&env, "0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a50");
+    let nullifier = hex_str_to_u256(
+        &env,
+        "0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a50",
+    );
     let proof = get_real_proof(&env);
 
     voting_client.vote(

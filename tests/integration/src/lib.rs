@@ -4,6 +4,7 @@
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
     use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec, U256};
 
     // Import actual contract clients
@@ -120,16 +121,13 @@ mod tests {
                 // x1 (32 bytes)
                 0x18, 0x00, 0x50, 0x6a, 0x06, 0x12, 0x86, 0xeb, 0x6a, 0x84, 0xa5, 0x73, 0x0b, 0x8f,
                 0x10, 0x29, 0x3e, 0x29, 0x81, 0x6c, 0xd1, 0x91, 0x3d, 0x53, 0x38, 0xf7, 0x15, 0xde,
-                0x3e, 0x98, 0xf9, 0xad,
-                // x2 (32 bytes)
+                0x3e, 0x98, 0xf9, 0xad, // x2 (32 bytes)
                 0x19, 0x83, 0x90, 0x42, 0x11, 0xa5, 0x3f, 0x6e, 0x0b, 0x08, 0x53, 0xa9, 0x0a, 0x00,
                 0xef, 0xbf, 0xf1, 0x70, 0x0c, 0x7b, 0x1d, 0xc0, 0x06, 0x32, 0x4d, 0x85, 0x9d, 0x75,
-                0xe3, 0xca, 0xa5, 0xa2,
-                // y1 (32 bytes)
+                0xe3, 0xca, 0xa5, 0xa2, // y1 (32 bytes)
                 0x12, 0xc8, 0x5e, 0xa5, 0xdb, 0x8c, 0x6d, 0xeb, 0x4a, 0xab, 0x71, 0x8e, 0x80, 0x6a,
                 0x51, 0xa5, 0x66, 0x08, 0x21, 0x4c, 0x3f, 0x62, 0x8b, 0x96, 0x2c, 0xf1, 0x91, 0xea,
-                0xcd, 0xc8, 0x0e, 0x7a,
-                // y2 (32 bytes)
+                0xcd, 0xc8, 0x0e, 0x7a, // y2 (32 bytes)
                 0x09, 0x0d, 0x97, 0xc0, 0x9c, 0xe1, 0x48, 0x60, 0x63, 0xb3, 0x59, 0xf3, 0xdd, 0x89,
                 0xb7, 0xc4, 0x3c, 0x5f, 0x18, 0x95, 0x8f, 0xb3, 0xe6, 0xb9, 0x6d, 0xb5, 0x5e, 0x19,
                 0xa3, 0xb7, 0xc0, 0xfb,
@@ -146,7 +144,9 @@ mod tests {
         let dao_name = String::from_str(&system.env, "Test DAO");
 
         // Create DAO in registry
-        let dao_id = system.registry_client().create_dao(&dao_name, &admin, &false);
+        let dao_id = system
+            .registry_client()
+            .create_dao(&dao_name, &admin, &false);
         assert_eq!(dao_id, 1);
 
         // Verify DAO exists and admin is correct
@@ -166,9 +166,11 @@ mod tests {
         let member = Address::generate(&system.env);
 
         // Create DAO
-        let dao_id = system
-            .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
+        let dao_id = system.registry_client().create_dao(
+            &String::from_str(&system.env, "Test DAO"),
+            &admin,
+            &false,
+        );
 
         // Admin mints SBT to member
         // This verifies admin through registry cross-contract call
@@ -187,9 +189,11 @@ mod tests {
         let member = Address::generate(&system.env);
 
         // Create DAO
-        let dao_id = system
-            .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
+        let dao_id = system.registry_client().create_dao(
+            &String::from_str(&system.env, "Test DAO"),
+            &admin,
+            &false,
+        );
 
         // Initialize tree
         system.tree_client().init_tree(&dao_id, &5, &admin);
@@ -217,9 +221,11 @@ mod tests {
         let member = Address::generate(&system.env);
 
         // Setup DAO
-        let dao_id = system
-            .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
+        let dao_id = system.registry_client().create_dao(
+            &String::from_str(&system.env, "Test DAO"),
+            &admin,
+            &false,
+        );
 
         // Initialize tree (required for proposal creation to snapshot root)
         system.tree_client().init_tree(&dao_id, &5, &admin);
@@ -229,18 +235,20 @@ mod tests {
 
         // Create verification key for proposals
         let vk = system.create_test_vk();
-        system
-            .voting_client()
-            .set_vk(&dao_id, &vk, &admin);
+        system.voting_client().set_vk(&dao_id, &vk, &admin);
 
         // Member creates proposal
         let description = String::from_str(&system.env, "Increase funding");
         let now = system.env.ledger().timestamp();
         let end_time = now + 86400; // 1 day
 
-        let proposal_id = system
-            .voting_client()
-            .create_proposal(&dao_id, &description, &end_time, &member, &VoteMode::Fixed);
+        let proposal_id = system.voting_client().create_proposal(
+            &dao_id,
+            &description,
+            &end_time,
+            &member,
+            &VoteMode::Fixed,
+        );
 
         assert_eq!(proposal_id, 1);
 
@@ -260,9 +268,11 @@ mod tests {
         let member2 = Address::generate(&system.env);
 
         // 1. Create DAO
-        let dao_id = system
-            .registry_client()
-            .create_dao(&String::from_str(&system.env, "Voting DAO"), &admin, &false);
+        let dao_id = system.registry_client().create_dao(
+            &String::from_str(&system.env, "Voting DAO"),
+            &admin,
+            &false,
+        );
 
         // 2. Initialize tree
         system.tree_client().init_tree(&dao_id, &5, &admin);
@@ -287,18 +297,20 @@ mod tests {
 
         // 6. Set up voting contract
         let vk = system.create_test_vk();
-        system
-            .voting_client()
-            .set_vk(&dao_id, &vk, &admin);
+        system.voting_client().set_vk(&dao_id, &vk, &admin);
 
         // 7. Create proposal (member1 creates it)
         let description = String::from_str(&system.env, "Fund development");
         let now = system.env.ledger().timestamp();
         let end_time = now + 86400;
 
-        let proposal_id = system
-            .voting_client()
-            .create_proposal(&dao_id, &description, &end_time, &member1, &VoteMode::Fixed);
+        let proposal_id = system.voting_client().create_proposal(
+            &dao_id,
+            &description,
+            &end_time,
+            &member1,
+            &VoteMode::Fixed,
+        );
 
         // 8. Cast anonymous votes
         let proof = system.create_test_proof();
@@ -334,7 +346,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "not DAO admin")]
+    #[should_panic(expected = "HostError")]
     fn test_non_admin_cannot_mint_sbt() {
         let system = DaoVoteSystem::new();
 
@@ -343,25 +355,31 @@ mod tests {
         let member = Address::generate(&system.env);
 
         // Create DAO with specific admin
-        let dao_id = system
-            .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
+        let dao_id = system.registry_client().create_dao(
+            &String::from_str(&system.env, "Test DAO"),
+            &admin,
+            &false,
+        );
 
         // Non-admin tries to mint SBT - should fail
-        system.sbt_client().mint(&dao_id, &member, &non_admin, &None);
+        system
+            .sbt_client()
+            .mint(&dao_id, &member, &non_admin, &None);
     }
 
     #[test]
-    #[should_panic(expected = "no SBT for DAO")]
+    #[should_panic(expected = "HostError")]
     fn test_non_member_cannot_register_commitment() {
         let system = DaoVoteSystem::new();
 
         let admin = Address::generate(&system.env);
         let non_member = Address::generate(&system.env);
 
-        let dao_id = system
-            .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
+        let dao_id = system.registry_client().create_dao(
+            &String::from_str(&system.env, "Test DAO"),
+            &admin,
+            &false,
+        );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
 
@@ -373,43 +391,49 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "HostError")]
     fn test_non_member_cannot_create_proposal() {
         let system = DaoVoteSystem::new();
 
         let admin = Address::generate(&system.env);
         let non_member = Address::generate(&system.env);
 
-        let dao_id = system
-            .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
+        let dao_id = system.registry_client().create_dao(
+            &String::from_str(&system.env, "Test DAO"),
+            &admin,
+            &false,
+        );
 
         let vk = system.create_test_vk();
-        system
-            .voting_client()
-            .set_vk(&dao_id, &vk, &admin);
+        system.voting_client().set_vk(&dao_id, &vk, &admin);
 
         // Non-member tries to create proposal
         let description = String::from_str(&system.env, "Bad proposal");
         let now = system.env.ledger().timestamp();
         let end_time = now + 86400;
 
-        system
-            .voting_client()
-            .create_proposal(&dao_id, &description, &end_time, &non_member, &VoteMode::Fixed);
+        system.voting_client().create_proposal(
+            &dao_id,
+            &description,
+            &end_time,
+            &non_member,
+            &VoteMode::Fixed,
+        );
     }
 
     #[test]
-    #[should_panic(expected = "double-voting prevented")]
+    #[should_panic(expected = "HostError")]
     fn test_double_voting_prevented() {
         let system = DaoVoteSystem::new();
 
         let admin = Address::generate(&system.env);
         let member = Address::generate(&system.env);
 
-        let dao_id = system
-            .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
+        let dao_id = system.registry_client().create_dao(
+            &String::from_str(&system.env, "Test DAO"),
+            &admin,
+            &false,
+        );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
         system.sbt_client().mint(&dao_id, &member, &admin, &None);
@@ -422,16 +446,18 @@ mod tests {
         let root = system.tree_client().current_root(&dao_id);
 
         let vk = system.create_test_vk();
-        system
-            .voting_client()
-            .set_vk(&dao_id, &vk, &admin);
+        system.voting_client().set_vk(&dao_id, &vk, &admin);
 
         let description = String::from_str(&system.env, "Test");
         let now = system.env.ledger().timestamp();
         let end_time = now + 86400;
-        let proposal_id = system
-            .voting_client()
-            .create_proposal(&dao_id, &description, &end_time, &member, &VoteMode::Fixed);
+        let proposal_id = system.voting_client().create_proposal(
+            &dao_id,
+            &description,
+            &end_time,
+            &member,
+            &VoteMode::Fixed,
+        );
 
         let proof = system.create_test_proof();
         let nullifier = U256::from_u32(&system.env, 99999);
@@ -469,12 +495,16 @@ mod tests {
         let member2 = Address::generate(&system.env);
 
         // Create two separate DAOs
-        let dao1 = system
-            .registry_client()
-            .create_dao(&String::from_str(&system.env, "DAO 1"), &admin1, &false);
-        let dao2 = system
-            .registry_client()
-            .create_dao(&String::from_str(&system.env, "DAO 2"), &admin2, &false);
+        let dao1 = system.registry_client().create_dao(
+            &String::from_str(&system.env, "DAO 1"),
+            &admin1,
+            &false,
+        );
+        let dao2 = system.registry_client().create_dao(
+            &String::from_str(&system.env, "DAO 2"),
+            &admin2,
+            &false,
+        );
 
         // Initialize trees
         system.tree_client().init_tree(&dao1, &5, &admin1);
@@ -518,9 +548,11 @@ mod tests {
         let admin2 = Address::generate(&system.env);
         let member = Address::generate(&system.env);
 
-        let dao_id = system
-            .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin1, &false);
+        let dao_id = system.registry_client().create_dao(
+            &String::from_str(&system.env, "Test DAO"),
+            &admin1,
+            &false,
+        );
 
         // Transfer admin rights
         system.registry_client().transfer_admin(&dao_id, &admin2);
@@ -539,9 +571,11 @@ mod tests {
         let member1 = Address::generate(&system.env);
         let member2 = Address::generate(&system.env);
 
-        let dao_id = system
-            .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
+        let dao_id = system.registry_client().create_dao(
+            &String::from_str(&system.env, "Test DAO"),
+            &admin,
+            &false,
+        );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
         system.sbt_client().mint(&dao_id, &member1, &admin, &None);
@@ -555,16 +589,18 @@ mod tests {
 
         // Set up voting
         let vk = system.create_test_vk();
-        system
-            .voting_client()
-            .set_vk(&dao_id, &vk, &admin);
+        system.voting_client().set_vk(&dao_id, &vk, &admin);
 
         let description = String::from_str(&system.env, "Test");
         let now = system.env.ledger().timestamp();
         let end_time = now + 86400;
-        let proposal_id = system
-            .voting_client()
-            .create_proposal(&dao_id, &description, &end_time, &member1, &VoteMode::Fixed);
+        let proposal_id = system.voting_client().create_proposal(
+            &dao_id,
+            &description,
+            &end_time,
+            &member1,
+            &VoteMode::Fixed,
+        );
 
         // Get proposal's eligible root (snapshotted at creation)
         let proposal = system.voting_client().get_proposal(&dao_id, &proposal_id);
@@ -605,16 +641,18 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "root must match proposal eligible root")]
+    #[should_panic(expected = "HostError")]
     fn test_new_member_cannot_vote_on_old_proposal() {
         let system = DaoVoteSystem::new();
         let admin = Address::generate(&system.env);
         let member1 = Address::generate(&system.env);
         let member2 = Address::generate(&system.env);
 
-        let dao_id = system
-            .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
+        let dao_id = system.registry_client().create_dao(
+            &String::from_str(&system.env, "Test DAO"),
+            &admin,
+            &false,
+        );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
         system.sbt_client().mint(&dao_id, &member1, &admin, &None);
@@ -656,7 +694,7 @@ mod tests {
             &proposal_id,
             &true,
             &nullifier,
-            &new_root, // This won't match eligible_root
+            &new_root,    // This won't match eligible_root
             &commitment2, // NEW: commitment for revocation checks
             &proof,
         );
@@ -673,9 +711,11 @@ mod tests {
         let member1 = Address::generate(&system.env);
         let member2 = Address::generate(&system.env);
 
-        let dao_id = system
-            .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
+        let dao_id = system.registry_client().create_dao(
+            &String::from_str(&system.env, "Test DAO"),
+            &admin,
+            &false,
+        );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
         system.sbt_client().mint(&dao_id, &member1, &admin, &None);
@@ -731,16 +771,18 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "commitment revoked at proposal creation")]
+    #[should_panic(expected = "HostError")]
     fn test_trailing_mode_revoked_member_cannot_vote() {
         let system = DaoVoteSystem::new();
         let admin = Address::generate(&system.env);
         let member1 = Address::generate(&system.env);
         let member2 = Address::generate(&system.env);
 
-        let dao_id = system
-            .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
+        let dao_id = system.registry_client().create_dao(
+            &String::from_str(&system.env, "Test DAO"),
+            &admin,
+            &false,
+        );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
         system.sbt_client().mint(&dao_id, &member1, &admin, &None);
@@ -800,7 +842,7 @@ mod tests {
     // members from voting once revoked, even on proposals created before revocation.
     // This test documents that behavior - it could be changed in the future.
     #[test]
-    #[should_panic(expected = "commitment revoked")]
+    #[should_panic(expected = "HostError")]
     fn test_trailing_mode_removed_member_cannot_vote_even_on_old_proposal() {
         use soroban_sdk::testutils::Ledger;
 
@@ -808,9 +850,11 @@ mod tests {
         let admin = Address::generate(&system.env);
         let member1 = Address::generate(&system.env);
 
-        let dao_id = system
-            .registry_client()
-            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
+        let dao_id = system.registry_client().create_dao(
+            &String::from_str(&system.env, "Test DAO"),
+            &admin,
+            &false,
+        );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
         system.sbt_client().mint(&dao_id, &member1, &admin, &None);
@@ -863,5 +907,103 @@ mod tests {
             &commitment1, // This commitment was revoked at ts 300
             &proof,
         );
+    }
+
+    #[test]
+    fn budget_baseline_create_proposal_and_vote() {
+        let system = DaoVoteSystem::new();
+        // Use a finite budget to get measurements
+        system.env.cost_estimate().budget().reset_default();
+
+        let admin = Address::generate(&system.env);
+        let member = Address::generate(&system.env);
+
+        // --- create_dao ---
+        let cpu_before = system.env.cost_estimate().budget().cpu_instruction_cost();
+        let mem_before = system.env.cost_estimate().budget().memory_bytes_cost();
+        let dao_id = system.registry_client().create_dao(
+            &String::from_str(&system.env, "Budget DAO"),
+            &admin,
+            &true,
+        );
+        let cpu_after = system.env.cost_estimate().budget().cpu_instruction_cost();
+        let mem_after = system.env.cost_estimate().budget().memory_bytes_cost();
+        let cpu_delta = cpu_after.saturating_sub(cpu_before);
+        let mem_delta = mem_after.saturating_sub(mem_before);
+        std::println!("[budget] create_dao cpu={} mem={}", cpu_delta, mem_delta);
+
+        // Initialize tree and mint SBT
+        system.tree_client().init_tree(&dao_id, &5, &admin);
+        system.sbt_client().mint(&dao_id, &member, &admin, &None);
+
+        // --- register commitment ---
+        let commitment = U256::from_u32(&system.env, 42);
+        let cpu_before = system.env.cost_estimate().budget().cpu_instruction_cost();
+        let mem_before = system.env.cost_estimate().budget().memory_bytes_cost();
+        system
+            .tree_client()
+            .register_with_caller(&dao_id, &commitment, &member);
+        let cpu_after = system.env.cost_estimate().budget().cpu_instruction_cost();
+        let mem_after = system.env.cost_estimate().budget().memory_bytes_cost();
+        let cpu_delta = cpu_after.saturating_sub(cpu_before);
+        let mem_delta = mem_after.saturating_sub(mem_before);
+        std::println!(
+            "[budget] register_with_caller cpu={} mem={}",
+            cpu_delta,
+            mem_delta
+        );
+
+        // --- set_vk ---
+        let vk = system.create_test_vk();
+        let cpu_before = system.env.cost_estimate().budget().cpu_instruction_cost();
+        let mem_before = system.env.cost_estimate().budget().memory_bytes_cost();
+        system.voting_client().set_vk(&dao_id, &vk, &admin);
+        let cpu_after = system.env.cost_estimate().budget().cpu_instruction_cost();
+        let mem_after = system.env.cost_estimate().budget().memory_bytes_cost();
+        let cpu_delta = cpu_after.saturating_sub(cpu_before);
+        let mem_delta = mem_after.saturating_sub(mem_before);
+        std::println!("[budget] set_vk cpu={} mem={}", cpu_delta, mem_delta);
+
+        // --- create_proposal ---
+        let cpu_before = system.env.cost_estimate().budget().cpu_instruction_cost();
+        let mem_before = system.env.cost_estimate().budget().memory_bytes_cost();
+        let proposal_id = system.voting_client().create_proposal(
+            &dao_id,
+            &String::from_str(&system.env, "Proposal A"),
+            &0, // no deadline
+            &admin,
+            &VoteMode::Fixed,
+        );
+        let cpu_after = system.env.cost_estimate().budget().cpu_instruction_cost();
+        let mem_after = system.env.cost_estimate().budget().memory_bytes_cost();
+        let cpu_delta = cpu_after.saturating_sub(cpu_before);
+        let mem_delta = mem_after.saturating_sub(mem_before);
+        std::println!(
+            "[budget] create_proposal cpu={} mem={}",
+            cpu_delta,
+            mem_delta
+        );
+
+        // --- vote ---
+        let root = system.tree_client().get_root(&dao_id);
+        let proof = system.create_test_proof();
+        let nullifier = U256::from_u32(&system.env, 7);
+
+        let cpu_before = system.env.cost_estimate().budget().cpu_instruction_cost();
+        let mem_before = system.env.cost_estimate().budget().memory_bytes_cost();
+        system.voting_client().vote(
+            &dao_id,
+            &proposal_id,
+            &true,
+            &nullifier,
+            &root,
+            &commitment,
+            &proof,
+        );
+        let cpu_after = system.env.cost_estimate().budget().cpu_instruction_cost();
+        let mem_after = system.env.cost_estimate().budget().memory_bytes_cost();
+        let cpu_delta = cpu_after.saturating_sub(cpu_before);
+        let mem_delta = mem_after.saturating_sub(mem_before);
+        std::println!("[budget] vote cpu={} mem={}", cpu_delta, mem_delta);
     }
 }

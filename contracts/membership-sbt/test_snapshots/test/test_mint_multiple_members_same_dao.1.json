@@ -558,6 +558,14 @@
                         "val": {
                           "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                         }
+                      },
+                      {
+                        "key": {
+                          "symbol": "ver"
+                        },
+                        "val": {
+                          "u32": 1
+                        }
                       }
                     ]
                   }

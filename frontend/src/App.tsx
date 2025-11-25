@@ -13,10 +13,12 @@ import { initializeContractClients } from "./lib/contracts";
 import { getReadOnlyDaoRegistry } from "./lib/readOnlyContracts";
 import verificationKey from "./lib/verification_key_soroban.json";
 import { CONTRACTS } from "./config/contracts";
+import { validateStaticConfig } from "./config/guardrails";
+import { checkRelayerReady } from "./lib/stellar";
 // ZK credentials will be generated deterministically after DAO creation
 
 // Component for DAO detail page
-function DAODetailPage({ publicKey, isConnected, isInitializing }: { publicKey: string | null; isConnected: boolean; isInitializing: boolean }) {
+function DAODetailPage({ publicKey, isInitializing }: { publicKey: string | null; isInitializing: boolean }) {
   const { daoId } = useParams<{ daoId: string }>();
   const navigate = useNavigate();
   const [daoName, setDaoName] = useState<string>(() => {
@@ -141,7 +143,7 @@ function DAODetailPage({ publicKey, isConnected, isInitializing }: { publicKey: 
 }
 
 // Component for Manage/View Members page
-function ManageMembersPage({ publicKey, isConnected, isInitializing }: { publicKey: string | null; isConnected: boolean; isInitializing: boolean }) {
+function ManageMembersPage({ publicKey, isInitializing }: { publicKey: string | null; isInitializing: boolean }) {
   const { daoId } = useParams<{ daoId: string }>();
   const navigate = useNavigate();
   const [daoName, setDaoName] = useState<string>(() => {
@@ -310,11 +312,12 @@ function App() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [configErrors, setConfigErrors] = useState<string[]>([]);
+  const [relayerStatus, setRelayerStatus] = useState<string | null>(null);
 
   // Determine current view from URL path
-  const getCurrentView = (): 'home' | 'browse' | 'votes' | 'dao' => {
-    if (location.pathname.startsWith('/daos/')) return 'dao';
-    if (location.pathname === '/daos/') return 'browse';
+  const getCurrentView = (): 'home' | 'browse' | 'votes' => {
+    if (location.pathname.startsWith('/daos/')) return 'browse';
     if (location.pathname === '/public-votes/') return 'votes';
     return 'home';
   };
@@ -326,6 +329,31 @@ function App() {
     setSuccess(null);
     setError(null);
   }, [location.pathname]);
+
+  // Basic config guardrails (network + contract IDs)
+  useEffect(() => {
+    const { errors, warnings } = validateStaticConfig();
+    setConfigErrors(errors);
+    if (warnings.length) {
+      console.warn("[config] warnings", warnings);
+    }
+  }, []);
+
+  // Relayer readiness (best effort)
+  useEffect(() => {
+    const relayerUrl = import.meta?.env?.VITE_RELAYER_URL || "";
+    const authToken = import.meta?.env?.VITE_RELAYER_AUTH || "";
+    if (!relayerUrl) {
+      setRelayerStatus("Relayer URL not configured");
+      return;
+    }
+    checkRelayerReady(relayerUrl, authToken || undefined)
+      .then((res) => {
+        if (res.ok) setRelayerStatus("ready");
+        else setRelayerStatus(res.error || "relayer not ready");
+      })
+      .catch((err) => setRelayerStatus(err?.message || "relayer check failed"));
+  }, []);
 
   const handleNavigate = (view: 'home' | 'browse' | 'votes') => {
     if (view === 'home') navigate('/');
@@ -404,7 +432,7 @@ function App() {
         },
         {
           // Increase budget for this complex transaction (5 steps including Merkle tree ops)
-          fee: "10000000", // 10 XLM max fee
+          fee: 10_000_000, // 10 XLM max fee
         }
       );
 
@@ -449,6 +477,7 @@ function App() {
         onToggleTheme={toggleTheme}
         currentView={currentView}
         onNavigate={handleNavigate}
+        relayerStatus={relayerStatus}
       />
 
       {/* Main Content */}
@@ -589,17 +618,17 @@ function App() {
 
           {/* Public Votes Route */}
           <Route path="/public-votes/" element={
-            <PublicVotes publicKey={publicKey} isConnected={isConnected} isInitializing={isInitializing} />
+          <PublicVotes publicKey={publicKey} isConnected={isConnected} isInitializing={isInitializing} />
           } />
 
           {/* DAO Detail Route */}
           <Route path="/daos/:daoId" element={
-            <DAODetailPage publicKey={publicKey} isConnected={isConnected} isInitializing={isInitializing} />
+          <DAODetailPage publicKey={publicKey} isInitializing={isInitializing} />
           } />
 
           {/* Manage/View Members Route */}
           <Route path="/daos/:daoId/members" element={
-            <ManageMembersPage publicKey={publicKey} isConnected={isConnected} isInitializing={isInitializing} />
+          <ManageMembersPage publicKey={publicKey} isInitializing={isInitializing} />
           } />
         </Routes>
       </main>
@@ -617,3 +646,4 @@ function App() {
 }
 
 export default App;
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps */

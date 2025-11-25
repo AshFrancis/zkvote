@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "relayer": "node src/relayer.js",
-    "dev:relayer": "node --watch src/relayer.js"
+    "dev:relayer": "node --watch src/relayer.js",
+    "test": "RELAYER_TEST_MODE=true node --test"
   },
   "keywords": [
     "stellar",
@@ -25,5 +26,8 @@
     "express-rate-limit": "^7.1.5",
     "helmet": "^7.1.0",
     "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "supertest": "^7.1.4"
   }
 }

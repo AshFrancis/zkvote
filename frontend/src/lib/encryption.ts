@@ -241,3 +241,4 @@ export function encryptAlias(alias: string, encryptionKey: Uint8Array): string {
 export function decryptAlias(encryptedAlias: string, encryptionKey: Uint8Array): string | null {
   return decryptWithKey(encryptedAlias, encryptionKey);
 }
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */

@@ -12,11 +12,11 @@ fn test_poseidon_direct_hash() {
     // Expected from circomlib: 0x1914879b2a4e7f9555f3eb55837243cefb1366a692794a7e5b5b3181fb14b49b
 
     let env = Env::default();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     // Create input values as U256
-    let input1 = U256::from_u32(&env, 12345);
-    let input2 = U256::from_u32(&env, 67890);
+    let _input1 = U256::from_u32(&env, 12345);
+    let _input2 = U256::from_u32(&env, 67890);
 
     println!("Input 1: 12345");
     println!("Input 2: 67890");
@@ -27,12 +27,11 @@ fn test_poseidon_direct_hash() {
 
     // Expected output from circomlib
     let expected_bytes: [u8; 32] = [
-        0x19, 0x14, 0x87, 0x9b, 0x2a, 0x4e, 0x7f, 0x95,
-        0x55, 0xf3, 0xeb, 0x55, 0x83, 0x72, 0x43, 0xce,
-        0xfb, 0x13, 0x66, 0xa6, 0x92, 0x79, 0x4a, 0x7e,
-        0x5b, 0x5b, 0x31, 0x81, 0xfb, 0x14, 0xb4, 0x9b,
+        0x19, 0x14, 0x87, 0x9b, 0x2a, 0x4e, 0x7f, 0x95, 0x55, 0xf3, 0xeb, 0x55, 0x83, 0x72, 0x43,
+        0xce, 0xfb, 0x13, 0x66, 0xa6, 0x92, 0x79, 0x4a, 0x7e, 0x5b, 0x5b, 0x31, 0x81, 0xfb, 0x14,
+        0xb4, 0x9b,
     ];
-    let expected = U256::from_be_bytes(&env, &Bytes::from_array(&env, &expected_bytes));
+    let _expected = U256::from_be_bytes(&env, &Bytes::from_array(&env, &expected_bytes));
 
     print!("Expected (circomlib): 0x");
     for byte in expected_bytes {
@@ -53,9 +52,7 @@ fn test_empty_tree_root() {
 
     // Import contracts
     mod dao_registry {
-        soroban_sdk::contractimport!(
-            file = "../../target/wasm32v1-none/release/dao_registry.wasm"
-        );
+        soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/dao_registry.wasm");
     }
 
     mod membership_sbt {
@@ -71,12 +68,11 @@ fn test_empty_tree_root() {
     }
 
     use dao_registry::Client as RegistryClient;
-    use membership_sbt::Client as SbtClient;
     use membership_tree::Client as TreeClient;
 
     let env = Env::default();
     env.mock_all_auths();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     // Deploy contracts
     let registry_id = env.register(dao_registry::WASM, ());
@@ -89,11 +85,8 @@ fn test_empty_tree_root() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Empty Tree Test"),
-        &admin,
-        &false,
-    );
+    let dao_id =
+        registry_client.create_dao(&String::from_str(&env, "Empty Tree Test"), &admin, &false);
 
     // Initialize empty tree with depth 20
     tree_client.init_tree(&dao_id, &18, &admin);

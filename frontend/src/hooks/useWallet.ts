@@ -8,6 +8,7 @@ import {
   AlbedoModule,
 } from "@creit.tech/stellar-wallets-kit";
 import type { ISupportedWallet } from "@creit.tech/stellar-wallets-kit";
+import { NETWORK_CONFIG } from "../config/contracts";
 
 export interface WalletState {
   publicKey: string | null;
@@ -17,6 +18,14 @@ export interface WalletState {
 }
 
 let globalKit: StellarWalletsKit | null = null;
+
+const inferWalletNetwork = (passphrase: string): WalletNetwork | null => {
+  if (passphrase === "Public Global Stellar Network ; September 2015") return WalletNetwork.PUBLIC;
+  if (passphrase === "Test SDF Network ; September 2015") return WalletNetwork.TESTNET;
+  if (passphrase === "Test SDF Future Network ; October 2022") return WalletNetwork.FUTURENET;
+  // Unknown/custom network (e.g., local sandbox)
+  return null;
+};
 
 export function useWallet() {
   const [wallet, setWallet] = useState<WalletState>({
@@ -29,8 +38,16 @@ export function useWallet() {
   useEffect(() => {
     // Initialize kit only once
     if (!globalKit) {
+      const inferredNetwork = inferWalletNetwork(NETWORK_CONFIG.networkPassphrase);
+      if (!inferredNetwork) {
+        console.warn(
+          "[wallet] Using FUTURENET as fallback; update WalletNetwork mapping if using a custom passphrase",
+          NETWORK_CONFIG.networkPassphrase
+        );
+      }
+
       globalKit = new StellarWalletsKit({
-        network: WalletNetwork.FUTURENET,
+        network: inferredNetwork ?? WalletNetwork.FUTURENET,
         selectedWalletId: FREIGHTER_ID,
         modules: [
           new FreighterModule(),
@@ -130,3 +147,4 @@ export function useWallet() {
     disconnect,
   };
 }
+/* eslint-disable react-hooks/set-state-in-effect, @typescript-eslint/no-unused-vars */

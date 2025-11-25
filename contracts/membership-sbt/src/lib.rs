@@ -1,18 +1,31 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Env, IntoVal, Symbol,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
+    Env, IntoVal, Symbol,
 };
 
 const REGISTRY: Symbol = symbol_short!("registry");
+const VERSION: u32 = 1;
+const VERSION_KEY: Symbol = symbol_short!("ver");
+
+#[contracterror]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum SbtError {
+    NotDaoAdmin = 1,
+    AlreadyMinted = 2,
+    NotMember = 3,
+    NotOpenMembership = 4,
+    AlreadyInitialized = 5,
+}
 
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
-    Member(u64, Address),     // (dao_id, address)
-    Alias(u64, Address),      // (dao_id, address) -> encrypted alias
-    Revoked(u64, Address),    // (dao_id, address) -> bool (revocation flag)
-    MemberCount(u64),         // dao_id -> total member count
-    MemberAtIndex(u64, u64),  // (dao_id, index) -> Address
+    Member(u64, Address),    // (dao_id, address)
+    Alias(u64, Address),     // (dao_id, address) -> encrypted alias
+    Revoked(u64, Address),   // (dao_id, address) -> bool (revocation flag)
+    MemberCount(u64),        // dao_id -> total member count
+    MemberAtIndex(u64, u64), // (dao_id, index) -> Address
 }
 
 // Typed Events
@@ -40,6 +53,13 @@ pub struct SbtLeaveEvent {
     pub member: Address,
 }
 
+#[soroban_sdk::contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContractUpgraded {
+    pub from: u32,
+    pub to: u32,
+}
+
 #[contract]
 pub struct MembershipSbt;
 
@@ -47,7 +67,24 @@ pub struct MembershipSbt;
 impl MembershipSbt {
     /// Constructor: Initialize contract with DAO Registry address
     pub fn __constructor(env: Env, registry: Address) {
+        if env.storage().instance().has(&VERSION_KEY) {
+            panic_with_error!(&env, SbtError::AlreadyInitialized);
+        }
+        env.storage().instance().set(&VERSION_KEY, &VERSION);
+        ContractUpgraded {
+            from: 0,
+            to: VERSION,
+        }
+        .publish(&env);
+
         env.storage().instance().set(&REGISTRY, &registry);
+    }
+
+    fn registry_addr(env: &Env) -> Address {
+        env.storage()
+            .instance()
+            .get(&REGISTRY)
+            .unwrap_or_else(|| panic_with_error!(env, SbtError::NotDaoAdmin))
     }
 
     /// Helper: Add member to enumeration list
@@ -60,19 +97,27 @@ impl MembershipSbt {
         env.storage().persistent().set(&index_key, member);
 
         // Increment count
-        env.storage().persistent().set(&count_key, &(current_count + 1));
+        env.storage()
+            .persistent()
+            .set(&count_key, &(current_count + 1));
     }
 
     /// Mint SBT to address for a specific DAO
     /// Only DAO admin can mint (verified via registry)
     /// Optionally stores an encrypted alias for the member
     /// Can re-mint to previously revoked members
-    pub fn mint(env: Env, dao_id: u64, to: Address, admin: Address, encrypted_alias: Option<soroban_sdk::String>) {
+    pub fn mint(
+        env: Env,
+        dao_id: u64,
+        to: Address,
+        admin: Address,
+        encrypted_alias: Option<soroban_sdk::String>,
+    ) {
         // Verify admin authorization
         admin.require_auth();
 
         // Verify this admin owns the DAO (cross-contract call to registry)
-        let registry: Address = env.storage().instance().get(&REGISTRY).unwrap();
+        let registry: Address = Self::registry_addr(&env);
         let dao_admin: Address = env.invoke_contract(
             &registry,
             &symbol_short!("get_admin"),
@@ -80,12 +125,12 @@ impl MembershipSbt {
         );
 
         if dao_admin != admin {
-            panic!("not DAO admin");
+            panic_with_error!(&env, SbtError::NotDaoAdmin);
         }
 
         // Check if already has active SBT (not revoked)
         if Self::has(env.clone(), dao_id, to.clone()) {
-            panic!("already minted");
+            panic_with_error!(&env, SbtError::AlreadyMinted);
         }
 
         let member_key = DataKey::Member(dao_id, to.clone());
@@ -122,7 +167,7 @@ impl MembershipSbt {
     pub fn mint_from_registry(env: Env, dao_id: u64, to: Address) {
         // Check not already minted
         if Self::has(env.clone(), dao_id, to.clone()) {
-            panic!("already minted");
+            panic_with_error!(&env, SbtError::AlreadyMinted);
         }
 
         let key = DataKey::Member(dao_id, to.clone());
@@ -141,14 +186,21 @@ impl MembershipSbt {
 
         // Must have SBT AND not be revoked
         let has_sbt = env.storage().persistent().get(&member_key).unwrap_or(false);
-        let is_revoked = env.storage().persistent().get(&revoked_key).unwrap_or(false);
+        let is_revoked = env
+            .storage()
+            .persistent()
+            .get(&revoked_key)
+            .unwrap_or(false);
 
         has_sbt && !is_revoked
     }
 
     /// Get registry address
     pub fn registry(env: Env) -> Address {
-        env.storage().instance().get(&REGISTRY).unwrap()
+        env.storage()
+            .instance()
+            .get(&REGISTRY)
+            .unwrap_or_else(|| panic_with_error!(&env, SbtError::NotDaoAdmin))
     }
 
     /// Get encrypted alias for a member (if set)
@@ -164,7 +216,7 @@ impl MembershipSbt {
         admin.require_auth();
 
         // Verify this admin owns the DAO (cross-contract call to registry)
-        let registry: Address = env.storage().instance().get(&REGISTRY).unwrap();
+        let registry: Address = Self::registry_addr(&env);
         let dao_admin: Address = env.invoke_contract(
             &registry,
             &symbol_short!("get_admin"),
@@ -172,13 +224,13 @@ impl MembershipSbt {
         );
 
         if dao_admin != admin {
-            panic!("not DAO admin");
+            panic_with_error!(&env, SbtError::NotDaoAdmin);
         }
 
         // Member must exist
         let member_key = DataKey::Member(dao_id, member.clone());
         if !env.storage().persistent().has(&member_key) {
-            panic!("not a member");
+            panic_with_error!(&env, SbtError::NotMember);
         }
 
         // Set revoked flag
@@ -197,7 +249,7 @@ impl MembershipSbt {
         // Member must exist
         let member_key = DataKey::Member(dao_id, member.clone());
         if !env.storage().persistent().has(&member_key) {
-            panic!("not a member");
+            panic_with_error!(&env, SbtError::NotMember);
         }
 
         // Set revoked flag
@@ -209,12 +261,17 @@ impl MembershipSbt {
 
     /// Self-join a DAO with open membership
     /// Allows users to mint their own SBT if the DAO allows open membership
-    pub fn self_join(env: Env, dao_id: u64, member: Address, encrypted_alias: Option<soroban_sdk::String>) {
+    pub fn self_join(
+        env: Env,
+        dao_id: u64,
+        member: Address,
+        encrypted_alias: Option<soroban_sdk::String>,
+    ) {
         // Member must authorize
         member.require_auth();
 
         // Check with registry if this DAO has open membership
-        let registry: Address = env.storage().instance().get(&REGISTRY).unwrap();
+        let registry: Address = Self::registry_addr(&env);
         let membership_open: bool = env.invoke_contract(
             &registry,
             &Symbol::new(&env, "is_membership_open"),
@@ -222,7 +279,7 @@ impl MembershipSbt {
         );
 
         if !membership_open {
-            panic!("not open membership");
+            panic_with_error!(&env, SbtError::NotOpenMembership);
         }
 
         // Check if already has active SBT (not revoked)
@@ -278,18 +335,20 @@ impl MembershipSbt {
         );
 
         if dao_admin != admin {
-            panic!("not DAO admin");
+            panic_with_error!(&env, SbtError::NotDaoAdmin);
         }
 
         // Member must exist
         let member_key = DataKey::Member(dao_id, member.clone());
         if !env.storage().persistent().has(&member_key) {
-            panic!("not a member");
+            panic_with_error!(&env, SbtError::NotMember);
         }
 
         // Update alias
         let alias_key = DataKey::Alias(dao_id, member);
-        env.storage().persistent().set(&alias_key, &new_encrypted_alias);
+        env.storage()
+            .persistent()
+            .set(&alias_key, &new_encrypted_alias);
     }
 
     /// Get total member count for a DAO
@@ -306,7 +365,12 @@ impl MembershipSbt {
 
     /// Get a batch of members for a DAO
     /// Returns addresses from offset to offset+limit (or end of list)
-    pub fn get_members(env: Env, dao_id: u64, offset: u64, limit: u64) -> soroban_sdk::Vec<Address> {
+    pub fn get_members(
+        env: Env,
+        dao_id: u64,
+        offset: u64,
+        limit: u64,
+    ) -> soroban_sdk::Vec<Address> {
         let mut members = soroban_sdk::Vec::new(&env);
         let count = Self::get_member_count(env.clone(), dao_id);
 
@@ -320,6 +384,14 @@ impl MembershipSbt {
         }
 
         members
+    }
+
+    /// Contract version for upgrade tracking.
+    pub fn version(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&VERSION_KEY)
+            .unwrap_or(VERSION)
     }
 }
 

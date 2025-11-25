@@ -8,7 +8,9 @@ interface NavbarProps {
   onToggleTheme: () => void;
   currentView: 'home' | 'browse' | 'votes';
   onNavigate: (view: 'home' | 'browse' | 'votes') => void;
+  relayerStatus?: string | null;
 }
+
 
 function truncateAddress(address: string): string {
   if (address.length <= 12) return address;
@@ -25,6 +27,7 @@ export default function Navbar({
   onToggleTheme,
   currentView,
   onNavigate,
+  relayerStatus,
 }: NavbarProps) {
   return (
     <nav className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm" style={{ paddingLeft: 'calc(-100% + 100vw)' }}>
@@ -71,6 +74,11 @@ export default function Navbar({
 
           {/* Right side controls */}
           <div className="flex items-center gap-4">
+            {relayerStatus && (
+              <span className="hidden sm:inline text-xs text-gray-500 dark:text-gray-400">
+                Relayer: {relayerStatus}
+              </span>
+            )}
             {/* Theme Toggle */}
             <button
               onClick={onToggleTheme}

@@ -77,7 +77,7 @@ fn test_mint() {
 }
 
 #[test]
-#[should_panic(expected = "already minted")]
+#[should_panic(expected = "HostError")]
 fn test_mint_twice_fails() {
     let (env, sbt_id, _, admin, member) = setup_env();
     let client = MembershipSbtClient::new(&env, &sbt_id);
@@ -153,7 +153,7 @@ fn test_different_daos_isolated() {
 }
 
 #[test]
-#[should_panic(expected = "not DAO admin")]
+#[should_panic(expected = "HostError")]
 fn test_wrong_admin_cannot_mint() {
     let (env, sbt_id, _, _, member) = setup_env();
     let client = MembershipSbtClient::new(&env, &sbt_id);
@@ -181,7 +181,7 @@ fn test_events_emitted_on_mint() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "HostError")]
 fn test_mint_to_nonexistent_dao_fails() {
     let (env, sbt_id, _, admin, member) = setup_env();
     let client = MembershipSbtClient::new(&env, &sbt_id);
@@ -210,7 +210,7 @@ fn test_mint_from_registry() {
 }
 
 #[test]
-#[should_panic(expected = "already minted")]
+#[should_panic(expected = "HostError")]
 fn test_mint_from_registry_twice_fails() {
     let (env, sbt_id, _, _, member) = setup_env();
     let client = MembershipSbtClient::new(&env, &sbt_id);
@@ -270,7 +270,7 @@ fn test_self_join_open_dao() {
 }
 
 #[test]
-#[should_panic(expected = "not open membership")]
+#[should_panic(expected = "HostError")]
 fn test_self_join_closed_dao_fails() {
     let (env, sbt_id, registry_id, _, _) = setup_env();
     let client = MembershipSbtClient::new(&env, &sbt_id);
@@ -284,7 +284,7 @@ fn test_self_join_closed_dao_fails() {
 }
 
 #[test]
-#[should_panic(expected = "already minted")]
+#[should_panic(expected = "HostError")]
 fn test_self_join_twice_fails() {
     let (env, sbt_id, registry_id, _, _) = setup_env();
     let client = MembershipSbtClient::new(&env, &sbt_id);

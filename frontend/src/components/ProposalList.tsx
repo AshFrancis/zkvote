@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 import { initializeContractClients } from "../lib/contracts";
-import { getReadOnlyDaoRegistry } from "../lib/readOnlyContracts";
+import { getReadOnlyVoting } from "../lib/readOnlyContracts";
 import { calculateNullifier } from "../lib/zkproof";
 import ProposalCard from "./ProposalCard";
+import { getZKCredentials } from "../lib/zk";
 
 interface ProposalListProps {
   publicKey: string | null;
@@ -23,6 +24,7 @@ interface Proposal {
   eligibleRoot: bigint; // Snapshot of Merkle root when proposal was created
   voteMode: "Fixed" | "Trailing"; // Vote mode: Fixed (snapshot) or Trailing (dynamic)
   endTime: number; // Unix timestamp in seconds
+  vkVersion?: number | null;
 }
 
 export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkSet, isInitializing = false }: ProposalListProps) {
@@ -107,11 +109,10 @@ export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkS
 
   const loadProposal = async (proposalId: number): Promise<Proposal | null> => {
     try {
-      // Use read-only client if wallet not connected
-      const clients = publicKey ? initializeContractClients(publicKey) : { voting: getReadOnlyDaoRegistry() };
+      const votingClient: any = publicKey ? initializeContractClients(publicKey).voting : getReadOnlyVoting();
 
       // Get proposal info
-      const proposalResult = await clients.voting.get_proposal({
+      const proposalResult = await votingClient.get_proposal({
         dao_id: BigInt(daoId),
         proposal_id: BigInt(proposalId),
       });
@@ -123,11 +124,10 @@ export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkS
       let hasVoted = false;
       if (publicKey) {
         try {
-          const registrationKey = `voting_registration_${daoId}_${publicKey}`;
-          const registrationDataStr = localStorage.getItem(registrationKey);
+          const cached = getZKCredentials(daoId, publicKey);
 
-          if (registrationDataStr) {
-            const { secret } = JSON.parse(registrationDataStr);
+          if (cached) {
+            const { secret } = cached;
             const nullifier = await calculateNullifier(
               secret,
               daoId.toString(),
@@ -135,7 +135,7 @@ export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkS
             );
 
             // Check if this nullifier has been used
-            const nullifierUsedResult = await clients.voting.is_nullifier_used({
+            const nullifierUsedResult = await votingClient.is_nullifier_used({
               dao_id: BigInt(daoId),
               proposal_id: BigInt(proposalId),
               nullifier: BigInt(nullifier),
@@ -157,6 +157,7 @@ export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkS
         eligibleRoot: proposal.eligible_root, // Pass through the snapshot root
         voteMode: proposal.vote_mode.tag as "Fixed" | "Trailing", // Extract vote mode from enum
         endTime: Number(proposal.end_time), // Unix timestamp in seconds
+        vkVersion: (proposal as any).vk_version !== undefined ? Number((proposal as any).vk_version) : null,
       };
     } catch (err) {
       return null;
@@ -196,3 +197,4 @@ export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkS
     </div>
   );
 }
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps */

@@ -6,31 +6,25 @@
 //
 // These tests use REAL Groth16 proof data (BE-encoded) for accurate BN254 verification.
 
-use soroban_sdk::{testutils::Address as _, Address, Bytes, BytesN, Env, String, U256, Vec as SdkVec};
+use soroban_sdk::{
+    testutils::Address as _, Address, Bytes, BytesN, Env, String, Vec as SdkVec, U256,
+};
 
 // Import all contract clients
 mod dao_registry {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/dao_registry.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/dao_registry.wasm");
 }
 
 mod membership_sbt {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/membership_sbt.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_sbt.wasm");
 }
 
 mod membership_tree {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/membership_tree.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_tree.wasm");
 }
 
 mod voting {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/voting.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/voting.wasm");
 }
 
 use dao_registry::Client as RegistryClient;
@@ -111,7 +105,8 @@ fn get_real_proof(env: &Env) -> voting::Proof {
 // nullifier = 5760508796108392755529358167294721063592787938597807569861628631651201858128
 // root = 17138981085726982929815047770222948937180916992196016628536485002859509881328
 // (depth 18, commitment at index 0)
-const REAL_COMMITMENT_HEX: &str = "2536d01521137bf7b39e3fd26c1376f456ce46a45993a5d7c3c158a450fd7329";
+const REAL_COMMITMENT_HEX: &str =
+    "2536d01521137bf7b39e3fd26c1376f456ce46a45993a5d7c3c158a450fd7329";
 const REAL_NULLIFIER_HEX: &str = "0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a50";
 
 // Helper function to create BN254 G1 generator point (1, 2) - for mock proofs in failure tests
@@ -128,21 +123,18 @@ fn bn254_g1_generator(env: &Env) -> soroban_sdk::BytesN<64> {
 fn bn254_g2_generator(env: &Env) -> soroban_sdk::BytesN<128> {
     let bytes: [u8; 128] = [
         // x1 (imag) - 32 bytes
-        0x18, 0x00, 0x50, 0x6a, 0x06, 0x12, 0x86, 0xeb, 0x6a, 0x84, 0xa5, 0x73, 0x0b, 0x8f,
-        0x10, 0x29, 0x3e, 0x29, 0x81, 0x6c, 0xd1, 0x91, 0x3d, 0x53, 0x38, 0xf7, 0x15, 0xde,
-        0x3e, 0x98, 0xf9, 0xad,
-        // x2 (real) - 32 bytes
-        0x19, 0x83, 0x90, 0x42, 0x11, 0xa5, 0x3f, 0x6e, 0x0b, 0x08, 0x53, 0xa9, 0x0a, 0x00,
-        0xef, 0xbf, 0xf1, 0x70, 0x0c, 0x7b, 0x1d, 0xc0, 0x06, 0x32, 0x4d, 0x85, 0x9d, 0x75,
-        0xe3, 0xca, 0xa5, 0xa2,
-        // y1 (imag) - 32 bytes
-        0x12, 0xc8, 0x5e, 0xa5, 0xdb, 0x8c, 0x6d, 0xeb, 0x4a, 0xab, 0x71, 0x8e, 0x80, 0x6a,
-        0x51, 0xa5, 0x66, 0x08, 0x21, 0x4c, 0x3f, 0x62, 0x8b, 0x96, 0x2c, 0xf1, 0x91, 0xea,
-        0xcd, 0xc8, 0x0e, 0x7a,
-        // y2 (real) - 32 bytes
-        0x09, 0x0d, 0x97, 0xc0, 0x9c, 0xe1, 0x48, 0x60, 0x63, 0xb3, 0x59, 0xf3, 0xdd, 0x89,
-        0xb7, 0xc4, 0x3c, 0x5f, 0x18, 0x95, 0x8f, 0xb3, 0xe6, 0xb9, 0x6d, 0xb5, 0x5e, 0x19,
-        0xa3, 0xb7, 0xc0, 0xfb,
+        0x18, 0x00, 0x50, 0x6a, 0x06, 0x12, 0x86, 0xeb, 0x6a, 0x84, 0xa5, 0x73, 0x0b, 0x8f, 0x10,
+        0x29, 0x3e, 0x29, 0x81, 0x6c, 0xd1, 0x91, 0x3d, 0x53, 0x38, 0xf7, 0x15, 0xde, 0x3e, 0x98,
+        0xf9, 0xad, // x2 (real) - 32 bytes
+        0x19, 0x83, 0x90, 0x42, 0x11, 0xa5, 0x3f, 0x6e, 0x0b, 0x08, 0x53, 0xa9, 0x0a, 0x00, 0xef,
+        0xbf, 0xf1, 0x70, 0x0c, 0x7b, 0x1d, 0xc0, 0x06, 0x32, 0x4d, 0x85, 0x9d, 0x75, 0xe3, 0xca,
+        0xa5, 0xa2, // y1 (imag) - 32 bytes
+        0x12, 0xc8, 0x5e, 0xa5, 0xdb, 0x8c, 0x6d, 0xeb, 0x4a, 0xab, 0x71, 0x8e, 0x80, 0x6a, 0x51,
+        0xa5, 0x66, 0x08, 0x21, 0x4c, 0x3f, 0x62, 0x8b, 0x96, 0x2c, 0xf1, 0x91, 0xea, 0xcd, 0xc8,
+        0x0e, 0x7a, // y2 (real) - 32 bytes
+        0x09, 0x0d, 0x97, 0xc0, 0x9c, 0xe1, 0x48, 0x60, 0x63, 0xb3, 0x59, 0xf3, 0xdd, 0x89, 0xb7,
+        0xc4, 0x3c, 0x5f, 0x18, 0x95, 0x8f, 0xb3, 0xe6, 0xb9, 0x6d, 0xb5, 0x5e, 0x19, 0xa3, 0xb7,
+        0xc0, 0xfb,
     ];
     soroban_sdk::BytesN::from_array(env, &bytes)
 }
@@ -196,11 +188,7 @@ fn test_fixed_mode_late_joiner_cannot_vote() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Test DAO"),
-        &admin,
-        &false,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -237,7 +225,15 @@ fn test_fixed_mode_late_joiner_cannot_vote() {
     let proof2 = create_mock_proof(&env);
 
     // This should panic with "root must match proposal eligible root"
-    voting_client.vote(&dao_id, &proposal_id, &true, &nullifier2, &new_root, &commitment2, &proof2);
+    voting_client.vote(
+        &dao_id,
+        &proposal_id,
+        &true,
+        &nullifier2,
+        &new_root,
+        &commitment2,
+        &proof2,
+    );
 }
 
 // Test: Trailing mode - late joiner CAN vote (root history allows newer roots)
@@ -256,11 +252,7 @@ fn test_trailing_mode_late_joiner_can_vote() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO (first DAO will have dao_id = 1, matching the proof)
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Test DAO"),
-        &admin,
-        &false,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
     assert_eq!(dao_id, 1, "First DAO must have ID 1 to match proof");
 
     // Initialize tree with depth 18 (matching the proof)
@@ -288,7 +280,10 @@ fn test_trailing_mode_late_joiner_can_vote() {
         &member1,
         &voting::VoteMode::Trailing, // Trailing mode
     );
-    assert_eq!(proposal_id, 1, "First proposal must have ID 1 to match proof");
+    assert_eq!(
+        proposal_id, 1,
+        "First proposal must have ID 1 to match proof"
+    );
 
     // Member 2 joins AFTER proposal creation (changes the root)
     let member2 = Address::generate(&env);
@@ -336,11 +331,7 @@ fn test_trailing_mode_removed_member_cannot_vote_on_new_proposal() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Test DAO"),
-        &admin,
-        &false,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
 
     // Initialize tree and set VK (mock is fine since we fail before proof verification)
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -379,7 +370,15 @@ fn test_trailing_mode_removed_member_cannot_vote_on_new_proposal() {
     let proof1 = create_mock_proof(&env);
 
     // This should panic with "commitment revoked at proposal creation"
-    voting_client.vote(&dao_id, &proposal_id, &true, &nullifier1, &old_root, &commitment1, &proof1);
+    voting_client.vote(
+        &dao_id,
+        &proposal_id,
+        &true,
+        &nullifier1,
+        &old_root,
+        &commitment1,
+        &proof1,
+    );
 }
 
 // Test: Trailing mode - removed member CANNOT vote even on OLD proposal
@@ -401,11 +400,7 @@ fn test_trailing_mode_removed_member_cannot_vote_on_old_proposal() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(
-        &String::from_str(&env, "Test DAO"),
-        &admin,
-        &false,
-    );
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
 
     // Initialize tree and set VK (mock is fine since we fail before proof verification)
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -439,5 +434,13 @@ fn test_trailing_mode_removed_member_cannot_vote_on_old_proposal() {
     let proof1 = create_mock_proof(&env);
 
     // This should panic with "commitment revoked"
-    voting_client.vote(&dao_id, &proposal_id, &true, &nullifier1, &old_root, &commitment1, &proof1);
+    voting_client.vote(
+        &dao_id,
+        &proposal_id,
+        &true,
+        &nullifier1,
+        &old_root,
+        &commitment1,
+        &proof1,
+    );
 }

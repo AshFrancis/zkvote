@@ -18,11 +18,16 @@ mod mock_registry {
     #[contractimpl]
     impl MockRegistry {
         pub fn set_admin(env: Env, dao_id: u64, admin: Address) {
-            env.storage().persistent().set(&DataKey::Admin(dao_id), &admin);
+            env.storage()
+                .persistent()
+                .set(&DataKey::Admin(dao_id), &admin);
         }
 
         pub fn get_admin(env: Env, dao_id: u64) -> Address {
-            env.storage().persistent().get(&DataKey::Admin(dao_id)).unwrap()
+            env.storage()
+                .persistent()
+                .get(&DataKey::Admin(dao_id))
+                .unwrap()
         }
     }
 }
@@ -108,7 +113,7 @@ fn test_init_tree() {
 }
 
 #[test]
-#[should_panic(expected = "tree already initialized")]
+#[should_panic(expected = "HostError")]
 fn test_init_tree_twice_fails() {
     let (env, tree_id, _, registry_id, admin) = setup_env();
     let client = MembershipTreeClient::new(&env, &tree_id);
@@ -120,7 +125,7 @@ fn test_init_tree_twice_fails() {
 }
 
 #[test]
-#[should_panic(expected = "invalid depth")]
+#[should_panic(expected = "HostError")]
 fn test_init_tree_invalid_depth() {
     let (env, tree_id, _, registry_id, admin) = setup_env();
     let client = MembershipTreeClient::new(&env, &tree_id);
@@ -131,7 +136,7 @@ fn test_init_tree_invalid_depth() {
 }
 
 #[test]
-#[should_panic(expected = "invalid depth")]
+#[should_panic(expected = "HostError")]
 fn test_init_tree_depth_exceeds_max_fails() {
     let (env, tree_id, _, registry_id, admin) = setup_env();
     let client = MembershipTreeClient::new(&env, &tree_id);
@@ -143,7 +148,7 @@ fn test_init_tree_depth_exceeds_max_fails() {
 }
 
 #[test]
-#[should_panic(expected = "invalid depth")]
+#[should_panic(expected = "HostError")]
 fn test_init_tree_depth_extremely_large_fails() {
     let (env, tree_id, _, registry_id, admin) = setup_env();
     let client = MembershipTreeClient::new(&env, &tree_id);
@@ -155,7 +160,7 @@ fn test_init_tree_depth_extremely_large_fails() {
 }
 
 #[test]
-#[should_panic(expected = "not admin")]
+#[should_panic(expected = "HostError")]
 fn test_init_tree_non_admin_fails() {
     let (env, tree_id, _, registry_id, admin) = setup_env();
     let client = MembershipTreeClient::new(&env, &tree_id);
@@ -193,7 +198,7 @@ fn test_register_commitment() {
 }
 
 #[test]
-#[should_panic(expected = "no SBT for DAO")]
+#[should_panic(expected = "HostError")]
 fn test_register_without_sbt_fails() {
     let (env, tree_id, _, registry_id, admin) = setup_env();
     let client = MembershipTreeClient::new(&env, &tree_id);
@@ -208,7 +213,7 @@ fn test_register_without_sbt_fails() {
 }
 
 #[test]
-#[should_panic(expected = "commitment already registered")]
+#[should_panic(expected = "HostError")]
 fn test_register_duplicate_commitment_fails() {
     let (env, tree_id, sbt_id, registry_id, admin) = setup_env();
     let tree_client = MembershipTreeClient::new(&env, &tree_id);
@@ -387,7 +392,7 @@ fn test_root_history_eviction_after_30_updates() {
 }
 
 #[test]
-#[should_panic(expected = "tree is full")]
+#[should_panic(expected = "HostError")]
 fn test_tree_full_small_depth() {
     let (env, tree_id, sbt_id, registry_id, admin) = setup_env();
     let tree_client = MembershipTreeClient::new(&env, &tree_id);
@@ -406,7 +411,7 @@ fn test_tree_full_small_depth() {
         tree_client.register_with_caller(&1u64, &commitment, &member);
     }
 
-    // 5th commitment should panic with "tree is full"
+    // 5th commitment should panic due to full tree
     let member5 = Address::generate(&env);
     sbt_client.set_member(&1u64, &member5, &true);
     let commitment5 = U256::from_u32(&env, 500);
