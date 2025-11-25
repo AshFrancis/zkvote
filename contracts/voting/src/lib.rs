@@ -77,8 +77,9 @@ pub enum DataKey {
     Proposal(u64, u64),        // (dao_id, proposal_id) -> ProposalInfo
     ProposalCount(u64),        // dao_id -> count
     Nullifier(u64, u64, U256), // (dao_id, proposal_id, nullifier) -> bool
-    VotingKey(u64),            // dao_id -> VerificationKey
+    VotingKey(u64),            // dao_id -> latest VerificationKey
     VkVersion(u64),            // dao_id -> current VK version
+    VkByVersion(u64, u32),     // (dao_id, vk_version) -> VerificationKey
 }
 
 #[contracttype]
@@ -307,6 +308,9 @@ impl Voting {
 
         let key = DataKey::VotingKey(dao_id);
         env.storage().persistent().set(&key, &vk);
+        env.storage()
+            .persistent()
+            .set(&DataKey::VkByVersion(dao_id, new_version), &vk);
 
         VKSetEvent { dao_id }.publish(&env);
     }
@@ -618,24 +622,12 @@ impl Voting {
             }
         }
 
-        // Get verification key
-        let vk_key = DataKey::VotingKey(dao_id);
+        // Get verification key pinned to proposal version
         let vk: VerificationKey = env
             .storage()
             .persistent()
-            .get(&vk_key)
-            .unwrap_or_else(|| panic_with_error!(&env, VotingError::VkNotSet));
-
-        // Ensure VK version matches proposal snapshot
-        let version_key = DataKey::VkVersion(dao_id);
-        let current_version: u32 = env
-            .storage()
-            .persistent()
-            .get(&version_key)
-            .unwrap_or_else(|| panic_with_error!(&env, VotingError::VkNotSet));
-        if current_version != proposal.vk_version {
-            panic_with_error!(&env, VotingError::VkVersionMismatch);
-        }
+            .get(&DataKey::VkByVersion(dao_id, proposal.vk_version))
+            .unwrap_or_else(|| panic_with_error!(&env, VotingError::VkVersionMismatch));
 
         // Verify VK matches the snapshot taken at proposal creation
         // This prevents VK changes from invalidating in-flight votes

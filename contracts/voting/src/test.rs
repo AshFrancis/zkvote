@@ -771,8 +771,7 @@ fn test_bn254_modulus_constant_validation() {
 }
 
 #[test]
-#[should_panic(expected = "HostError")]
-fn test_vk_change_after_proposal_creation_fails() {
+fn test_vk_change_after_proposal_creation_resists_vk_change() {
     let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
     let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
@@ -820,7 +819,7 @@ fn test_vk_change_after_proposal_creation_fails() {
     ];
     voting_client.set_vk(&1u64, &vk2, &admin);
 
-    // Try to vote with proof - should fail because VK changed
+    // Try to vote with proof - should still succeed using stored versioned VK
     let proposal = voting_client.get_proposal(&1u64, &proposal_id);
     let nullifier = U256::from_u32(&env, 99999);
     let proof = create_dummy_proof(&env);
@@ -884,7 +883,11 @@ fn test_vk_version_mismatch_rejected() {
     ];
     voting_client.set_vk(&1u64, &vk2, &admin);
 
-    // Vote should fail due to vk_version mismatch
+    // Remove stored VK v1 to simulate missing history and ensure vote fails
+    env.as_contract(&voting_id, || {
+        env.storage().persistent().remove(&DataKey::VkByVersion(1, 1));
+    });
+
     let proposal = voting_client.get_proposal(&1u64, &proposal_id);
     let nullifier = U256::from_u32(&env, 99999);
     let proof = create_dummy_proof(&env);
