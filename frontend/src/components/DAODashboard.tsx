@@ -52,6 +52,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
   const [creatingProposal, setCreatingProposal] = useState(false);
   const [proposalKey, setProposalKey] = useState(0);
   const [voteMode, setVoteMode] = useState<"fixed" | "trailing">("fixed");
+  const [deadlineSeconds, setDeadlineSeconds] = useState<string>(String(7 * 24 * 60 * 60)); // Default: 7 days in seconds
 
   // Optimistically check registration from cache when publicKey changes
   useEffect(() => {
@@ -458,14 +459,28 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
       return;
     }
 
+    // Validate deadline
+    const seconds = parseFloat(deadlineSeconds);
+    if (isNaN(seconds) || seconds < 0) {
+      setError("Please enter a valid number of seconds (0 for no deadline)");
+      return;
+    }
+
     try {
       setCreatingProposal(true);
       setError(null);
 
       const clients = initializeContractClients(publicKey);
 
-      // Default end time: 1 week from now
-      const endTime = BigInt(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
+      // Calculate end time
+      let endTime: bigint;
+      if (seconds === 0) {
+        // No deadline
+        endTime = BigInt(0);
+      } else {
+        // Add seconds to current time
+        endTime = BigInt(Math.floor(Date.now() / 1000) + Math.floor(seconds));
+      }
 
       const tx = await clients.voting.create_proposal({
         dao_id: BigInt(daoId),
@@ -678,6 +693,91 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
                 </div>
               </label>
             </div>
+          </div>
+
+          {/* Deadline Selection */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Voting Deadline (seconds)
+            </label>
+            <input
+              type="number"
+              value={deadlineSeconds}
+              onChange={(e) => setDeadlineSeconds(e.target.value)}
+              placeholder="Enter seconds (0 for no deadline)"
+              min="0"
+              step="1"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <div className="mt-2 grid grid-cols-4 gap-2">
+              <button
+                type="button"
+                onClick={() => setDeadlineSeconds(String(86400))}
+                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                1 Day
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeadlineSeconds(String(3 * 86400))}
+                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                3 Days
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeadlineSeconds(String(5 * 86400))}
+                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                5 Days
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeadlineSeconds(String(7 * 86400))}
+                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                7 Days
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeadlineSeconds(String(10 * 86400))}
+                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                10 Days
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeadlineSeconds(String(30 * 86400))}
+                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                30 Days
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeadlineSeconds(String(90 * 86400))}
+                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                90 Days
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeadlineSeconds("0")}
+                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                No Deadline
+              </button>
+            </div>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              {(() => {
+                const seconds = parseFloat(deadlineSeconds);
+                if (isNaN(seconds)) return "Enter a valid number";
+                if (seconds === 0) return "Voting will remain open indefinitely";
+                if (seconds < 60) return `${seconds} second${seconds !== 1 ? "s" : ""}`;
+                if (seconds < 3600) return `${Math.floor(seconds / 60)} minute${Math.floor(seconds / 60) !== 1 ? "s" : ""}`;
+                if (seconds < 86400) return `${Math.floor(seconds / 3600)} hour${Math.floor(seconds / 3600) !== 1 ? "s" : ""}`;
+                return `${Math.floor(seconds / 86400)} day${Math.floor(seconds / 86400) !== 1 ? "s" : ""}`;
+              })()}
+            </p>
           </div>
 
           <div className="flex gap-2">

@@ -43,6 +43,24 @@ mod mock_tree {
                 .get(&key)
                 .unwrap_or(U256::from_u32(&env, 0))
         }
+
+        pub fn curr_idx(_env: Env, _dao_id: u64) -> u32 {
+            // Mock implementation: return index 0 for current root
+            // Real contract tracks root history, mock doesn't need to
+            0
+        }
+
+        pub fn revok_at(_env: Env, _dao_id: u64, _commitment: U256) -> Option<u64> {
+            // Mock implementation: return None (member never revoked)
+            // Real contract tracks revocation timestamps
+            None
+        }
+
+        pub fn reinst_at(_env: Env, _dao_id: u64, _commitment: U256) -> Option<u64> {
+            // Mock implementation: return None (member never reinstated)
+            // Real contract tracks reinstatement timestamps
+            None
+        }
     }
 }
 
@@ -327,7 +345,7 @@ fn test_vote_success() {
 }
 
 #[test]
-#[should_panic(expected = "already voted")]
+#[should_panic(expected = "this nullifier has already been used")]
 fn test_double_vote_fails() {
     let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
@@ -696,7 +714,7 @@ fn test_vk_change_after_proposal_creation_fails() {
         bytes[63] = 3; // Different y
         BytesN::from_array(&env, &bytes)
     };
-    vk2.ic = soroban_sdk::vec![&env, different_g1.clone(), different_g1.clone(), different_g1.clone(), different_g1.clone(), different_g1.clone(), different_g1];
+    vk2.ic = soroban_sdk::vec![&env, different_g1.clone(), different_g1.clone(), different_g1.clone(), different_g1.clone(), different_g1.clone(), different_g1.clone(), different_g1];
     voting_client.set_vk(&1u64, &vk2, &admin);
 
     // Try to vote with proof - should fail because VK changed
@@ -708,7 +726,7 @@ fn test_vk_change_after_proposal_creation_fails() {
 }
 
 #[test]
-#[should_panic(expected = "VK IC length must be exactly 6 for vote circuit")]
+#[should_panic(expected = "VK IC length must be exactly 7 for vote circuit")]
 fn test_set_vk_empty_ic_fails() {
     let (env, voting_id, _tree_id, _sbt_id, registry_id, _member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
@@ -730,12 +748,12 @@ fn test_set_vk_empty_ic_fails() {
         ic: soroban_sdk::vec![&env], // Empty!
     };
 
-    // Should panic - IC length must be exactly 6
+    // Should panic - IC length must be exactly 7
     voting_client.set_vk(&1u64, &invalid_vk, &admin);
 }
 
 #[test]
-#[should_panic(expected = "VK IC length must be exactly 6 for vote circuit")]
+#[should_panic(expected = "VK IC length must be exactly 7 for vote circuit")]
 fn test_set_vk_ic_too_large_fails() {
     let (env, voting_id, _tree_id, _sbt_id, registry_id, _member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
@@ -762,12 +780,12 @@ fn test_set_vk_ic_too_large_fails() {
         ic: ic_vec,
     };
 
-    // Should panic - first check catches IC length != 6
+    // Should panic - first check catches IC length != 7
     voting_client.set_vk(&1u64, &invalid_vk, &admin);
 }
 
 #[test]
-#[should_panic(expected = "VK IC length must be exactly 6 for vote circuit")]
+#[should_panic(expected = "VK IC length must be exactly 7 for vote circuit")]
 fn test_set_vk_ic_length_5_fails() {
     let (env, voting_id, _tree_id, _sbt_id, registry_id, _member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
@@ -776,7 +794,7 @@ fn test_set_vk_ic_length_5_fails() {
     let admin = Address::generate(&env);
     registry_client.set_admin(&1u64, &admin);
 
-    // Create VK with IC length = 5 (need exactly 6 for vote circuit)
+    // Create VK with IC length = 5 (need exactly 7 for vote circuit)
     let g1 = bn254_g1_generator(&env);
     let g2 = bn254_g2_generator(&env);
     let invalid_vk = VerificationKey {
@@ -787,12 +805,12 @@ fn test_set_vk_ic_length_5_fails() {
         ic: soroban_sdk::vec![&env, g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone()],
     };
 
-    // Should panic - need exactly 6 elements
+    // Should panic - need exactly 7 elements
     voting_client.set_vk(&1u64, &invalid_vk, &admin);
 }
 
 #[test]
-#[should_panic(expected = "VK IC length must be exactly 6 for vote circuit")]
+#[should_panic(expected = "VK IC length must be exactly 7 for vote circuit")]
 fn test_set_vk_ic_length_7_fails() {
     let (env, voting_id, _tree_id, _sbt_id, registry_id, _member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
@@ -801,7 +819,7 @@ fn test_set_vk_ic_length_7_fails() {
     let admin = Address::generate(&env);
     registry_client.set_admin(&1u64, &admin);
 
-    // Create VK with IC length = 7 (need exactly 6 for vote circuit)
+    // Create VK with IC length = 8 (need exactly 7 for vote circuit)
     let g1 = bn254_g1_generator(&env);
     let g2 = bn254_g2_generator(&env);
     let invalid_vk = VerificationKey {
@@ -809,10 +827,10 @@ fn test_set_vk_ic_length_7_fails() {
         beta: g2.clone(),
         gamma: g2.clone(),
         delta: g2,
-        ic: soroban_sdk::vec![&env, g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone()],
+        ic: soroban_sdk::vec![&env, g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone(), g1.clone()],
     };
 
-    // Should panic - need exactly 6 elements
+    // Should panic - need exactly 7 elements
     voting_client.set_vk(&1u64, &invalid_vk, &admin);
 }
 

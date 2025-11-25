@@ -22,6 +22,7 @@ interface Proposal {
   hasVoted: boolean;
   eligibleRoot: bigint; // Snapshot of Merkle root when proposal was created
   voteMode: "Fixed" | "Trailing"; // Vote mode: Fixed (snapshot) or Trailing (dynamic)
+  endTime: number; // Unix timestamp in seconds
 }
 
 export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkSet, isInitializing = false }: ProposalListProps) {
@@ -155,6 +156,7 @@ export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkS
         hasVoted,
         eligibleRoot: proposal.eligible_root, // Pass through the snapshot root
         voteMode: proposal.vote_mode.tag as "Fixed" | "Trailing", // Extract vote mode from enum
+        endTime: Number(proposal.end_time), // Unix timestamp in seconds
       };
     } catch (err) {
       return null;

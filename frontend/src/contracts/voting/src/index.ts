@@ -34,7 +34,7 @@ if (typeof window !== 'undefined') {
 export const networks = {
   futurenet: {
     networkPassphrase: "Test SDF Future Network ; October 2022",
-    contractId: "CBOSMQ2DH4H4VKLZJEPWXTBDODEO4O7QPUJQGHBEKSENRARWCABDQCV2",
+    contractId: "CDDJZIZVRYOHVDRWBFICTWMQPY4QJTWXO6AHAWSEZN5E3GURWWAS2ZCE",
   }
 } as const
 
@@ -44,12 +44,14 @@ export type VoteMode = {tag: "Fixed", values: void} | {tag: "Trailing", values: 
 
 
 export interface ProposalInfo {
+  created_at: u64;
   created_by: string;
   dao_id: u64;
   description: string;
   earliest_root_index: u32;
   eligible_root: u256;
   end_time: u64;
+  finalized: boolean;
   id: u64;
   no_votes: u64;
   vk_hash: Buffer;
@@ -154,7 +156,29 @@ export interface Client {
    * Construct and simulate a vote transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Submit a vote with ZK proof
    */
-  vote: ({dao_id, proposal_id, vote_choice, nullifier, root, proof}: {dao_id: u64, proposal_id: u64, vote_choice: boolean, nullifier: u256, root: u256, proof: Proof}, options?: {
+  vote: ({dao_id, proposal_id, vote_choice, nullifier, root, commitment, proof}: {dao_id: u64, proposal_id: u64, vote_choice: boolean, nullifier: u256, root: u256, commitment: u256, proof: Proof}, options?: {
+    /**
+     * The fee to pay for the transaction. Default: BASE_FEE
+     */
+    fee?: number;
+
+    /**
+     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
+     */
+    timeoutInSeconds?: number;
+
+    /**
+     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
+     */
+    simulate?: boolean;
+  }) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a finalize_proposal transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Finalize a proposal (callable by admin after end_time)
+   * Blocks further votes even if proof generation is slow
+   */
+  finalize_proposal: ({dao_id, proposal_id, admin}: {dao_id: u64, proposal_id: u64, admin: string}, options?: {
     /**
      * The fee to pay for the transaction. Default: BASE_FEE
      */
@@ -298,7 +322,7 @@ export class Client extends ContractClient {
     super(
       new ContractSpec([ "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAABAAAAAEAAAAAAAAACFByb3Bvc2FsAAAAAgAAAAYAAAAGAAAAAQAAAAAAAAANUHJvcG9zYWxDb3VudAAAAAAAAAEAAAAGAAAAAQAAAAAAAAAJTnVsbGlmaWVyAAAAAAAAAwAAAAYAAAAGAAAADAAAAAEAAAAAAAAACVZvdGluZ0tleQAAAAAAAAEAAAAG",
         "AAAAAgAAAAAAAAAAAAAACFZvdGVNb2RlAAAAAgAAAAAAAAAAAAAABUZpeGVkAAAAAAAAAAAAAAAAAAAIVHJhaWxpbmc=",
-        "AAAAAQAAAAAAAAAAAAAADFByb3Bvc2FsSW5mbwAAAAsAAAAAAAAACmNyZWF0ZWRfYnkAAAAAABMAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAALZGVzY3JpcHRpb24AAAAAEAAAAAAAAAATZWFybGllc3Rfcm9vdF9pbmRleAAAAAAEAAAAAAAAAA1lbGlnaWJsZV9yb290AAAAAAAADAAAAAAAAAAIZW5kX3RpbWUAAAAGAAAAAAAAAAJpZAAAAAAABgAAAAAAAAAIbm9fdm90ZXMAAAAGAAAAAAAAAAd2a19oYXNoAAAAA+4AAAAgAAAAAAAAAAl2b3RlX21vZGUAAAAAAAfQAAAACFZvdGVNb2RlAAAAAAAAAAl5ZXNfdm90ZXMAAAAAAAAG",
+        "AAAAAQAAAAAAAAAAAAAADFByb3Bvc2FsSW5mbwAAAA0AAAAAAAAACmNyZWF0ZWRfYXQAAAAAAAYAAAAAAAAACmNyZWF0ZWRfYnkAAAAAABMAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAALZGVzY3JpcHRpb24AAAAAEAAAAAAAAAATZWFybGllc3Rfcm9vdF9pbmRleAAAAAAEAAAAAAAAAA1lbGlnaWJsZV9yb290AAAAAAAADAAAAAAAAAAIZW5kX3RpbWUAAAAGAAAAAAAAAAlmaW5hbGl6ZWQAAAAAAAABAAAAAAAAAAJpZAAAAAAABgAAAAAAAAAIbm9fdm90ZXMAAAAGAAAAAAAAAAd2a19oYXNoAAAAA+4AAAAgAAAAAAAAAAl2b3RlX21vZGUAAAAAAAfQAAAACFZvdGVNb2RlAAAAAAAAAAl5ZXNfdm90ZXMAAAAAAAAG",
         "AAAAAQAAACJHcm90aDE2IFZlcmlmaWNhdGlvbiBLZXkgZm9yIEJOMjU0AAAAAAAAAAAAD1ZlcmlmaWNhdGlvbktleQAAAAAFAAAAAAAAAAVhbHBoYQAAAAAAA+4AAABAAAAAAAAAAARiZXRhAAAD7gAAAIAAAAAAAAAABWRlbHRhAAAAAAAD7gAAAIAAAAAAAAAABWdhbW1hAAAAAAAD7gAAAIAAAAAAAAAAAmljAAAAAAPqAAAD7gAAAEA=",
         "AAAAAQAAAA1Hcm90aDE2IFByb29mAAAAAAAAAAAAAAVQcm9vZgAAAAAAAAMAAAAAAAAAAWEAAAAAAAPuAAAAQAAAAAAAAAABYgAAAAAAA+4AAACAAAAAAAAAAAFjAAAAAAAD7gAAAEA=",
         "AAAABQAAAAAAAAAAAAAAClZLU2V0RXZlbnQAAAAAAAEAAAAMdmtfc2V0X2V2ZW50AAAAAQAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAQAAAAI=",
@@ -308,7 +332,8 @@ export class Client extends ContractClient {
         "AAAAAAAAACtTZXQgdmVyaWZpY2F0aW9uIGtleSBmb3IgYSBEQU8gKGFkbWluIG9ubHkpAAAAAAZzZXRfdmsAAAAAAAMAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAACdmsAAAAAB9AAAAAPVmVyaWZpY2F0aW9uS2V5AAAAAAAAAAAFYWRtaW4AAAAAAAATAAAAAA==",
         "AAAAAAAAANBTZXQgdmVyaWZpY2F0aW9uIGtleSBmcm9tIHJlZ2lzdHJ5IGR1cmluZyBEQU8gaW5pdGlhbGl6YXRpb24KVGhpcyBmdW5jdGlvbiBpcyBjYWxsZWQgYnkgdGhlIHJlZ2lzdHJ5IGNvbnRyYWN0IGR1cmluZyBjcmVhdGVfYW5kX2luaXRfZGFvCnRvIGF2b2lkIHJlLWVudHJhbmN5IGlzc3Vlcy4gVGhlIHJlZ2lzdHJ5IGlzIGEgdHJ1c3RlZCBzeXN0ZW0gY29udHJhY3QuAAAAFHNldF92a19mcm9tX3JlZ2lzdHJ5AAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAJ2awAAAAAH0AAAAA9WZXJpZmljYXRpb25LZXkAAAAAAA==",
         "AAAAAAAAALBDcmVhdGUgYSBuZXcgcHJvcG9zYWwgZm9yIGEgREFPClZvdGluZyBzdGFydHMgaW1tZWRpYXRlbHkgdXBvbiBjcmVhdGlvbiAoTWVya2xlIHJvb3Qgc25hcHNob3QgdGFrZW4gbm93KQplbmRfdGltZTogVW5peCB0aW1lc3RhbXAgZm9yIHdoZW4gdm90aW5nIGNsb3NlcyAobXVzdCBiZSBpbiB0aGUgZnV0dXJlKQAAAA9jcmVhdGVfcHJvcG9zYWwAAAAABQAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAtkZXNjcmlwdGlvbgAAAAAQAAAAAAAAAAhlbmRfdGltZQAAAAYAAAAAAAAAB2NyZWF0b3IAAAAAEwAAAAAAAAAJdm90ZV9tb2RlAAAAAAAH0AAAAAhWb3RlTW9kZQAAAAEAAAAG",
-        "AAAAAAAAABtTdWJtaXQgYSB2b3RlIHdpdGggWksgcHJvb2YAAAAABHZvdGUAAAAGAAAAAAAAAAZkYW9faWQAAAAAAAYAAAAAAAAAC3Byb3Bvc2FsX2lkAAAAAAYAAAAAAAAAC3ZvdGVfY2hvaWNlAAAAAAEAAAAAAAAACW51bGxpZmllcgAAAAAAAAwAAAAAAAAABHJvb3QAAAAMAAAAAAAAAAVwcm9vZgAAAAAAB9AAAAAFUHJvb2YAAAAAAAAA",
+        "AAAAAAAAABtTdWJtaXQgYSB2b3RlIHdpdGggWksgcHJvb2YAAAAABHZvdGUAAAAHAAAAAAAAAAZkYW9faWQAAAAAAAYAAAAAAAAAC3Byb3Bvc2FsX2lkAAAAAAYAAAAAAAAAC3ZvdGVfY2hvaWNlAAAAAAEAAAAAAAAACW51bGxpZmllcgAAAAAAAAwAAAAAAAAABHJvb3QAAAAMAAAAAAAAAApjb21taXRtZW50AAAAAAAMAAAAAAAAAAVwcm9vZgAAAAAAB9AAAAAFUHJvb2YAAAAAAAAA",
+        "AAAAAAAAAGxGaW5hbGl6ZSBhIHByb3Bvc2FsIChjYWxsYWJsZSBieSBhZG1pbiBhZnRlciBlbmRfdGltZSkKQmxvY2tzIGZ1cnRoZXIgdm90ZXMgZXZlbiBpZiBwcm9vZiBnZW5lcmF0aW9uIGlzIHNsb3cAAAARZmluYWxpemVfcHJvcG9zYWwAAAAAAAADAAAAAAAAAAZkYW9faWQAAAAAAAYAAAAAAAAAC3Byb3Bvc2FsX2lkAAAAAAYAAAAAAAAABWFkbWluAAAAAAAAEwAAAAA=",
         "AAAAAAAAABFHZXQgcHJvcG9zYWwgaW5mbwAAAAAAAAxnZXRfcHJvcG9zYWwAAAACAAAAAAAAAAZkYW9faWQAAAAAAAYAAAAAAAAAC3Byb3Bvc2FsX2lkAAAAAAYAAAABAAAH0AAAAAxQcm9wb3NhbEluZm8=",
         "AAAAAAAAABxHZXQgcHJvcG9zYWwgY291bnQgZm9yIGEgREFPAAAADnByb3Bvc2FsX2NvdW50AAAAAAABAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAABg==",
         "AAAAAAAAACBDaGVjayBpZiBudWxsaWZpZXIgaGFzIGJlZW4gdXNlZAAAABFpc19udWxsaWZpZXJfdXNlZAAAAAAAAAMAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAALcHJvcG9zYWxfaWQAAAAABgAAAAAAAAAJbnVsbGlmaWVyAAAAAAAADAAAAAEAAAAB",
@@ -322,6 +347,7 @@ export class Client extends ContractClient {
         set_vk_from_registry: this.txFromJSON<null>,
         create_proposal: this.txFromJSON<u64>,
         vote: this.txFromJSON<null>,
+        finalize_proposal: this.txFromJSON<null>,
         get_proposal: this.txFromJSON<ProposalInfo>,
         proposal_count: this.txFromJSON<u64>,
         is_nullifier_used: this.txFromJSON<boolean>,

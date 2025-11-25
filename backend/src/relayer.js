@@ -13,8 +13,11 @@ const app = express();
 app.use(helmet());
 
 // Security: CORS configuration
+const corsOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
+  : '*';
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || '*',  // In production, set to specific origin
+  origin: corsOrigins,  // In production, set to specific origin
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type'],
   maxAge: 86400  // 24 hours

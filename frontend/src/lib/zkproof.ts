@@ -42,6 +42,7 @@ export async function generateVoteProof(
       daoId: input.daoId,
       proposalId: input.proposalId,
       voteChoice: input.voteChoice,
+      commitment: input.commitment,
       // Private signals
       secret: input.secret,
       salt: input.salt,

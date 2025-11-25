@@ -5,6 +5,7 @@ members = [
     "contracts/membership-tree",
     "contracts/voting",
     "tests/integration",
+    "tests/p25-feature-check",
 ]
 resolver = "2"
 

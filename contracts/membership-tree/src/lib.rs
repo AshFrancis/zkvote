@@ -337,6 +337,99 @@ impl MembershipTree {
         .publish(&env);
     }
 
+    /// Self-register a commitment in a public DAO (requires SBT membership)
+    /// For public DAOs, anyone with an SBT can register their commitment
+    pub fn self_register(env: Env, dao_id: u64, commitment: U256, member: Address) {
+        member.require_auth();
+
+        // Get SBT contract and verify membership
+        let sbt_contract: Address = env.storage().instance().get(&SBT_CONTRACT).unwrap();
+        let has_sbt: bool = env.invoke_contract(
+            &sbt_contract,
+            &symbol_short!("has"),
+            soroban_sdk::vec![&env, dao_id.into_val(&env), member.clone().into_val(&env)],
+        );
+
+        if !has_sbt {
+            panic!("no SBT for DAO");
+        }
+
+        // Get registry from SBT contract
+        let registry: Address = env.invoke_contract(
+            &sbt_contract,
+            &symbol_short!("registry"),
+            soroban_sdk::vec![&env],
+        );
+
+        // Check if DAO has open membership
+        let membership_open: bool = env.invoke_contract(
+            &registry,
+            &Symbol::new(&env, "is_membership_open"),
+            soroban_sdk::vec![&env, dao_id.into_val(&env)],
+        );
+
+        if !membership_open {
+            panic!("not open membership DAO");
+        }
+
+        // Check tree is initialized
+        let depth_key = DataKey::TreeDepth(dao_id);
+        if !env.storage().persistent().has(&depth_key) {
+            panic!("tree not initialized");
+        }
+
+        // Check commitment not already registered
+        let leaf_key = DataKey::LeafIndex(dao_id, commitment.clone());
+        if env.storage().persistent().has(&leaf_key) {
+            panic!("commitment already registered");
+        }
+
+        // Check member hasn't already registered
+        let member_key = DataKey::MemberLeafIndex(dao_id, member.clone());
+        if env.storage().persistent().has(&member_key) {
+            panic!("member already registered");
+        }
+
+        // Get tree parameters
+        let depth: u32 = env.storage().persistent().get(&depth_key).unwrap();
+        let next_index: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::NextLeafIndex(dao_id))
+            .unwrap();
+
+        if next_index >= (1u32 << depth) {
+            panic!("tree is full");
+        }
+
+        // Insert leaf into tree
+        let (new_root, root_index) = Self::insert_leaf(&env, dao_id, commitment.clone(), next_index, depth);
+
+        // Update next index
+        env.storage()
+            .persistent()
+            .set(&DataKey::NextLeafIndex(dao_id), &(next_index + 1));
+
+        // Store leaf index for this commitment
+        env.storage().persistent().set(&leaf_key, &next_index);
+
+        // Store member -> index mapping
+        env.storage().persistent().set(&member_key, &next_index);
+
+        // Store leaf value
+        let leaf_value_key = DataKey::LeafValue(dao_id, next_index);
+        env.storage().persistent().set(&leaf_value_key, &commitment);
+
+        CommitEvent {
+            dao_id,
+            commitment,
+            index: next_index,
+            new_root,
+            root_index,
+        }
+        .publish(&env);
+    }
+
     /// Get current root for a DAO
     pub fn current_root(env: Env, dao_id: u64) -> U256 {
         let roots: Vec<U256> = env

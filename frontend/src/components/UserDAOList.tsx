@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getUserDaos } from '../lib/readOnlyContracts';
+import { CONTRACTS } from '../config/contracts';
 
 interface UserDAO {
   id: number;
@@ -16,10 +17,13 @@ interface UserDAOListProps {
   isInitializing?: boolean;
 }
 
+// Generate cache key based on user address and contract deployment so cache invalidates on redeployment
+const getCacheKey = (userAddress: string) => `user_daos_${userAddress}_${CONTRACTS.REGISTRY_ID.slice(0, 8)}`;
+
 export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, onDaosLoaded, isInitializing = false }: UserDAOListProps) {
   const [daos, setDaos] = useState<UserDAO[]>(() => {
     // Initialize with cached data if available
-    const cacheKey = `user_daos_${userAddress}`;
+    const cacheKey = getCacheKey(userAddress);
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
       const cachedData = JSON.parse(cached);
@@ -29,7 +33,7 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
   });
   const [loading, setLoading] = useState(() => {
     // Only show loading indicator if no cache exists
-    const cacheKey = `user_daos_${userAddress}`;
+    const cacheKey = getCacheKey(userAddress);
     const cached = localStorage.getItem(cacheKey);
     return !cached;
   });
@@ -53,7 +57,7 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
   }, [userAddress, isInitializing]);
 
   const loadUserDaos = async () => {
-    const cacheKey = `user_daos_${userAddress}`;
+    const cacheKey = getCacheKey(userAddress);
 
     try {
       // Load from cache first
@@ -120,7 +124,10 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
     );
   }
 
-  if (daos.length === 0) {
+  // Filter out Public DAO (DAO #1) from user's DAOs
+  const filteredDaos = daos.filter(dao => dao.id !== 1);
+
+  if (filteredDaos.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
@@ -138,11 +145,11 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
   return (
     <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
       <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-        Your DAOs ({daos.length})
+        Your DAOs ({filteredDaos.length})
       </h2>
 
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-        {daos.map((dao) => (
+        {filteredDaos.map((dao) => (
           <button
             key={dao.id}
             onClick={() => onSelectDao(dao.id)}

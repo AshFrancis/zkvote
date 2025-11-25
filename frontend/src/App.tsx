@@ -6,6 +6,7 @@ import DAODashboard from "./components/DAODashboard";
 import DAOList from "./components/DAOList";
 import UserDAOList from "./components/UserDAOList";
 import ManageMembers from "./components/ManageMembers";
+import PublicVotes from "./components/PublicVotes";
 import { useWallet } from "./hooks/useWallet";
 import { useTheme } from "./hooks/useTheme";
 import { initializeContractClients } from "./lib/contracts";
@@ -303,6 +304,12 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const [userDaoIds, setUserDaoIds] = useState<number[]>([]);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newDaoName, setNewDaoName] = useState("");
+  const [membershipOpen, setMembershipOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   // Determine current view from URL path
   const getCurrentView = (): 'home' | 'browse' | 'votes' | 'dao' => {
@@ -314,6 +321,12 @@ function App() {
 
   const currentView = getCurrentView();
 
+  // Clear success and error messages when navigating to a different route
+  useEffect(() => {
+    setSuccess(null);
+    setError(null);
+  }, [location.pathname]);
+
   const handleNavigate = (view: 'home' | 'browse' | 'votes') => {
     if (view === 'home') navigate('/');
     else if (view === 'browse') navigate('/daos/');
@@ -323,12 +336,6 @@ function App() {
   const handleSelectDao = (daoId: number) => {
     navigate(`/daos/${daoId}`);
   };
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [newDaoName, setNewDaoName] = useState("");
-  const [membershipOpen, setMembershipOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   const handleCreateDao = async () => {
     if (!newDaoName.trim()) {
@@ -582,14 +589,7 @@ function App() {
 
           {/* Public Votes Route */}
           <Route path="/public-votes/" element={
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Public Votes
-              </h2>
-              <p className="text-gray-600 dark:text-gray-400">
-                Public vote history coming soon...
-              </p>
-            </div>
+            <PublicVotes publicKey={publicKey} isConnected={isConnected} isInitializing={isInitializing} />
           } />
 
           {/* DAO Detail Route */}

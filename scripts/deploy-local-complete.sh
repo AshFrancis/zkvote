@@ -168,6 +168,42 @@ echo "Building Voting bindings..."
 (cd frontend/src/contracts/voting && npm install --silent && npm run build) > /dev/null 2>&1
 success "Voting bindings built"
 
+# Step 3.6: Create Public DAO (always DAO #1)
+step "Creating Public DAO..."
+ADMIN_ADDRESS=$(stellar keys address "$KEY_NAME")
+
+# Create DAO with open membership
+echo "Creating Public Votes DAO..."
+DAO_ID=$(stellar contract invoke \
+  --id "$REGISTRY_ID" \
+  --rpc-url "$RPC_URL" \
+  --network-passphrase "$NETWORK_PASSPHRASE" \
+  --source "$KEY_NAME" \
+  -- create_dao \
+  --name "Public Votes" \
+  --creator "$ADMIN_ADDRESS" \
+  --membership_open true 2>&1 | grep -v 'ℹ️' | tr -d '"')
+
+if [ "$DAO_ID" != "1" ]; then
+  warn "Expected DAO ID 1, got $DAO_ID. This may cause issues."
+fi
+success "Public DAO created (ID: $DAO_ID)"
+
+# Initialize tree for public DAO
+echo "Initializing merkle tree..."
+stellar contract invoke \
+  --id "$TREE_ID" \
+  --rpc-url "$RPC_URL" \
+  --network-passphrase "$NETWORK_PASSPHRASE" \
+  --source "$KEY_NAME" \
+  -- init_tree_from_registry \
+  --dao_id "$DAO_ID" \
+  --depth 18 > /dev/null 2>&1
+success "Merkle tree initialized (depth 18, capacity 262,144)"
+
+warn "NOTE: Verification key must be set manually through the frontend UI"
+echo "      Navigate to the Public Votes page and click 'Set Verification Key' as admin"
+
 # Step 4: Update frontend configuration
 step "Updating frontend configuration..."
 cat > frontend/src/config/contracts.ts << EOF

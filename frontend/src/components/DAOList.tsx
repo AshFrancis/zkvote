@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getAllDaos } from '../lib/readOnlyContracts';
+import { CONTRACTS } from '../config/contracts';
 
 interface DAO {
   id: number;
@@ -16,15 +17,18 @@ interface DAOListProps {
   isInitializing?: boolean;
 }
 
+// Generate cache key based on contract addresses so cache invalidates on redeployment
+const getCacheKey = () => `all_daos_${CONTRACTS.REGISTRY_ID.slice(0, 8)}`;
+
 export default function DAOList({ onSelectDao, selectedDaoId, isConnected, userDaoIds = [], isInitializing = false }: DAOListProps) {
   const [daos, setDaos] = useState<DAO[]>(() => {
     // Initialize with cached data if available
-    const cached = localStorage.getItem('all_daos');
+    const cached = localStorage.getItem(getCacheKey());
     return cached ? JSON.parse(cached) : [];
   });
   const [loading, setLoading] = useState(() => {
     // Only show loading indicator if no cache exists
-    const cached = localStorage.getItem('all_daos');
+    const cached = localStorage.getItem(getCacheKey());
     return !cached;
   });
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +44,7 @@ export default function DAOList({ onSelectDao, selectedDaoId, isConnected, userD
   }, [isInitializing]);
 
   const loadDaos = async () => {
-    const cacheKey = 'all_daos';
+    const cacheKey = getCacheKey();
 
     try {
       // Load from cache first
@@ -66,10 +70,10 @@ export default function DAOList({ onSelectDao, selectedDaoId, isConnected, userD
     }
   };
 
-  // Filter out user's DAOs when connected
-  const filteredDaos = isConnected
-    ? daos.filter(dao => !userDaoIds.includes(dao.id))
-    : daos;
+  // Filter out user's DAOs when connected and always exclude DAO #1 (Public Votes)
+  const filteredDaos = daos
+    .filter(dao => dao.id !== 1) // Exclude Public Votes DAO
+    .filter(dao => !isConnected || !userDaoIds.includes(dao.id)); // Exclude user's DAOs when connected
 
   const title = isConnected ? 'Other DAOs' : 'All DAOs';
 

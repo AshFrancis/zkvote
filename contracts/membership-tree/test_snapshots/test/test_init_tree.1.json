@@ -23,7 +23,7 @@
                   "u64": "1"
                 },
                 {
-                  "u32": 20
+                  "u32": 18
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
@@ -259,12 +259,6 @@
                     },
                     {
                       "u256": "21035245323335827719745544373081896983162834604456827698288649288827293579666"
-                    },
-                    {
-                      "u256": "6939770416153240137322503476966641397417391950902474480970945462551409848591"
-                    },
-                    {
-                      "u256": "10941962436777715901943463195175331263348098796018438960955633645115732864202"
                     }
                   ]
                 }
@@ -327,6 +321,102 @@
             "key": {
               "vec": [
                 {
+                  "symbol": "NextRootIndex"
+                },
+                {
+                  "u64": "1"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "NextRootIndex"
+                    },
+                    {
+                      "u64": "1"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "u32": 0
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "RootIndex"
+                },
+                {
+                  "u64": "1"
+                },
+                {
+                  "u256": "6939770416153240137322503476966641397417391950902474480970945462551409848591"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "RootIndex"
+                    },
+                    {
+                      "u64": "1"
+                    },
+                    {
+                      "u256": "6939770416153240137322503476966641397417391950902474480970945462551409848591"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "u32": 0
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "vec": [
+                {
                   "symbol": "Roots"
                 },
                 {
@@ -358,7 +448,7 @@
                 "val": {
                   "vec": [
                     {
-                      "u256": "15019797232609675441998260052101280400536945603062888308240081994073687793470"
+                      "u256": "6939770416153240137322503476966641397417391950902474480970945462551409848591"
                     }
                   ]
                 }
@@ -405,7 +495,7 @@
                 },
                 "durability": "persistent",
                 "val": {
-                  "u32": 20
+                  "u32": 18
                 }
               }
             },
@@ -507,12 +597,6 @@
                             },
                             {
                               "u256": "6939770416153240137322503476966641397417391950902474480970945462551409848591"
-                            },
-                            {
-                              "u256": "10941962436777715901943463195175331263348098796018438960955633645115732864202"
-                            },
-                            {
-                              "u256": "15019797232609675441998260052101280400536945603062888308240081994073687793470"
                             }
                           ]
                         }

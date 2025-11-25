@@ -10,6 +10,7 @@ interface ProposalCardProps {
     hasVoted: boolean;
     eligibleRoot: bigint; // Snapshot of Merkle root when proposal was created
     voteMode: "Fixed" | "Trailing"; // Vote mode: Fixed (snapshot) or Trailing (dynamic)
+    endTime: number; // Unix timestamp in seconds
   };
   daoId: number;
   publicKey: string;
@@ -38,6 +39,40 @@ export default function ProposalCard({
     return localStorage.getItem(registrationKey) !== null;
   })() : false;
 
+  // Deadline logic
+  const now = Math.floor(Date.now() / 1000); // Current time in seconds
+  const hasDeadline = proposal.endTime > 0;
+  const isPastDeadline = hasDeadline && now > proposal.endTime;
+
+  const formatDeadline = (timestamp: number): string => {
+    if (timestamp === 0) return "No deadline";
+
+    const date = new Date(timestamp * 1000);
+    const timeLeft = timestamp - now;
+
+    if (timeLeft < 0) {
+      return "Closed";
+    } else if (timeLeft < 3600) {
+      const minutes = Math.floor(timeLeft / 60);
+      return `${minutes} minute${minutes !== 1 ? "s" : ""} left`;
+    } else if (timeLeft < 86400) {
+      const hours = Math.floor(timeLeft / 3600);
+      return `${hours} hour${hours !== 1 ? "s" : ""} left`;
+    } else {
+      const days = Math.floor(timeLeft / 86400);
+      return `${days} day${days !== 1 ? "s" : ""} left`;
+    }
+  };
+
+  const getDeadlineColor = (): string => {
+    if (!hasDeadline) return "text-gray-600 dark:text-gray-400";
+    if (isPastDeadline) return "text-red-600 dark:text-red-400";
+
+    const timeLeft = proposal.endTime - now;
+    if (timeLeft < 86400) return "text-orange-600 dark:text-orange-400"; // Less than 1 day
+    return "text-gray-600 dark:text-gray-400";
+  };
+
   return (
     <>
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5">
@@ -52,7 +87,17 @@ export default function ProposalCard({
                   Voted
                 </span>
               )}
+              {isPastDeadline && (
+                <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200">
+                  Closed
+                </span>
+              )}
             </div>
+            {hasDeadline && (
+              <div className={`text-sm font-medium mb-2 ${getDeadlineColor()}`}>
+                {formatDeadline(proposal.endTime)}
+              </div>
+            )}
             <p className="text-gray-900 dark:text-gray-100 mb-4">
               {proposal.description}
             </p>
@@ -86,21 +131,22 @@ export default function ProposalCard({
           <>
             <button
               onClick={() => setShowVoteModal(true)}
-              disabled={!isRegistered}
+              disabled={!isRegistered || isPastDeadline}
               className={`w-full mt-4 font-medium px-4 py-2 rounded-md transition-colors ${
-                isRegistered
+                isRegistered && !isPastDeadline
                   ? "bg-blue-600 hover:bg-blue-700 text-white"
                   : "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
               }`}
-              title={!isRegistered ? "Please register for voting first" : ""}
+              title={
+                !isRegistered
+                  ? "Please register for voting first"
+                  : isPastDeadline
+                  ? "Voting period has ended"
+                  : ""
+              }
             >
-              Vote (Anonymous)
+              {isPastDeadline ? "Voting Closed" : "Vote (Anonymous)"}
             </button>
-            {!isRegistered && (
-              <p className="mt-2 text-sm text-yellow-600 dark:text-yellow-400">
-                You must register for voting before you can vote. Click "Register for Voting" in the DAO dashboard.
-              </p>
-            )}
           </>
         )}
       </div>

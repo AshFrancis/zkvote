@@ -34,11 +34,11 @@ if (typeof window !== 'undefined') {
 export const networks = {
   futurenet: {
     networkPassphrase: "Test SDF Future Network ; October 2022",
-    contractId: "CCT6MUCZLDBXZNJX2VKR5GVAYPPZEJF26KSCHUT22FOP7XLWZQQE7J2G",
+    contractId: "CCVGLYQD2WJYCTJEDQF6RRPV2TCM6NQBCZ5LXEZCE6PBWBAFCIQ2FCA4",
   }
 } as const
 
-export type DataKey = {tag: "TreeDepth", values: readonly [u64]} | {tag: "NextLeafIndex", values: readonly [u64]} | {tag: "FilledSubtrees", values: readonly [u64]} | {tag: "Roots", values: readonly [u64]} | {tag: "LeafIndex", values: readonly [u64, u256]} | {tag: "MemberLeafIndex", values: readonly [u64, string]} | {tag: "LeafValue", values: readonly [u64, u32]} | {tag: "NextRootIndex", values: readonly [u64]} | {tag: "RootIndex", values: readonly [u64, u256]};
+export type DataKey = {tag: "TreeDepth", values: readonly [u64]} | {tag: "NextLeafIndex", values: readonly [u64]} | {tag: "FilledSubtrees", values: readonly [u64]} | {tag: "Roots", values: readonly [u64]} | {tag: "LeafIndex", values: readonly [u64, u256]} | {tag: "MemberLeafIndex", values: readonly [u64, string]} | {tag: "LeafValue", values: readonly [u64, u32]} | {tag: "NextRootIndex", values: readonly [u64]} | {tag: "RootIndex", values: readonly [u64, u256]} | {tag: "RevokedAt", values: readonly [u64, u256]} | {tag: "ReinstatedAt", values: readonly [u64, u256]};
 
 
 
@@ -118,6 +118,28 @@ export interface Client {
    * Register a commitment with explicit caller (requires SBT membership)
    */
   register_with_caller: ({dao_id, commitment, caller}: {dao_id: u64, commitment: u256, caller: string}, options?: {
+    /**
+     * The fee to pay for the transaction. Default: BASE_FEE
+     */
+    fee?: number;
+
+    /**
+     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
+     */
+    timeoutInSeconds?: number;
+
+    /**
+     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
+     */
+    simulate?: boolean;
+  }) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a self_register transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Self-register a commitment in a public DAO (requires SBT membership)
+   * For public DAOs, anyone with an SBT can register their commitment
+   */
+  self_register: ({dao_id, commitment, member}: {dao_id: u64, commitment: u256, member: string}, options?: {
     /**
      * The fee to pay for the transaction. Default: BASE_FEE
      */
@@ -352,6 +374,8 @@ export interface Client {
    * Construct and simulate a remove_member transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Remove a member by zeroing their leaf and recomputing the root
    * Only callable by DAO admin
+   * Remove member by recording revocation timestamp (cheap, no tree update)
+   * This prevents the member from voting on proposals created after this timestamp
    */
   remove_member: ({dao_id, member, admin}: {dao_id: u64, member: string, admin: string}, options?: {
     /**
@@ -369,6 +393,72 @@ export interface Client {
      */
     simulate?: boolean;
   }) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a reinstate_member transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Reinstate a previously removed member
+   * Records the reinstatement timestamp, allowing them to vote on future proposals
+   */
+  reinstate_member: ({dao_id, member, admin}: {dao_id: u64, member: string, admin: string}, options?: {
+    /**
+     * The fee to pay for the transaction. Default: BASE_FEE
+     */
+    fee?: number;
+
+    /**
+     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
+     */
+    timeoutInSeconds?: number;
+
+    /**
+     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
+     */
+    simulate?: boolean;
+  }) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a revok_at transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Get revocation timestamp for a commitment (returns None if never revoked)
+   * Used by voting contract to check if member was revoked
+   */
+  revok_at: ({dao_id, commitment}: {dao_id: u64, commitment: u256}, options?: {
+    /**
+     * The fee to pay for the transaction. Default: BASE_FEE
+     */
+    fee?: number;
+
+    /**
+     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
+     */
+    timeoutInSeconds?: number;
+
+    /**
+     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
+     */
+    simulate?: boolean;
+  }) => Promise<AssembledTransaction<Option<u64>>>
+
+  /**
+   * Construct and simulate a reinst_at transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Get reinstatement timestamp for a commitment (returns None if never reinstated)
+   * Used by voting contract to check if member was reinstated after revocation
+   */
+  reinst_at: ({dao_id, commitment}: {dao_id: u64, commitment: u256}, options?: {
+    /**
+     * The fee to pay for the transaction. Default: BASE_FEE
+     */
+    fee?: number;
+
+    /**
+     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
+     */
+    timeoutInSeconds?: number;
+
+    /**
+     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
+     */
+    simulate?: boolean;
+  }) => Promise<AssembledTransaction<Option<u64>>>
 
 }
 export class Client extends ContractClient {
@@ -390,7 +480,7 @@ export class Client extends ContractClient {
   }
   constructor(public readonly options: ContractClientOptions) {
     super(
-      new ContractSpec([ "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAACQAAAAEAAAAAAAAACVRyZWVEZXB0aAAAAAAAAAEAAAAGAAAAAQAAAAAAAAANTmV4dExlYWZJbmRleAAAAAAAAAEAAAAGAAAAAQAAAAAAAAAORmlsbGVkU3VidHJlZXMAAAAAAAEAAAAGAAAAAQAAAAAAAAAFUm9vdHMAAAAAAAABAAAABgAAAAEAAAAAAAAACUxlYWZJbmRleAAAAAAAAAIAAAAGAAAADAAAAAEAAAAAAAAAD01lbWJlckxlYWZJbmRleAAAAAACAAAABgAAABMAAAABAAAAAAAAAAlMZWFmVmFsdWUAAAAAAAACAAAABgAAAAQAAAABAAAAAAAAAA1OZXh0Um9vdEluZGV4AAAAAAAAAQAAAAYAAAABAAAAAAAAAAlSb290SW5kZXgAAAAAAAACAAAABgAAAAw=",
+      new ContractSpec([ "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAACwAAAAEAAAAAAAAACVRyZWVEZXB0aAAAAAAAAAEAAAAGAAAAAQAAAAAAAAANTmV4dExlYWZJbmRleAAAAAAAAAEAAAAGAAAAAQAAAAAAAAAORmlsbGVkU3VidHJlZXMAAAAAAAEAAAAGAAAAAQAAAAAAAAAFUm9vdHMAAAAAAAABAAAABgAAAAEAAAAAAAAACUxlYWZJbmRleAAAAAAAAAIAAAAGAAAADAAAAAEAAAAAAAAAD01lbWJlckxlYWZJbmRleAAAAAACAAAABgAAABMAAAABAAAAAAAAAAlMZWFmVmFsdWUAAAAAAAACAAAABgAAAAQAAAABAAAAAAAAAA1OZXh0Um9vdEluZGV4AAAAAAAAAQAAAAYAAAABAAAAAAAAAAlSb290SW5kZXgAAAAAAAACAAAABgAAAAwAAAABAAAAAAAAAAlSZXZva2VkQXQAAAAAAAACAAAABgAAAAwAAAABAAAAAAAAAAxSZWluc3RhdGVkQXQAAAACAAAABgAAAAw=",
         "AAAABQAAAAAAAAAAAAAADVRyZWVJbml0RXZlbnQAAAAAAAABAAAAD3RyZWVfaW5pdF9ldmVudAAAAAAEAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAAAAAAVkZXB0aAAAAAAAAAQAAAAAAAAAAAAAAAplbXB0eV9yb290AAAAAAAMAAAAAAAAAAAAAAAKcm9vdF9pbmRleAAAAAAABAAAAAAAAAAC",
         "AAAABQAAAAAAAAAAAAAAC0NvbW1pdEV2ZW50AAAAAAEAAAAMY29tbWl0X2V2ZW50AAAABQAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAQAAAAAAAAAKY29tbWl0bWVudAAAAAAADAAAAAAAAAAAAAAABWluZGV4AAAAAAAABAAAAAAAAAAAAAAACG5ld19yb290AAAADAAAAAAAAAAAAAAACnJvb3RfaW5kZXgAAAAAAAQAAAAAAAAAAg==",
         "AAAABQAAAAAAAAAAAAAADFJlbW92YWxFdmVudAAAAAEAAAANcmVtb3ZhbF9ldmVudAAAAAAAAAUAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAAAAAAABm1lbWJlcgAAAAAAEwAAAAEAAAAAAAAABWluZGV4AAAAAAAABAAAAAAAAAAAAAAACG5ld19yb290AAAADAAAAAAAAAAAAAAACnJvb3RfaW5kZXgAAAAAAAQAAAAAAAAAAg==",
@@ -399,6 +489,7 @@ export class Client extends ContractClient {
         "AAAAAAAAAMtJbml0aWFsaXplIHRyZWUgZnJvbSByZWdpc3RyeSBkdXJpbmcgREFPIGluaXRpYWxpemF0aW9uClRoaXMgZnVuY3Rpb24gaXMgY2FsbGVkIGJ5IHRoZSByZWdpc3RyeSBjb250cmFjdCBkdXJpbmcgY3JlYXRlX2FuZF9pbml0X2Rhbwp0byBhdm9pZCByZS1lbnRyYW5jeSBpc3N1ZXMuIFRoZSByZWdpc3RyeSBpcyBhIHRydXN0ZWQgc3lzdGVtIGNvbnRyYWN0LgAAAAAXaW5pdF90cmVlX2Zyb21fcmVnaXN0cnkAAAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAVkZXB0aAAAAAAAAAQAAAAA",
         "AAAAAAAAAP1SZWdpc3RlciBhIGNvbW1pdG1lbnQgZnJvbSByZWdpc3RyeSBkdXJpbmcgREFPIGluaXRpYWxpemF0aW9uClRoaXMgZnVuY3Rpb24gaXMgY2FsbGVkIGJ5IHRoZSByZWdpc3RyeSBjb250cmFjdCBkdXJpbmcgY3JlYXRlX2FuZF9pbml0X2Rhbwp0byBhdXRvbWF0aWNhbGx5IHJlZ2lzdGVyIHRoZSBjcmVhdG9yJ3MgY29tbWl0bWVudC4KVGhlIHJlZ2lzdHJ5IGlzIHRydXN0ZWQgdG8gaGF2ZSBhbHJlYWR5IHZlcmlmaWVkIFNCVCBvd25lcnNoaXAuAAAAAAAAFnJlZ2lzdGVyX2Zyb21fcmVnaXN0cnkAAAAAAAMAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAAKY29tbWl0bWVudAAAAAAADAAAAAAAAAAGbWVtYmVyAAAAAAATAAAAAA==",
         "AAAAAAAAAERSZWdpc3RlciBhIGNvbW1pdG1lbnQgd2l0aCBleHBsaWNpdCBjYWxsZXIgKHJlcXVpcmVzIFNCVCBtZW1iZXJzaGlwKQAAABRyZWdpc3Rlcl93aXRoX2NhbGxlcgAAAAMAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAAKY29tbWl0bWVudAAAAAAADAAAAAAAAAAGY2FsbGVyAAAAAAATAAAAAA==",
+        "AAAAAAAAAIZTZWxmLXJlZ2lzdGVyIGEgY29tbWl0bWVudCBpbiBhIHB1YmxpYyBEQU8gKHJlcXVpcmVzIFNCVCBtZW1iZXJzaGlwKQpGb3IgcHVibGljIERBT3MsIGFueW9uZSB3aXRoIGFuIFNCVCBjYW4gcmVnaXN0ZXIgdGhlaXIgY29tbWl0bWVudAAAAAAADXNlbGZfcmVnaXN0ZXIAAAAAAAADAAAAAAAAAAZkYW9faWQAAAAAAAYAAAAAAAAACmNvbW1pdG1lbnQAAAAAAAwAAAAAAAAABm1lbWJlcgAAAAAAEwAAAAA=",
         "AAAAAAAAABpHZXQgY3VycmVudCByb290IGZvciBhIERBTwAAAAAADGN1cnJlbnRfcm9vdAAAAAEAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAAM",
         "AAAAAAAAADdHZXQgY3VycmVudCByb290IChzaG9ydCBhbGlhcyBmb3IgY3Jvc3MtY29udHJhY3QgY2FsbHMpAAAAAAhnZXRfcm9vdAAAAAEAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAAM",
         "AAAAAAAAACVDaGVjayBpZiBhIHJvb3QgaXMgdmFsaWQgKGluIGhpc3RvcnkpAAAAAAAAB3Jvb3Rfb2sAAAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAARyb290AAAADAAAAAEAAAAB",
@@ -409,7 +500,10 @@ export class Client extends ContractClient {
         "AAAAAAAAAMNHZXQgTWVya2xlIHBhdGggZm9yIGEgc3BlY2lmaWMgbGVhZiBpbmRleApSZXR1cm5zIChwYXRoRWxlbWVudHMsIHBhdGhJbmRpY2VzKSB3aGVyZToKLSBwYXRoRWxlbWVudHNbaV0gaXMgdGhlIHNpYmxpbmcgaGFzaCBhdCBsZXZlbCBpCi0gcGF0aEluZGljZXNbaV0gaXMgMCBpZiBsZWFmIGlzIGxlZnQgY2hpbGQsIDEgaWYgcmlnaHQgY2hpbGQAAAAAD2dldF9tZXJrbGVfcGF0aAAAAAACAAAAAAAAAAZkYW9faWQAAAAAAAYAAAAAAAAACmxlYWZfaW5kZXgAAAAAAAQAAAABAAAD7QAAAAIAAAPqAAAADAAAA+oAAAAE",
         "AAAAAAAAABhHZXQgU0JUIGNvbnRyYWN0IGFkZHJlc3MAAAAJc2J0X2NvbnRyAAAAAAAAAAAAAAEAAAAT",
         "AAAAAAAAAKpQcmUtaW5pdGlhbGl6ZSB0aGUgemVyb3MgY2FjaGUgdG8gYXZvaWQgYnVkZ2V0IGlzc3VlcyBkdXJpbmcgZmlyc3QgdHJlZSBvcGVyYXRpb25zLgpUaGlzIHNob3VsZCBiZSBjYWxsZWQgb25jZSBkdXJpbmcgZGVwbG95bWVudCB0byBwcmVjb21wdXRlIHplcm8gdmFsdWVzIGZvciBhbGwgbGV2ZWxzLgAAAAAAEGluaXRfemVyb3NfY2FjaGUAAAAAAAAAAA==",
-        "AAAAAAAAAFlSZW1vdmUgYSBtZW1iZXIgYnkgemVyb2luZyB0aGVpciBsZWFmIGFuZCByZWNvbXB1dGluZyB0aGUgcm9vdApPbmx5IGNhbGxhYmxlIGJ5IERBTyBhZG1pbgAAAAAAAA1yZW1vdmVfbWVtYmVyAAAAAAAAAwAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAZtZW1iZXIAAAAAABMAAAAAAAAABWFkbWluAAAAAAAAEwAAAAA=" ]),
+        "AAAAAAAAAPBSZW1vdmUgYSBtZW1iZXIgYnkgemVyb2luZyB0aGVpciBsZWFmIGFuZCByZWNvbXB1dGluZyB0aGUgcm9vdApPbmx5IGNhbGxhYmxlIGJ5IERBTyBhZG1pbgpSZW1vdmUgbWVtYmVyIGJ5IHJlY29yZGluZyByZXZvY2F0aW9uIHRpbWVzdGFtcCAoY2hlYXAsIG5vIHRyZWUgdXBkYXRlKQpUaGlzIHByZXZlbnRzIHRoZSBtZW1iZXIgZnJvbSB2b3Rpbmcgb24gcHJvcG9zYWxzIGNyZWF0ZWQgYWZ0ZXIgdGhpcyB0aW1lc3RhbXAAAAANcmVtb3ZlX21lbWJlcgAAAAAAAAMAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAAGbWVtYmVyAAAAAAATAAAAAAAAAAVhZG1pbgAAAAAAABMAAAAA",
+        "AAAAAAAAAHRSZWluc3RhdGUgYSBwcmV2aW91c2x5IHJlbW92ZWQgbWVtYmVyClJlY29yZHMgdGhlIHJlaW5zdGF0ZW1lbnQgdGltZXN0YW1wLCBhbGxvd2luZyB0aGVtIHRvIHZvdGUgb24gZnV0dXJlIHByb3Bvc2FscwAAABByZWluc3RhdGVfbWVtYmVyAAAAAwAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAZtZW1iZXIAAAAAABMAAAAAAAAABWFkbWluAAAAAAAAEwAAAAA=",
+        "AAAAAAAAAIBHZXQgcmV2b2NhdGlvbiB0aW1lc3RhbXAgZm9yIGEgY29tbWl0bWVudCAocmV0dXJucyBOb25lIGlmIG5ldmVyIHJldm9rZWQpClVzZWQgYnkgdm90aW5nIGNvbnRyYWN0IHRvIGNoZWNrIGlmIG1lbWJlciB3YXMgcmV2b2tlZAAAAAhyZXZva19hdAAAAAIAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAAKY29tbWl0bWVudAAAAAAADAAAAAEAAAPoAAAABg==",
+        "AAAAAAAAAJpHZXQgcmVpbnN0YXRlbWVudCB0aW1lc3RhbXAgZm9yIGEgY29tbWl0bWVudCAocmV0dXJucyBOb25lIGlmIG5ldmVyIHJlaW5zdGF0ZWQpClVzZWQgYnkgdm90aW5nIGNvbnRyYWN0IHRvIGNoZWNrIGlmIG1lbWJlciB3YXMgcmVpbnN0YXRlZCBhZnRlciByZXZvY2F0aW9uAAAAAAAJcmVpbnN0X2F0AAAAAAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAApjb21taXRtZW50AAAAAAAMAAAAAQAAA+gAAAAG" ]),
       options
     )
   }
@@ -418,6 +512,7 @@ export class Client extends ContractClient {
         init_tree_from_registry: this.txFromJSON<null>,
         register_from_registry: this.txFromJSON<null>,
         register_with_caller: this.txFromJSON<null>,
+        self_register: this.txFromJSON<null>,
         current_root: this.txFromJSON<u256>,
         get_root: this.txFromJSON<u256>,
         root_ok: this.txFromJSON<boolean>,
@@ -428,6 +523,9 @@ export class Client extends ContractClient {
         get_merkle_path: this.txFromJSON<readonly [Array<u256>, Array<u32>]>,
         sbt_contr: this.txFromJSON<string>,
         init_zeros_cache: this.txFromJSON<null>,
-        remove_member: this.txFromJSON<null>
+        remove_member: this.txFromJSON<null>,
+        reinstate_member: this.txFromJSON<null>,
+        revok_at: this.txFromJSON<Option<u64>>,
+        reinst_at: this.txFromJSON<Option<u64>>
   }
 }

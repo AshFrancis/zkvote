@@ -76,7 +76,6 @@ pub struct ProposalInfo {
     pub eligible_root: U256,      // Merkle root at creation - defines eligible voter set
     pub vote_mode: VoteMode,      // Fixed or Trailing voting
     pub earliest_root_index: u32, // For Trailing mode: earliest valid root index
-    pub finalized: bool,          // If true, no more votes can be submitted
 }
 
 /// Groth16 Verification Key for BN254
@@ -299,7 +298,7 @@ impl Voting {
             panic!("description too long");
         }
 
-        // Verify creator has SBT membership (via tree contract)
+        // Get tree and sbt contracts
         let tree_contract: Address = env.storage().instance().get(&TREE_CONTRACT).unwrap();
         let sbt_contract: Address = env.invoke_contract(
             &tree_contract,
@@ -307,21 +306,39 @@ impl Voting {
             soroban_sdk::vec![&env],
         );
 
-        let has_sbt: bool = env.invoke_contract(
+        // Get registry from SBT contract
+        let registry: Address = env.invoke_contract(
             &sbt_contract,
-            &symbol_short!("has"),
-            soroban_sdk::vec![&env, dao_id.into_val(&env), creator.clone().into_val(&env)],
+            &symbol_short!("registry"),
+            soroban_sdk::vec![&env],
         );
 
-        if !has_sbt {
-            panic!("not DAO member");
+        // Check if DAO has open membership
+        let membership_open: bool = env.invoke_contract(
+            &registry,
+            &Symbol::new(&env, "is_membership_open"),
+            soroban_sdk::vec![&env, dao_id.into_val(&env)],
+        );
+
+        // For non-public DAOs, verify creator has SBT membership
+        if !membership_open {
+            let has_sbt: bool = env.invoke_contract(
+                &sbt_contract,
+                &symbol_short!("has"),
+                soroban_sdk::vec![&env, dao_id.into_val(&env), creator.clone().into_val(&env)],
+            );
+
+            if !has_sbt {
+                panic!("not DAO member");
+            }
         }
+        // For public DAOs (membership_open = true), anyone can create proposals
 
         let now = env.ledger().timestamp();
 
-        // Validate end_time is in the future
-        if end_time <= now {
-            panic!("end time must be in the future");
+        // Validate end_time: 0 = no deadline, otherwise must be in the future
+        if end_time != 0 && end_time <= now {
+            panic!("end time must be in the future or 0 for no deadline");
         }
 
         // Verify VK is set for this DAO and snapshot it
@@ -364,7 +381,6 @@ impl Voting {
             eligible_root,
             vote_mode,
             earliest_root_index,
-            finalized: false,
         };
 
         let key = DataKey::Proposal(dao_id, proposal_id);
@@ -431,14 +447,10 @@ impl Voting {
             .expect("proposal not found");
 
         // Check voting period (voting starts at creation, ends at end_time)
+        // If end_time is 0, there's no deadline (voting never closes)
         let now = env.ledger().timestamp();
-        if now > proposal.end_time {
+        if proposal.end_time != 0 && now > proposal.end_time {
             panic!("voting period closed");
-        }
-
-        // Check if proposal is finalized (blocks further votes)
-        if proposal.finalized {
-            panic!("proposal finalized");
         }
 
         // Get tree contract for revocation checks
@@ -588,63 +600,6 @@ impl Voting {
             nullifier,
         }
         .publish(&env);
-    }
-
-    /// Finalize a proposal (callable by admin after end_time)
-    /// Blocks further votes even if proof generation is slow
-    pub fn finalize_proposal(env: Env, dao_id: u64, proposal_id: u64, admin: Address) {
-        admin.require_auth();
-
-        // Verify admin via registry
-        let tree_contract: Address = env.storage().instance().get(&TREE_CONTRACT).unwrap();
-        let sbt_contract: Address = env.invoke_contract(
-            &tree_contract,
-            &symbol_short!("sbt_contr"),
-            soroban_sdk::vec![&env],
-        );
-        let registry: Address = env.invoke_contract(
-            &sbt_contract,
-            &symbol_short!("registry"),
-            soroban_sdk::vec![&env],
-        );
-        let dao_admin: Address = env.invoke_contract(
-            &registry,
-            &symbol_short!("get_admin"),
-            soroban_sdk::vec![&env, dao_id.into_val(&env)],
-        );
-
-        if admin != dao_admin {
-            panic!("not admin");
-        }
-
-        // Get proposal
-        let prop_key = DataKey::Proposal(dao_id, proposal_id);
-        let mut proposal: ProposalInfo = env
-            .storage()
-            .persistent()
-            .get(&prop_key)
-            .expect("proposal not found");
-
-        // Check voting period has ended
-        let now = env.ledger().timestamp();
-        if now <= proposal.end_time {
-            panic!("voting period not ended");
-        }
-
-        // Check not already finalized
-        if proposal.finalized {
-            panic!("already finalized");
-        }
-
-        // Mark as finalized
-        proposal.finalized = true;
-        env.storage().persistent().set(&prop_key, &proposal);
-
-        // Emit event
-        env.events().publish(
-            (symbol_short!("finalized"), dao_id),
-            (proposal_id, now),
-        );
     }
 
     /// Get proposal info
