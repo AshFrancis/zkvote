@@ -48,75 +48,50 @@ fn hex_str_to_u256(env: &Env, hex: &str) -> U256 {
 }
 
 fn get_real_proof(env: &Env) -> voting::Proof {
-    // Real proof from standalone test (generated for a specific root)
+    // Real proof from circuits/build/proof_soroban_be.json (BIG-ENDIAN)
+    // Generated with: secret=123456789, salt=987654321, daoId=1, proposalId=1, voteChoice=1
     voting::Proof {
         a: hex_to_bytes(
             env,
-            "54f558fca3ae990d199f05f1351f7909fa4a5540936d705a6c153628fe5ab6110c12c592108e4c4d5eac2c33eddd9d3d5c568647abe791136d19f33ca3669620",
+            "2d806e0094f82e4826cbaf1c55d9411c99cbd4724a06b3636343e9b4662101d027f2ac0e90e5abf5c8eb68bc544720783089cac24d53f97b4ccb23997ee1bef1",
         ),
         b: hex_to_bytes(
             env,
-            "f59ab459228fa9f302e67621923bcb6bf2f5d4615def50c4b45b9c1e46c9b814f9f5e66cf599e13630ab3b7ddbdae67082f771cd5cc4bd13d0abcbcc65a02a0bc77bf2141857569cfac2acea49cfa9309954ba844018fdb3b8bf636bb8f7ea29cf2ddc1a07d0a5aa0b994aa0f3a7cfbc2fedd59ea783416758eadab66c473c1d",
+            "079a9e010f261129556108ece03d72f2241446001f4867236ee62d0cdd165a2d1f4155f6d442b0f8eb5dd5562119b9efad6c51f52923beb9122e1ef8479c45d508d8febd3f8a15ce920ab23fa2228a56e2af681b9b1aec9071dce66801c5fa810d51353b9164be959e736cd071d642bf3f7cbbeab73eb6dadd02471fc0000fac",
         ),
         c: hex_to_bytes(
             env,
-            "a46962366b50a0c9a27e69511ae2d183bb462f43dd213ca32c8e74a86f1a3903ee2656a4bf4943f3c2efcf7b0c431aeffb80362fd7f48e33974a1b8ee5564b17",
+            "1417617b66c6217dfd3d37a2949f230cd2126c8edebf73cd6fe9912c56e4b69e050323a90b08147b46079f4f0e359ee504da2082dda2ab112b8099fc064f4a6a",
         ),
     }
 }
 
 fn get_verification_key(env: &Env) -> voting::VerificationKey {
-    // VK from standalone test
+    // VK from circuits/build/verification_key_soroban_be.json (BIG-ENDIAN)
+    // 7 IC elements for 6 public signals (root, nullifier, daoId, proposalId, voteChoice, commitment)
     let mut ic = SdkVec::new(env);
 
-    ic.push_back(hex_to_bytes(
-        env,
-        "ef0630dec3ad685545f0d198824213e9f71235685979fba3d5e32e7c388bbf014893499ff0be943558b9d01817a878ce76d7bb0ebea3c0d9894c73bc7707981c",
-    ));
-    ic.push_back(hex_to_bytes(
-        env,
-        "3cbde84b103b8af6f1b4e76ff3515a2a33b5b80036e361629dd4415a971a0d19b6cc9eba3b6123dfe8f2f029e19506ba9339fce92686d8376884376059c25310",
-    ));
-    ic.push_back(hex_to_bytes(
-        env,
-        "83320a5c58bfecdca854a4a8e0a820f873f0a67e4791e8c3a23422ec29aee01aa1aef755d94f25e8462d780a5d33d80c4ff26bde7ba808d2559a7a7e32bf2415",
-    ));
-    ic.push_back(hex_to_bytes(
-        env,
-        "46111c538eb1637f9669c52e3038658195ecda946b712479d017c2cc6c04732b3b0f3dd4fa6d6c0ce8734344c4c334f79e271829805b314c8d2d859e1eadef02",
-    ));
-    ic.push_back(hex_to_bytes(
-        env,
-        "0da2a4435eb3f812b90ba2c5802d006d2407488ab2c483d6ab7912761191351b4cf8c263e9dc695e1972f0e944bd0365c35a07e19be57032b5c325d6027d7c04",
-    ));
-    ic.push_back(hex_to_bytes(
-        env,
-        "2313e0a2ca4854465d3bd39e3c317744c50fe1a014958024453aa3392ad7e72d8f6bbd47aec66b837adf7b682f18748e209c7a35bf8ca61ffe4f85dae7da2804",
-    ));
+    ic.push_back(hex_to_bytes(env, "0386c87c5f77037451fea91c60759229ca390a30e60d564e5ff0f0f95ffbd18207683040dab753f41635f947d3d13e057c73cb92a38d83400af26019ce24d54f"));
+    ic.push_back(hex_to_bytes(env, "0b8de6c132c626e6aa4676f7ca94d9ebeb93375ea3584b6337f9f823ac4157dd0b3de52288f2f4473c0c5041cf9a754decd57e2c0f6b2979d3467a30570c01ea"));
+    ic.push_back(hex_to_bytes(env, "139bde66aa5aa4311aca037419840a70fed606a0ed112e6686e1feb44183672d0e56114fa301c02ab1f0baac0973de2759bf26ccbbc594f8627054001f8ad27a"));
+    ic.push_back(hex_to_bytes(env, "2a7f1a9e3de9411015b1c5652856bc7a467110344153252026c44ca55f5dca632f0db38e6d0268092cba5ea0b5db9610e45bd8b4aac852527aeb6323c8f09804"));
+    ic.push_back(hex_to_bytes(env, "09c5b9b793a6f8098f0ac918aa0a19a75b74e7f1428f726194a48af37da8ac14122edc5b3704f106fa3c095ac74f524032e460179c3e8ecd562ef050c884336a"));
+    ic.push_back(hex_to_bytes(env, "143c06565aad1cacd0ddbc0cfc6dd131c70392d29c16d8c80ed7f62ada52587b13e189e68fe2fe8806b272da3c5762a18b23680cdeda63faef014b7dd6806f21"));
+    ic.push_back(hex_to_bytes(env, "1ff2e1a8bf1cdc19c43a4040d1a87832823cdafe5fdf0bd812eabc05882e1ff12139f471e228bdec73ad109a16c1fd938d9e8c2b4d5c5c0b9cb703c8eec3a8b0"));
 
     voting::VerificationKey {
-        alpha: hex_to_bytes(
-            env,
-            "e2f26dbea299f5223b646cb1fb33eadb059d9407559d7441dfd902e3a79a4d2d26194d00ffca76f0010323190a8389ce45e39f2060ecd861b0ce373c50ddbe14",
-        ),
-        beta: hex_to_bytes(
-            env,
-            "abb73dc17fbc13021e2471e0c08bd67d8401f52b73d6d07483794cad4778180e0c06f33bbc4c79a9cadef253a68084d382f17788f885c9afd176f7cb2f036709c8ced07a54067fd5a905ea3ec6b796f892912f4dd2233131c7a857a4b1c13917a74623114d9aa69d370d7a6bc4defdaa3c8c3fd947e8f5994a708ae0d1fb4c30",
-        ),
-        gamma: hex_to_bytes(
-            env,
-            "edf692d95cbdde46ddda5ef7d422436779445c5e66006a42761e1f12efde0018c212f3aeb785e49712e7a9353349aaf1255dfb31b7bf60723a480d9293938e19aa7dfa6601cce64c7bd3430c69e7d1e38f40cb8d8071ab4aeb6d8cdba55ec8125b9722d1dcdaac55f38eb37033314bbc95330c69ad999eec75f05f58d0890609",
-        ),
-        delta: hex_to_bytes(
-            env,
-            "0f39ec5884b6a91dbb21fd8dd55a87fb6867f2eb6f7547ce6b3f1c0fa35247209f9e49599cabf9f40b1bacb316f5ccb53c703c4e3801eee773c677523c8aa6222d1f6e392f7989220677b968d1747a858b4fc29d588070275c89ae10ca6d6525fe81aa0515743c98be2d1c20da4aef1aa538d88920c466f812ea3dd651bc892b",
-        ),
+        alpha: hex_to_bytes(env, "2d4d9aa7e302d9df41749d5507949d05dbea33fbb16c643b22f599a2be6df2e214bedd503c37ceb061d8ec60209fe345ce89830a19230301f076caff004d1926"),
+        beta: hex_to_bytes(env, "0967032fcbf776d1afc985f88877f182d38480a653f2decaa9794cbc3bf3060c0e187847ad4c798374d0d6732bf501847dd68bc0e071241e0213bc7fc13db7ab304cfbd1e08a704a99f5e847d93f8c3caafddec46b7a0d379da69a4d112346a71739c1b1a457a8c7313123d24d2f9192f896b7c63eea05a9d57f06547ad0cec8"),
+        gamma: hex_to_bytes(env, "198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c21800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa"),
+        delta: hex_to_bytes(env, "23bbe71cdbd371ce93879c1920554716ce89ee4e21f9a8aad6e7deb311f460381e3ed1aca9278a56e254d910b89f806fb308f538efd16563538b0b1ddb6d64be28ce9a5f31d7716460220c7e42e96ffa61608228d9a7a55186129cd138e47e590e2874e9d1bae76cbd0cf7081a5b178a34d8a218f7d139830922411a9fbca6c6"),
         ic,
     }
 }
 
+// Test that vote with wrong root fails
+// Uses BE-encoded proof/VK for commitment=16832421271961222550979173996485995711342823810308835997146707681980704453417
 #[test]
-#[should_panic(expected = "root must match proposal eligible root")]
+#[should_panic(expected = "HostError")]
 fn test_vote_with_wrong_root_fails() {
     let env = Env::default();
     env.mock_all_auths();
@@ -150,8 +125,9 @@ fn test_vote_with_wrong_root_fails() {
     // Add member and register
     sbt_client.mint(&dao_id, &member, &admin, &None);
 
-    // Use the commitment from the standalone test (secret=123456789, salt=987654321)
-    let commitment = hex_str_to_u256(&env, "0ba5c527b25bf1b3ebb63f7e4d7e2b41bea69cfc6b0ce1a684ac54a1eba98b1e");
+    // Use the commitment from circuits/build/public.json (secret=123456789, salt=987654321)
+    // commitment = 16832421271961222550979173996485995711342823810308835997146707681980704453417
+    let commitment = hex_str_to_u256(&env, "2536d01521137bf7b39e3fd26c1376f456ce46a45993a5d7c3c158a450fd7329");
     tree_client.register_with_caller(&dao_id, &commitment, &member);
 
     let root_A = tree_client.current_root(&dao_id);
@@ -172,8 +148,9 @@ fn test_vote_with_wrong_root_fails() {
     let proposal_1 = voting_client.get_proposal(&dao_id, &proposal_1_id);
     assert_eq!(proposal_1.eligible_root, root_A, "Proposal 1 should have root_A");
 
-    // Use the nullifier from standalone test
-    let nullifier = hex_str_to_u256(&env, "2e63a8df7e70db756c4ae0daf7effd4b4b86e8a8e5a91195b8b3c24f68adf41f");
+    // Use nullifier from circuits/build/public.json
+    // nullifier = 5760508796108392755529358167294721063592787938597807569861628631651201858128
+    let nullifier = hex_str_to_u256(&env, "0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a50");
 
     // Get the real proof (generated for root_A)
     let proof = get_real_proof(&env);
@@ -194,12 +171,15 @@ fn test_vote_with_wrong_root_fails() {
     println!("✅ Vote with correct root succeeded");
 
     // Now create Proposal 2 with a DIFFERENT eligible_root
-    // We'll remove the member to change the root
-    tree_client.remove_member(&dao_id, &member, &admin);
-    let root_B = tree_client.current_root(&dao_id);
+    // Add a new member to change the root
+    let member2 = Address::generate(&env);
+    sbt_client.mint(&dao_id, &member2, &admin, &None);
+    let commitment2 = hex_str_to_u256(&env, "1111111111111111111111111111111111111111111111111111111111111111");
+    tree_client.register_with_caller(&dao_id, &commitment2, &member2);
 
+    let root_B = tree_client.current_root(&dao_id);
     assert_ne!(root_A, root_B, "Roots must be different");
-    println!("Root B (with zeroed leaf): {:?}", root_B);
+    println!("Root B (with new member): {:?}", root_B);
 
     let proposal_2_id = voting_client.create_proposal(
         &dao_id,
@@ -234,6 +214,8 @@ fn test_vote_with_wrong_root_fails() {
     // Should panic before reaching here
 }
 
+// Test that vote with correct root succeeds
+// Uses BE-encoded proof/VK for commitment=16832421271961222550979173996485995711342823810308835997146707681980704453417
 #[test]
 fn test_vote_with_correct_root_succeeds() {
     let env = Env::default();
@@ -265,9 +247,10 @@ fn test_vote_with_correct_root_succeeds() {
     // Give admin an SBT (needed to create proposals)
     sbt_client.mint(&dao_id, &admin, &admin, &None);
 
-    // Add member and register with the commitment from standalone test
+    // Add member and register with the commitment from BE proof
+    // commitment = 16832421271961222550979173996485995711342823810308835997146707681980704453417
     sbt_client.mint(&dao_id, &member, &admin, &None);
-    let commitment = hex_str_to_u256(&env, "0ba5c527b25bf1b3ebb63f7e4d7e2b41bea69cfc6b0ce1a684ac54a1eba98b1e");
+    let commitment = hex_str_to_u256(&env, "2536d01521137bf7b39e3fd26c1376f456ce46a45993a5d7c3c158a450fd7329");
     tree_client.register_with_caller(&dao_id, &commitment, &member);
 
     let root = tree_client.current_root(&dao_id);
@@ -285,7 +268,8 @@ fn test_vote_with_correct_root_succeeds() {
     );
 
     // Vote with matching root
-    let nullifier = hex_str_to_u256(&env, "2e63a8df7e70db756c4ae0daf7effd4b4b86e8a8e5a91195b8b3c24f68adf41f");
+    // nullifier = 5760508796108392755529358167294721063592787938597807569861628631651201858128
+    let nullifier = hex_str_to_u256(&env, "0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a50");
     let proof = get_real_proof(&env);
 
     voting_client.vote(

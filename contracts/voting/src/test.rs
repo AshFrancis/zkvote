@@ -66,7 +66,13 @@ mod mock_tree {
 
 // Mock Registry contract
 mod mock_registry {
-    use soroban_sdk::{contract, contractimpl, Address, Env};
+    use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
+
+    #[contracttype]
+    pub enum DataKey {
+        Admin(u64),
+        MembershipOpen(u64),
+    }
 
     #[contract]
     pub struct MockRegistry;
@@ -74,11 +80,19 @@ mod mock_registry {
     #[contractimpl]
     impl MockRegistry {
         pub fn set_admin(env: Env, dao_id: u64, admin: Address) {
-            env.storage().persistent().set(&dao_id, &admin);
+            env.storage().persistent().set(&DataKey::Admin(dao_id), &admin);
         }
 
         pub fn get_admin(env: Env, dao_id: u64) -> Address {
-            env.storage().persistent().get(&dao_id).unwrap()
+            env.storage().persistent().get(&DataKey::Admin(dao_id)).unwrap()
+        }
+
+        pub fn set_membership_open(env: Env, dao_id: u64, is_open: bool) {
+            env.storage().persistent().set(&DataKey::MembershipOpen(dao_id), &is_open);
+        }
+
+        pub fn is_membership_open(env: Env, dao_id: u64) -> bool {
+            env.storage().persistent().get(&DataKey::MembershipOpen(dao_id)).unwrap_or(false)
         }
     }
 }

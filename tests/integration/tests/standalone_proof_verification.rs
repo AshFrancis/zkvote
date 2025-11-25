@@ -17,6 +17,9 @@
 //   - Merkle root matches expected value
 //   - First vote submission: SUCCESS (proof verifies)
 //   - Second vote (same nullifier): FAIL (double vote detected)
+//
+// NOTE: Proofs are LE-encoded (proof_soroban_le.json). After BE migration,
+// need to regenerate using proof_soroban_be.json and verification_key_soroban_be.json
 
 use soroban_sdk::{
     testutils::Address as _,
@@ -61,77 +64,77 @@ fn hex_str_to_u256(env: &Env, hex: &str) -> U256 {
 }
 
 fn get_real_proof(env: &Env) -> voting::Proof {
-    // Real proof from circuits/build/proof_soroban_le.json (LITTLE-ENDIAN!)
+    // Real proof from circuits/build/proof_soroban_be.json (BIG-ENDIAN!)
     // Generated with depth 18, 6 public signals (root, nullifier, daoId, proposalId, voteChoice, commitment)
-    // Fq2 element ordering: [x1, x2, y1, y2] (NOT reversed)
+    // G2 format: [c1, c0, c1, c0] (imaginary first)
     voting::Proof {
         a: hex_to_bytes(
             env,
-            "d0012166b4e9436363b3064a72d4cb991c41d9551cafcb26482ef894006e802df1bee17e9923cb4c7bf9534dc2ca893078204754bc68ebc8f5abe5900eacf227",
+            "2d806e0094f82e4826cbaf1c55d9411c99cbd4724a06b3636343e9b4662101d027f2ac0e90e5abf5c8eb68bc544720783089cac24d53f97b4ccb23997ee1bef1",
         ),
         b: hex_to_bytes(
             env,
-            "d5459c47f81e2e12b9be2329f5516cadefb9192156d55debf8b042d4f655411f2d5a16dd0c2de66e2367481f00461424f2723de0ec0861552911260f019e9a07ac0f00c01f4702dddab63eb7eabb7c3fbf42d671d06c739e95be64913b35510d81fac50168e6dc7190ec1a9b1b68afe2568a22a23fb20a92ce158a3fbdfed808",
+            "079a9e010f261129556108ece03d72f2241446001f4867236ee62d0cdd165a2d1f4155f6d442b0f8eb5dd5562119b9efad6c51f52923beb9122e1ef8479c45d508d8febd3f8a15ce920ab23fa2228a56e2af681b9b1aec9071dce66801c5fa810d51353b9164be959e736cd071d642bf3f7cbbeab73eb6dadd02471fc0000fac",
         ),
         c: hex_to_bytes(
             env,
-            "9eb6e4562c91e96fcd73bfde8e6c12d20c239f94a2373dfd7d21c6667b6117146a4a4f06fc99802b11aba2dd8220da04e59e350e4f9f07467b14080ba9230305",
+            "1417617b66c6217dfd3d37a2949f230cd2126c8edebf73cd6fe9912c56e4b69e050323a90b08147b46079f4f0e359ee504da2082dda2ab112b8099fc064f4a6a",
         ),
     }
 }
 
 fn get_verification_key(env: &Env) -> voting::VerificationKey {
-    // VK from circuits/build/verification_key_soroban_le.json (LITTLE-ENDIAN!)
+    // VK from circuits/build/verification_key_soroban_be.json (BIG-ENDIAN!)
     // Generated for 6 public signals: [root, nullifier, daoId, proposalId, voteChoice, commitment]
     // IC has 7 elements (n+1 for n public signals)
-    // Fq2 element ordering: [x1, x2, y1, y2] (NOT reversed)
+    // G2 format: [c1, c0, c1, c0] (imaginary first)
     let mut ic = Vec::new(env);
 
     ic.push_back(hex_to_bytes(
         env,
-        "82d1fb5ff9f0f05f4e560de6300a39ca299275601ca9fe517403775f7cc886034fd524ce1960f20a40838da392cb737c053ed1d347f93516f453b7da40306807",
+        "0386c87c5f77037451fea91c60759229ca390a30e60d564e5ff0f0f95ffbd18207683040dab753f41635f947d3d13e057c73cb92a38d83400af26019ce24d54f",
     ));
     ic.push_back(hex_to_bytes(
         env,
-        "dd5741ac23f8f937634b58a35e3793ebebd994caf77646aae626c632c1e68d0bea010c57307a46d379296b0f2c7ed5ec4d759acf41500c3c47f4f28822e53d0b",
+        "0b8de6c132c626e6aa4676f7ca94d9ebeb93375ea3584b6337f9f823ac4157dd0b3de52288f2f4473c0c5041cf9a754decd57e2c0f6b2979d3467a30570c01ea",
     ));
     ic.push_back(hex_to_bytes(
         env,
-        "2d678341b4fee186662e11eda006d6fe700a84197403ca1a31a45aaa66de9b137ad28a1f00547062f894c5bbcc26bf5927de7309acbaf0b12ac001a34f11560e",
+        "139bde66aa5aa4311aca037419840a70fed606a0ed112e6686e1feb44183672d0e56114fa301c02ab1f0baac0973de2759bf26ccbbc594f8627054001f8ad27a",
     ));
     ic.push_back(hex_to_bytes(
         env,
-        "63ca5d5fa54cc42620255341341071467abc562865c5b1151041e93d9e1a7f2a0498f0c82363eb7a5252c8aab4d85be41096dbb5a05eba2c0968026d8eb30d2f",
+        "2a7f1a9e3de9411015b1c5652856bc7a467110344153252026c44ca55f5dca632f0db38e6d0268092cba5ea0b5db9610e45bd8b4aac852527aeb6323c8f09804",
     ));
     ic.push_back(hex_to_bytes(
         env,
-        "14aca87df38aa49461728f42f1e7745ba7190aaa18c90a8f09f8a693b7b9c5096a3384c850f02e56cd8e3e9c1760e43240524fc75a093cfa06f104375bdc2e12",
+        "09c5b9b793a6f8098f0ac918aa0a19a75b74e7f1428f726194a48af37da8ac14122edc5b3704f106fa3c095ac74f524032e460179c3e8ecd562ef050c884336a",
     ));
     ic.push_back(hex_to_bytes(
         env,
-        "7b5852da2af6d70ec8d8169cd29203c731d16dfc0cbcddd0ac1cad5a56063c14216f80d67d4b01effa63dade0c68238ba162573cda72b20688fee28fe689e113",
+        "143c06565aad1cacd0ddbc0cfc6dd131c70392d29c16d8c80ed7f62ada52587b13e189e68fe2fe8806b272da3c5762a18b23680cdeda63faef014b7dd6806f21",
     ));
     ic.push_back(hex_to_bytes(
         env,
-        "f11f2e8805bcea12d80bdf5ffeda3c823278a8d140403ac419dc1cbfa8e1f21fb0a8c3eec803b79c0b5c5c4d2b8c9e8d93fdc1169a10ad73ecbd28e271f43921",
+        "1ff2e1a8bf1cdc19c43a4040d1a87832823cdafe5fdf0bd812eabc05882e1ff12139f471e228bdec73ad109a16c1fd938d9e8c2b4d5c5c0b9cb703c8eec3a8b0",
     ));
 
     voting::VerificationKey {
         alpha: hex_to_bytes(
             env,
-            "e2f26dbea299f5223b646cb1fb33eadb059d9407559d7441dfd902e3a79a4d2d26194d00ffca76f0010323190a8389ce45e39f2060ecd861b0ce373c50ddbe14",
+            "2d4d9aa7e302d9df41749d5507949d05dbea33fbb16c643b22f599a2be6df2e214bedd503c37ceb061d8ec60209fe345ce89830a19230301f076caff004d1926",
         ),
         beta: hex_to_bytes(
             env,
-            "abb73dc17fbc13021e2471e0c08bd67d8401f52b73d6d07483794cad4778180e0c06f33bbc4c79a9cadef253a68084d382f17788f885c9afd176f7cb2f036709c8ced07a54067fd5a905ea3ec6b796f892912f4dd2233131c7a857a4b1c13917a74623114d9aa69d370d7a6bc4defdaa3c8c3fd947e8f5994a708ae0d1fb4c30",
+            "0967032fcbf776d1afc985f88877f182d38480a653f2decaa9794cbc3bf3060c0e187847ad4c798374d0d6732bf501847dd68bc0e071241e0213bc7fc13db7ab304cfbd1e08a704a99f5e847d93f8c3caafddec46b7a0d379da69a4d112346a71739c1b1a457a8c7313123d24d2f9192f896b7c63eea05a9d57f06547ad0cec8",
         ),
         gamma: hex_to_bytes(
             env,
-            "edf692d95cbdde46ddda5ef7d422436779445c5e66006a42761e1f12efde0018c212f3aeb785e49712e7a9353349aaf1255dfb31b7bf60723a480d9293938e19aa7dfa6601cce64c7bd3430c69e7d1e38f40cb8d8071ab4aeb6d8cdba55ec8125b9722d1dcdaac55f38eb37033314bbc95330c69ad999eec75f05f58d0890609",
+            "198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c21800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa",
         ),
         delta: hex_to_bytes(
             env,
-            "be646ddb1d0b8b536365d1ef38f508b36f809fb810d954e2568a27a9acd13e1e3860f411b3dee7d6aaa8f9214eee89ce16475520199c8793ce71d3db1ce7bb23c6a6bc9f1a4122098339d1f718a2d8348a175b1a08f70cbd6ce7bad1e974280e597ee438d19c128651a5a7d928826061fa6fe9427e0c22606471d7315f9ace28",
+            "23bbe71cdbd371ce93879c1920554716ce89ee4e21f9a8aad6e7deb311f460381e3ed1aca9278a56e254d910b89f806fb308f538efd16563538b0b1ddb6d64be28ce9a5f31d7716460220c7e42e96ffa61608228d9a7a55186129cd138e47e590e2874e9d1bae76cbd0cf7081a5b178a34d8a218f7d139830922411a9fbca6c6",
         ),
         ic,
     }

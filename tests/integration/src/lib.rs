@@ -661,4 +661,207 @@ mod tests {
             &proof,
         );
     }
+
+    // ========================================
+    // Trailing Mode Tests (Native Contracts)
+    // ========================================
+
+    #[test]
+    fn test_trailing_mode_late_joiner_can_vote() {
+        let system = DaoVoteSystem::new();
+        let admin = Address::generate(&system.env);
+        let member1 = Address::generate(&system.env);
+        let member2 = Address::generate(&system.env);
+
+        let dao_id = system
+            .registry_client()
+            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
+
+        system.tree_client().init_tree(&dao_id, &5, &admin);
+        system.sbt_client().mint(&dao_id, &member1, &admin, &None);
+
+        // Member 1 registers commitment
+        let commitment1 = U256::from_u32(&system.env, 11111);
+        system
+            .tree_client()
+            .register_with_caller(&dao_id, &commitment1, &member1);
+
+        // Set up voting
+        let vk = system.create_test_vk();
+        system.voting_client().set_vk(&dao_id, &vk, &admin);
+
+        // Create proposal in TRAILING mode
+        let now = system.env.ledger().timestamp();
+        let end_time = now + 86400;
+        let proposal_id = system.voting_client().create_proposal(
+            &dao_id,
+            &String::from_str(&system.env, "Trailing Mode Test"),
+            &end_time,
+            &member1,
+            &VoteMode::Trailing, // Trailing mode allows late joiners
+        );
+
+        // Member 2 joins AFTER proposal creation
+        system.sbt_client().mint(&dao_id, &member2, &admin, &None);
+        let commitment2 = U256::from_u32(&system.env, 22222);
+        system
+            .tree_client()
+            .register_with_caller(&dao_id, &commitment2, &member2);
+
+        // Get the NEW root (includes member2)
+        let new_root = system.tree_client().current_root(&dao_id);
+
+        // Member 2 CAN vote with new root in trailing mode
+        let proof = system.create_test_proof();
+        let nullifier = U256::from_u32(&system.env, 88888);
+
+        system.voting_client().vote(
+            &dao_id,
+            &proposal_id,
+            &true,
+            &nullifier,
+            &new_root, // New root is valid in trailing mode
+            &commitment2,
+            &proof,
+        );
+
+        // Verify vote was counted
+        let proposal = system.voting_client().get_proposal(&dao_id, &proposal_id);
+        assert_eq!(proposal.yes_votes, 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "commitment revoked at proposal creation")]
+    fn test_trailing_mode_revoked_member_cannot_vote() {
+        let system = DaoVoteSystem::new();
+        let admin = Address::generate(&system.env);
+        let member1 = Address::generate(&system.env);
+        let member2 = Address::generate(&system.env);
+
+        let dao_id = system
+            .registry_client()
+            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
+
+        system.tree_client().init_tree(&dao_id, &5, &admin);
+        system.sbt_client().mint(&dao_id, &member1, &admin, &None);
+        system.sbt_client().mint(&dao_id, &member2, &admin, &None);
+
+        // Member 1 registers commitment
+        let commitment1 = U256::from_u32(&system.env, 11111);
+        system
+            .tree_client()
+            .register_with_caller(&dao_id, &commitment1, &member1);
+
+        // Capture the old root
+        let old_root = system.tree_client().current_root(&dao_id);
+
+        // Remove member1 (revokes their commitment)
+        system
+            .tree_client()
+            .remove_member(&dao_id, &member1, &admin);
+
+        // Member 2 registers
+        let commitment2 = U256::from_u32(&system.env, 22222);
+        system
+            .tree_client()
+            .register_with_caller(&dao_id, &commitment2, &member2);
+
+        // Set up voting
+        let vk = system.create_test_vk();
+        system.voting_client().set_vk(&dao_id, &vk, &admin);
+
+        // Create proposal AFTER member1 revocation
+        let now = system.env.ledger().timestamp();
+        let end_time = now + 86400;
+        let proposal_id = system.voting_client().create_proposal(
+            &dao_id,
+            &String::from_str(&system.env, "New Proposal"),
+            &end_time,
+            &member2,
+            &VoteMode::Trailing,
+        );
+
+        // Revoked member1 tries to vote - should fail due to revocation check
+        let proof = system.create_test_proof();
+        let nullifier = U256::from_u32(&system.env, 99999);
+
+        system.voting_client().vote(
+            &dao_id,
+            &proposal_id,
+            &true,
+            &nullifier,
+            &old_root,
+            &commitment1, // This commitment was revoked
+            &proof,
+        );
+    }
+
+    // NOTE: The current voting contract has strict revocation checks that prevent
+    // members from voting once revoked, even on proposals created before revocation.
+    // This test documents that behavior - it could be changed in the future.
+    #[test]
+    #[should_panic(expected = "commitment revoked")]
+    fn test_trailing_mode_removed_member_cannot_vote_even_on_old_proposal() {
+        use soroban_sdk::testutils::Ledger;
+
+        let system = DaoVoteSystem::new();
+        let admin = Address::generate(&system.env);
+        let member1 = Address::generate(&system.env);
+
+        let dao_id = system
+            .registry_client()
+            .create_dao(&String::from_str(&system.env, "Test DAO"), &admin, &false);
+
+        system.tree_client().init_tree(&dao_id, &5, &admin);
+        system.sbt_client().mint(&dao_id, &member1, &admin, &None);
+
+        // Member 1 registers commitment at timestamp 100
+        system.env.ledger().with_mut(|li| li.timestamp = 100);
+        let commitment1 = U256::from_u32(&system.env, 11111);
+        system
+            .tree_client()
+            .register_with_caller(&dao_id, &commitment1, &member1);
+
+        // Capture root before removal
+        let member_root = system.tree_client().current_root(&dao_id);
+
+        // Set up voting
+        let vk = system.create_test_vk();
+        system.voting_client().set_vk(&dao_id, &vk, &admin);
+
+        // Create proposal at timestamp 200 (BEFORE removal) in TRAILING mode
+        system.env.ledger().with_mut(|li| li.timestamp = 200);
+        let end_time = 200 + 86400;
+        let proposal_id = system.voting_client().create_proposal(
+            &dao_id,
+            &String::from_str(&system.env, "Old Proposal"),
+            &end_time,
+            &member1,
+            &VoteMode::Trailing,
+        );
+
+        // Remove member1 at timestamp 300 (AFTER proposal creation)
+        system.env.ledger().with_mut(|li| li.timestamp = 300);
+        system
+            .tree_client()
+            .remove_member(&dao_id, &member1, &admin);
+
+        // Vote at timestamp 400 (during voting period)
+        system.env.ledger().with_mut(|li| li.timestamp = 400);
+
+        // With current contract logic, even though the member was active when proposal
+        // was created, they cannot vote after being revoked (would need reinstatement)
+        let proof = system.create_test_proof();
+        let nullifier = U256::from_u32(&system.env, 77777);
+
+        system.voting_client().vote(
+            &dao_id,
+            &proposal_id,
+            &true,
+            &nullifier,
+            &member_root,
+            &commitment1, // This commitment was revoked at ts 300
+            &proof,
+        );
+    }
 }

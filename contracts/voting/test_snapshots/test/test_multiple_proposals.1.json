@@ -189,7 +189,14 @@
           "contract_data": {
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
             "key": {
-              "u64": "1"
+              "vec": [
+                {
+                  "symbol": "Admin"
+                },
+                {
+                  "u64": "1"
+                }
+              ]
             },
             "durability": "persistent"
           }
@@ -202,7 +209,14 @@
                 "ext": "v0",
                 "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
                 "key": {
-                  "u64": "1"
+                  "vec": [
+                    {
+                      "symbol": "Admin"
+                    },
+                    {
+                      "u64": "1"
+                    }
+                  ]
                 },
                 "durability": "persistent",
                 "val": {
@@ -556,14 +570,6 @@
                     },
                     {
                       "key": {
-                        "symbol": "finalized"
-                      },
-                      "val": {
-                        "bool": false
-                      }
-                    },
-                    {
-                      "key": {
                         "symbol": "id"
                       },
                       "val": {
@@ -712,14 +718,6 @@
                       },
                       "val": {
                         "u64": "7200"
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "finalized"
-                      },
-                      "val": {
-                        "bool": false
                       }
                     },
                     {

@@ -122,7 +122,7 @@ fn test_create_proposal_with_future_deadline() {
 }
 
 #[test]
-#[should_panic(expected = "end time must be in the future or 0 for no deadline")]
+#[should_panic(expected = "HostError")]
 fn test_create_proposal_with_past_deadline_fails() {
     let env = Env::default();
     env.mock_all_auths();

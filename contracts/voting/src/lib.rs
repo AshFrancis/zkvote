@@ -636,67 +636,7 @@ impl Voting {
         (proposal.yes_votes, proposal.no_votes)
     }
 
-    /// Set verification key for testing (skips admin check and creates dummy VK)
-    /// Only available in test/testutils mode
-    #[cfg(any(test, feature = "testutils"))]
-    pub fn set_vk_testmode(env: Env, dao_id: u64, admin: Address) {
-        admin.require_auth();
 
-        // Create simple dummy VK with G1/G2 generator points
-        // G1 generator: (1, 2)
-        let mut g1_bytes = [0u8; 64];
-        g1_bytes[31] = 1; // x = 1
-        g1_bytes[63] = 2; // y = 2
-        let g1_gen = BytesN::<64>::from_array(&env, &g1_bytes);
-
-        // G2 generator (simplified)
-        let mut g2_bytes = [0u8; 128];
-        g2_bytes[31] = 1;
-        g2_bytes[63] = 2;
-        g2_bytes[95] = 1;
-        g2_bytes[127] = 2;
-        let g2_gen = BytesN::<128>::from_array(&env, &g2_bytes);
-
-        let vk = VerificationKey {
-            alpha: g1_gen.clone(),
-            beta: g2_gen.clone(),
-            gamma: g2_gen.clone(),
-            delta: g2_gen,
-            // IC vector: 7 elements for 6 public signals
-            ic: soroban_sdk::vec![
-                &env,
-                g1_gen.clone(),
-                g1_gen.clone(),
-                g1_gen.clone(),
-                g1_gen.clone(),
-                g1_gen.clone(),
-                g1_gen.clone(),
-                g1_gen,
-            ],
-        };
-
-        let key = DataKey::VotingKey(dao_id);
-        env.storage().persistent().set(&key, &vk);
-
-        VKSetEvent { dao_id }.publish(&env);
-    }
-
-    /// Vote on a proposal with testmode (bypasses actual proof verification)
-    /// Only available in test/testutils mode
-    #[cfg(any(test, feature = "testutils"))]
-    pub fn vote_testmode(
-        env: Env,
-        dao_id: u64,
-        proposal_id: u64,
-        vote_choice: bool,
-        nullifier: U256,
-        root: U256,
-        commitment: U256,
-        proof: Proof,
-    ) {
-        // Same logic as regular vote(), but verify_groth16 will return true in testmode
-        Self::vote(env, dao_id, proposal_id, vote_choice, nullifier, root, commitment, proof)
-    }
 
     // Internal: Get next proposal ID
     fn next_proposal_id(env: &Env, dao_id: u64) -> u64 {
@@ -797,18 +737,18 @@ impl Voting {
 
     // Negate G1 point (flip y-coordinate)
     // For BN254: -P = (x, -y) where -y = field_modulus - y
-    // Uses LITTLE-ENDIAN byte order (arkworks G1Affine::from_bytes expects LE)
+    // Uses BIG-ENDIAN byte order (after PR #1614, Soroban uses Ethereum/EIP-196 encoding)
     #[cfg(not(any(test, feature = "testutils")))]
     fn g1_negate(env: &Env, point: &BytesN<64>) -> BytesN<64> {
         let bytes = point.to_array();
 
-        // BN254 base field modulus (Fq) in LITTLE-ENDIAN
+        // BN254 base field modulus (Fq) in BIG-ENDIAN
         // p = 21888242871839275222246405745257275088696311157297823662689037894645226208583
-        // Little-endian: 0x47fd7cd8168c203c8dca7168916a8197...
+        // Big-endian: 0x30644e72e131a029b85045b68181585d...
         let field_modulus: [u8; 32] = [
-            0x47, 0xfd, 0x7c, 0xd8, 0x16, 0x8c, 0x20, 0x3c, 0x8d, 0xca, 0x71, 0x68, 0x91, 0x6a,
-            0x81, 0x97, 0x5d, 0x58, 0x81, 0x81, 0xb6, 0x45, 0x50, 0xb8, 0x29, 0xa0, 0x31, 0xe1,
-            0x72, 0x4e, 0x64, 0x30,
+            0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81,
+            0x58, 0x5d, 0x97, 0x81, 0x6a, 0x91, 0x68, 0x71, 0xca, 0x8d, 0x3c, 0x20, 0x8c, 0x16,
+            0xd8, 0x7c, 0xfd, 0x47,
         ];
 
         // Extract x (first 32 bytes) and y (next 32 bytes)
@@ -817,8 +757,8 @@ impl Voting {
         x.copy_from_slice(&bytes[0..32]);
         y.copy_from_slice(&bytes[32..64]);
 
-        // Compute -y = p - y (little-endian subtraction)
-        let neg_y = Self::field_subtract_le(&field_modulus, &y);
+        // Compute -y = p - y (big-endian subtraction)
+        let neg_y = Self::field_subtract_be(&field_modulus, &y);
 
         // Construct negated point
         let mut result = [0u8; 64];
@@ -828,15 +768,15 @@ impl Voting {
         BytesN::from_array(env, &result)
     }
 
-    // Subtract two 256-bit LITTLE-ENDIAN numbers: a - b
+    // Subtract two 256-bit BIG-ENDIAN numbers: a - b
     #[cfg(not(any(test, feature = "testutils")))]
-    fn field_subtract_le(a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] {
+    fn field_subtract_be(a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] {
         let mut result = [0u8; 32];
         let mut borrow: u16 = 0;
 
-        // Subtract from least significant byte (index 0) to most significant (index 31)
-        // for little-endian
-        for i in 0..32 {
+        // Subtract from least significant byte (index 31) to most significant (index 0)
+        // for big-endian
+        for i in (0..32).rev() {
             let diff = (a[i] as u16) as i32 - (b[i] as u16) as i32 - borrow as i32;
             if diff < 0 {
                 result[i] = (diff + 256) as u8;

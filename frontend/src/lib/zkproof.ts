@@ -69,40 +69,39 @@ export async function generateVoteProof(
 /**
  * Convert snarkjs proof format to Soroban-compatible hex strings
  *
- * KEY INSIGHT: snarkjs outputs big-endian field elements, but the Soroban
- * host function expects little-endian bytes (arkworks G1Affine::from_bytes).
- * We must reverse each 32-byte limb before passing to the pairing check.
+ * After PR #1614, Soroban BN254 host functions use BIG-ENDIAN encoding
+ * matching CAP-74 and EVM precompile specifications (EIP-196, EIP-197).
+ * snarkjs already outputs big-endian field elements, so NO byte reversal is needed.
+ *
+ * G2 Fp2 format: Ethereum expects [c1, c0] (imaginary first), while snarkjs
+ * outputs [c0, c1] (real first), so we swap each coordinate pair.
  */
 export function formatProofForSoroban(proof: Groth16Proof): {
   proof_a: string;
   proof_b: string;
   proof_c: string;
 } {
-  // Convert field element to LITTLE-ENDIAN hex (reverse bytes)
-  // snarkjs outputs big-endian, but Soroban host function expects little-endian
-  const toHexLE = (value: string): string => {
+  // Convert field element to BIG-ENDIAN hex (no reversal needed)
+  const toHexBE = (value: string): string => {
     const bigInt = BigInt(value);
-    const hexBE = bigInt.toString(16).padStart(64, "0");
-    // Reverse bytes: "abcd...wxyz" -> "zyxw...dcba"
-    const hexLE = hexBE.match(/.{2}/g)!.reverse().join("");
-    return hexLE;
+    return bigInt.toString(16).padStart(64, "0");
   };
 
-  // Format pi_a (G1 point): [x, y] - each coordinate reversed to LE
-  const proof_a = toHexLE(proof.pi_a[0]) + toHexLE(proof.pi_a[1]);
+  // Format pi_a (G1 point): be_bytes(X) || be_bytes(Y)
+  const proof_a = toHexBE(proof.pi_a[0]) + toHexBE(proof.pi_a[1]);
 
   // Format pi_b (G2 point): [[x.c0, x.c1], [y.c0, y.c1]]
-  // Little-endian format: le_bytes(X_re) || le_bytes(X_im) || le_bytes(Y_re) || le_bytes(Y_im)
+  // Ethereum/Soroban format: be_bytes(X_c1) || be_bytes(X_c0) || be_bytes(Y_c1) || be_bytes(Y_c0)
   // snarkjs outputs: [[c0, c1], [c0, c1]] where c0=real, c1=imaginary
-  // Keep natural order [c0, c1, c0, c1] - NO swap, just reverse each limb
+  // We swap within each coordinate pair: [c1, c0, c1, c0]
   const proof_b =
-    toHexLE(proof.pi_b[0][0]) +  // X.c0 (real) - reversed
-    toHexLE(proof.pi_b[0][1]) +  // X.c1 (imaginary) - reversed
-    toHexLE(proof.pi_b[1][0]) +  // Y.c0 (real) - reversed
-    toHexLE(proof.pi_b[1][1]);   // Y.c1 (imaginary) - reversed
+    toHexBE(proof.pi_b[0][1]) +  // X.c1 (imaginary)
+    toHexBE(proof.pi_b[0][0]) +  // X.c0 (real)
+    toHexBE(proof.pi_b[1][1]) +  // Y.c1 (imaginary)
+    toHexBE(proof.pi_b[1][0]);   // Y.c0 (real)
 
-  // Format pi_c (G1 point): [x, y] - each coordinate reversed to LE
-  const proof_c = toHexLE(proof.pi_c[0]) + toHexLE(proof.pi_c[1]);
+  // Format pi_c (G1 point): be_bytes(X) || be_bytes(Y)
+  const proof_c = toHexBE(proof.pi_c[0]) + toHexBE(proof.pi_c[1]);
 
   return { proof_a, proof_b, proof_c };
 }
