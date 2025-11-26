@@ -54,4 +54,5 @@ test('config returns contract ids with auth', async () => {
   assert.equal(res.body.votingContract.startsWith('C'), true);
   assert.equal(res.body.treeContract.startsWith('C'), true);
   assert.equal(typeof res.body.networkPassphrase, 'string');
+  assert.equal(res.body.vkVersion, undefined);
 });

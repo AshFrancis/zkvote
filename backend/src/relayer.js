@@ -69,6 +69,9 @@ const HEALTH_EXPOSE_DETAILS = process.env.HEALTH_EXPOSE_DETAILS !== 'false'; // 
 const RPC_TIMEOUT_MS = Number(process.env.RPC_TIMEOUT_MS || 10_000);
 const LOG_REQUEST_BODY = process.env.LOG_REQUEST_BODY !== 'false'; // disable to avoid logging body meta
 const STRIP_REQUEST_BODIES = process.env.STRIP_REQUEST_BODIES === 'true'; // drop bodies entirely from logs/handlers
+const STATIC_VK_VERSION = process.env.VOTING_VK_VERSION
+  ? Number(process.env.VOTING_VK_VERSION)
+  : undefined;
 
 // Contract IDs - MUST be set or server won't start
 const VOTING_CONTRACT_ID = process.env.VOTING_CONTRACT_ID;
@@ -258,6 +261,7 @@ app.get('/config', (req, res) => {
     treeContract: TREE_CONTRACT_ID,
     networkPassphrase: NETWORK_PASSPHRASE,
     rpc: RPC_URL,
+    vkVersion: STATIC_VK_VERSION,
   };
   return res.json(base);
 });
