@@ -5,6 +5,7 @@
 - **Phase 1 – Contracts (Rust/Soroban)**: Enforce module boundaries, typed errors, storage/versioning scheme, governance FSM invariants, nullifier/replay safety, VK handling/rotation hooks, budget/meters optimization, minimal privacy-safe events, upgrade/version events.
   - Done: per-DAO VK versioning with `VkByVersion`, proposal pinning, explicit VK selection API, `vk_for_version` getter, VK-change compatibility tests.
   - Done: Proposal close flag guarded in vote, nullifier zero guard, shared VK validation/version bump helpers; budget smoke tests for core flows.
+  - Done: Added `ProposalState` (Active/Closed/Archived), admin helper reused for VK/close/archive; archive path and vote guards.
 - **Phase 2 – Circuits & Crypto**: Contract/circuit consistency (Poseidon params, encodings), VK/circuit rotation with per-proposal vk_id, golden vectors + CI, negative/side-channel-aware error handling, remove dev keys.
   - Done: Poseidon/Merkle golden vectors validated against host (`tests/golden_vectors.rs` + `circuits/utils/golden_vectors.json`).
 - **Phase 3 – Backend Relay**: Input validation, auth boundaries, privacy/log policy, resilience to RPC failures, env/config validation + healthcheck, removal of debug endpoints, tests for failures/replays/duplicates.
