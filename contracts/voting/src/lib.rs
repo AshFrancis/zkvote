@@ -767,6 +767,11 @@ impl Voting {
             .unwrap_or(0)
     }
 
+    /// Get a specific VK version for observability/off-chain verification
+    pub fn vk_for_version(env: Env, dao_id: u64, version: u32) -> VerificationKey {
+        Self::get_vk_by_version(&env, dao_id, version)
+    }
+
     // Internal: Get next proposal ID
     fn next_proposal_id(env: &Env, dao_id: u64) -> u64 {
         let count_key = DataKey::ProposalCount(dao_id);

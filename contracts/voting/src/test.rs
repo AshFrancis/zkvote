@@ -921,12 +921,21 @@ fn test_create_proposal_with_specific_vk_version() {
     let vk1 = create_dummy_vk(&env);
     voting_client.set_vk(&1u64, &vk1, &admin);
     let mut vk2 = create_dummy_vk(&env);
+    // Make vk2 distinct: tweak IC[0] and alpha
     let mut vk2_ic = soroban_sdk::vec![&env];
-    let ic_point = vk1.ic.get(0).unwrap();
-    for _ in 0..7 {
-        vk2_ic.push_back(ic_point.clone());
+    let mut first_ic_bytes = vk1.ic.get(0).unwrap().to_array();
+    first_ic_bytes[31] = 0x05; // change x
+    vk2_ic.push_back(BytesN::from_array(&env, &first_ic_bytes));
+    for _ in 1..7 {
+        vk2_ic.push_back(vk1.ic.get(0).unwrap());
     }
     vk2.ic = vk2_ic;
+
+    let mut alpha_bytes = vk2.alpha.to_array();
+    alpha_bytes[0] = 0xAA;
+    alpha_bytes[31] = 0xBB;
+    alpha_bytes[63] = 0xCC;
+    vk2.alpha = BytesN::from_array(&env, &alpha_bytes);
     voting_client.set_vk(&1u64, &vk2, &admin);
 
     // Create proposal pinned to v1 even though latest is v2
@@ -985,6 +994,47 @@ fn test_create_proposal_with_future_vk_version_rejected() {
         &VoteMode::Fixed,
         &2u32,
     );
+}
+
+#[test]
+fn test_vk_for_version_exposes_stored_key() {
+    let (env, voting_id, _tree_id, _sbt_id, registry_id, _member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    registry_client.set_admin(&1u64, &admin);
+
+    let vk1 = create_dummy_vk(&env);
+    let mut vk2 = create_dummy_vk(&env);
+    // Make vk2 distinct: tweak IC[0] and alpha
+    let mut vk2_ic = soroban_sdk::vec![&env];
+    let mut first_ic_bytes = vk1.ic.get(0).unwrap().to_array();
+    first_ic_bytes[31] = 0x05; // change x
+    vk2_ic.push_back(BytesN::from_array(&env, &first_ic_bytes));
+    for _ in 1..7 {
+        vk2_ic.push_back(vk1.ic.get(0).unwrap());
+    }
+    vk2.ic = vk2_ic;
+    let mut alpha_bytes = vk2.alpha.to_array();
+    alpha_bytes[0] = 0xAA;
+    alpha_bytes[31] = 0xBB;
+    alpha_bytes[63] = 0xCC;
+    vk2.alpha = BytesN::from_array(&env, &alpha_bytes);
+
+    let vk1_hash = Voting::hash_vk(&env, &vk1);
+    let vk2_hash = Voting::hash_vk(&env, &vk2);
+    assert_ne!(vk1_hash, vk2_hash);
+
+    voting_client.set_vk(&1u64, &vk1, &admin);
+    voting_client.set_vk(&1u64, &vk2, &admin);
+
+    let fetched_v1 = voting_client.vk_for_version(&1u64, &1u32);
+    let fetched_v2 = voting_client.vk_for_version(&1u64, &2u32);
+
+    assert_eq!(Voting::hash_vk(&env, &fetched_v1), vk1_hash);
+    assert_eq!(Voting::hash_vk(&env, &fetched_v2), vk2_hash);
+    assert_ne!(vk1_hash, vk2_hash);
 }
 
 #[test]
