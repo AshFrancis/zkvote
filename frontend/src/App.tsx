@@ -12,7 +12,7 @@ import { useTheme } from "./hooks/useTheme";
 import { initializeContractClients } from "./lib/contracts";
 import { getReadOnlyDaoRegistry } from "./lib/readOnlyContracts";
 import verificationKey from "./lib/verification_key_soroban.json";
-import { CONTRACTS } from "./config/contracts";
+import { CONTRACTS, NETWORK_CONFIG } from "./config/contracts";
 import { validateStaticConfig } from "./config/guardrails";
 import { checkRelayerReady, fetchRelayerConfig } from "./lib/stellar";
 // ZK credentials will be generated deterministically after DAO creation
@@ -361,6 +361,36 @@ function App() {
         console.warn("relayer config fetch failed", err?.message);
       });
   }, []);
+
+  // Cross-check relayer config against local contract config to prevent mispointing
+  useEffect(() => {
+    if (!relayerConfig) return;
+    const mismatches: string[] = [];
+    if (relayerConfig.votingContract && relayerConfig.votingContract !== CONTRACTS.VOTING_ID) {
+      mismatches.push(
+        `Relayer votingContract (${relayerConfig.votingContract}) differs from local config (${CONTRACTS.VOTING_ID})`
+      );
+    }
+    if (relayerConfig.treeContract && relayerConfig.treeContract !== CONTRACTS.TREE_ID) {
+      mismatches.push(
+        `Relayer treeContract (${relayerConfig.treeContract}) differs from local config (${CONTRACTS.TREE_ID})`
+      );
+    }
+    if (
+      relayerConfig.networkPassphrase &&
+      relayerConfig.networkPassphrase !== NETWORK_CONFIG.networkPassphrase
+    ) {
+      mismatches.push(
+        `Relayer networkPassphrase differs from local config (${NETWORK_CONFIG.networkPassphrase})`
+      );
+    }
+    if (relayerConfig.rpc && relayerConfig.rpc !== NETWORK_CONFIG.rpcUrl) {
+      mismatches.push(`Relayer RPC differs from local config (${NETWORK_CONFIG.rpcUrl})`);
+    }
+    if (mismatches.length) {
+      setConfigErrors((prev) => Array.from(new Set([...prev, ...mismatches])));
+    }
+  }, [relayerConfig]);
 
   const handleNavigate = (view: 'home' | 'browse' | 'votes') => {
     if (view === 'home') navigate('/');
