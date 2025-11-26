@@ -40,3 +40,18 @@ test('vote requires auth when token set', async () => {
   const res = await request(app).post('/vote').send({});
   assert.equal(res.statusCode, 401);
 });
+
+test('config requires auth when token set', async () => {
+  const app = await setupApp();
+  const res = await request(app).get('/config');
+  assert.equal(res.statusCode, 401);
+});
+
+test('config returns contract ids with auth', async () => {
+  const app = await setupApp();
+  const res = await request(app).get('/config').set('Authorization', `Bearer ${token}`);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.votingContract.startsWith('C'), true);
+  assert.equal(res.body.treeContract.startsWith('C'), true);
+  assert.equal(typeof res.body.networkPassphrase, 'string');
+});

@@ -244,6 +244,24 @@ app.get('/ready', async (_req, res) => {
   }
 });
 
+// Lightweight config surface (no secrets)
+app.get('/config', (req, res) => {
+  if (RELAYER_AUTH_TOKEN) {
+    const token = extractAuthToken(req);
+    if (token !== RELAYER_AUTH_TOKEN) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+  }
+
+  const base = {
+    votingContract: VOTING_CONTRACT_ID,
+    treeContract: TREE_CONTRACT_ID,
+    networkPassphrase: NETWORK_PASSPHRASE,
+    rpc: RPC_URL,
+  };
+  return res.json(base);
+});
+
 // Submit anonymous vote (with rate limiting)
 app.post('/vote', authGuard, voteLimiter, async (req, res) => {
   const { daoId, proposalId, choice, nullifier, root, commitment, proof } = STRIP_REQUEST_BODIES
