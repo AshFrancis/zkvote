@@ -136,6 +136,13 @@ Comprehensive test gap analysis and implementation roadmap for DaoVote.
 - [ ] Member leaves (SBT remains) - can still vote (commitment permanent)
 - [ ] Root changes mid-vote - old votes still valid, new voters use old root
 
+**FSM Transition Tests** (`contracts/voting/src/test.rs`):
+- [x] Close -> vote panics ✓
+- [x] Archive -> vote panics ✓
+- [x] Archive without close panics ✓
+- [x] Close after archive panics ✓
+- [ ] Reopen (Closed/Archived -> Active) impossible (assert no reopen path)
+
 ---
 
 ### 6. Backend & E2E
