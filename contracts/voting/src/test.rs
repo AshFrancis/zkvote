@@ -834,6 +834,50 @@ fn test_nullifier_reusable_across_proposals() {
     assert_eq!(no2, 1);
 }
 
+#[test]
+fn test_multiple_unique_nullifiers_succeed() {
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    sbt_client.set_member(&1u64, &member, &true);
+    let root = U256::from_u32(&env, 12345);
+    tree_client.set_root(&1u64, &root);
+    registry_client.set_admin(&1u64, &admin);
+    voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
+
+    let now = env.ledger().timestamp();
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Batch votes"),
+        &(now + 3600),
+        &member,
+        &VoteMode::Fixed,
+    );
+
+    let proposal = voting_client.get_proposal(&1u64, &proposal_id);
+    let proof = create_dummy_proof(&env);
+
+    for i in 1..6 {
+        let nullifier = U256::from_u32(&env, i);
+        voting_client.vote(
+            &1u64,
+            &proposal_id,
+            &(i % 2 == 0),
+            &nullifier,
+            &proposal.eligible_root,
+            &U256::from_u32(&env, 12345),
+            &proof,
+        );
+    }
+
+    let updated = voting_client.get_proposal(&1u64, &proposal_id);
+    assert_eq!(updated.yes_votes + updated.no_votes, 5);
+}
+
 // Validation test for BN254 base field modulus constant
 // This ensures the hardcoded modulus in g1_negate is correct
 #[test]
