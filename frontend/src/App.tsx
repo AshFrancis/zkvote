@@ -387,6 +387,14 @@ function App() {
     if (relayerConfig.rpc && relayerConfig.rpc !== NETWORK_CONFIG.rpcUrl) {
       mismatches.push(`Relayer RPC differs from local config (${NETWORK_CONFIG.rpcUrl})`);
     }
+    if (
+      typeof relayerConfig.vkVersion === "number" &&
+      relayerConfig.vkVersion > 0 &&
+      relayerConfig.vkVersion !== undefined
+    ) {
+      // If front-end ever hardcodes vk version, compare; otherwise just log for awareness
+      console.info("Relayer reports vkVersion", relayerConfig.vkVersion);
+    }
     if (mismatches.length) {
       setConfigErrors((prev) => Array.from(new Set([...prev, ...mismatches])));
     }
