@@ -10,5 +10,6 @@
   - ZK credential cache namespaced with TTL; config guardrails for network/contract IDs.
 - Contracts:
   - Version keys + `ContractUpgraded` events, reinit guards; typed error cleanups and VK version enforcement.
+  - Per-version VK storage with proposal pinning; added explicit proposal creation with chosen VK version and view `vk_for_version` for off-chain verification.
 - Tests:
   - Node built-in tests for relayer auth/health; Rust `cargo test --workspace` green; frontend build passing.
