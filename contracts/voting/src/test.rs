@@ -768,6 +768,53 @@ fn test_reopen_not_allowed() {
 }
 
 #[test]
+fn test_randomized_nullifier_sequence_no_duplicates() {
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    sbt_client.set_member(&1u64, &member, &true);
+    let root = U256::from_u32(&env, 12345);
+    tree_client.set_root(&1u64, &root);
+    registry_client.set_admin(&1u64, &admin);
+    voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
+
+    let now = env.ledger().timestamp();
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Randomized nullifiers"),
+        &(now + 3600),
+        &member,
+        &VoteMode::Fixed,
+    );
+
+    let proposal = voting_client.get_proposal(&1u64, &proposal_id);
+    let proof = create_dummy_proof(&env);
+
+    // Pseudo-randomish sequence without duplicates (hardcoded for determinism)
+    let nullifiers: [u32; 10] = [17, 3, 11, 25, 2, 19, 7, 13, 23, 29];
+
+    for (i, n) in nullifiers.iter().enumerate() {
+        let n_u = U256::from_u32(&env, *n);
+        voting_client.vote(
+            &1u64,
+            &proposal_id,
+            &(i % 2 == 0),
+            &n_u,
+            &proposal.eligible_root,
+            &U256::from_u32(&env, 12345),
+            &proof,
+        );
+    }
+
+    let updated = voting_client.get_proposal(&1u64, &proposal_id);
+    assert_eq!(updated.yes_votes + updated.no_votes, nullifiers.len() as u64);
+}
+
+#[test]
 #[should_panic(expected = "HostError")]
 fn test_close_proposal_non_admin_fails() {
     let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
