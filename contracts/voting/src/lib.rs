@@ -61,6 +61,7 @@ pub enum VotingError {
     VkNotSet = 16,
     VkVersionMismatch = 17,
     AlreadyInitialized = 18,
+    InvalidState = 20,
 }
 
 // Maximum allowed IC vector length (num_public_inputs + 1)
@@ -821,6 +822,9 @@ impl Voting {
             .get(&key)
             .expect("proposal not found");
 
+        if proposal.state == ProposalState::Archived {
+            panic_with_error!(&env, VotingError::InvalidState);
+        }
         if proposal.state != ProposalState::Closed {
             proposal.state = ProposalState::Closed;
             env.storage().persistent().set(&key, &proposal);
