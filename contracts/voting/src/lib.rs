@@ -315,6 +315,14 @@ impl Voting {
         VKSetEvent { dao_id }.publish(&env);
     }
 
+    /// Internal helper to fetch a VK by version or fail with a clear error
+    fn get_vk_by_version(env: &Env, dao_id: u64, version: u32) -> VerificationKey {
+        env.storage()
+            .persistent()
+            .get(&DataKey::VkByVersion(dao_id, version))
+            .unwrap_or_else(|| panic_with_error!(env, VotingError::VkVersionMismatch))
+    }
+
     /// Set verification key from registry during DAO initialization
     /// This function is called by the registry contract during create_and_init_dao
     /// to avoid re-entrancy issues. The registry is a trusted system contract.
@@ -340,6 +348,9 @@ impl Voting {
 
         let key = DataKey::VotingKey(dao_id);
         env.storage().persistent().set(&key, &vk);
+        env.storage()
+            .persistent()
+            .set(&DataKey::VkByVersion(dao_id, new_version), &vk);
 
         VKSetEvent { dao_id }.publish(&env);
     }
@@ -354,6 +365,33 @@ impl Voting {
         end_time: u64,
         creator: Address,
         vote_mode: VoteMode,
+    ) -> u64 {
+        Self::create_proposal_with_version(env, dao_id, description, end_time, creator, vote_mode, None)
+    }
+
+    /// Create proposal with a specific VK version (must be <= current and exist)
+    pub fn create_proposal_with_vk_version(
+        env: Env,
+        dao_id: u64,
+        description: String,
+        end_time: u64,
+        creator: Address,
+        vote_mode: VoteMode,
+        vk_version: u32,
+    ) -> u64 {
+        Self::create_proposal_with_version(
+            env, dao_id, description, end_time, creator, vote_mode, Some(vk_version),
+        )
+    }
+
+    fn create_proposal_with_version(
+        env: Env,
+        dao_id: u64,
+        description: String,
+        end_time: u64,
+        creator: Address,
+        vote_mode: VoteMode,
+        vk_version: Option<u32>,
     ) -> u64 {
         creator.require_auth();
 
@@ -405,21 +443,19 @@ impl Voting {
             panic_with_error!(&env, VotingError::EndTimeInvalid);
         }
 
-        // Verify VK is set for this DAO and snapshot it
-        let vk_key = DataKey::VotingKey(dao_id);
-        let vk: VerificationKey = env
+        // Resolve VK version to use
+        let current_version: u32 = env
             .storage()
             .persistent()
-            .get(&vk_key)
+            .get(&DataKey::VkVersion(dao_id))
             .unwrap_or_else(|| panic_with_error!(&env, VotingError::VkNotSet));
+        let selected_version = vk_version.unwrap_or(current_version);
+        if selected_version == 0 || selected_version > current_version {
+            panic_with_error!(&env, VotingError::VkNotSet);
+        }
 
-        // Snapshot VK version
-        let version_key = DataKey::VkVersion(dao_id);
-        let vk_version: u32 = env
-            .storage()
-            .persistent()
-            .get(&version_key)
-            .unwrap_or_else(|| panic_with_error!(&env, VotingError::VkNotSet));
+        // Snapshot VK by version
+        let vk = Self::get_vk_by_version(&env, dao_id, selected_version);
 
         // Compute VK hash for immutability during proposal lifetime
         let vk_hash = Self::hash_vk(&env, &vk);
@@ -450,7 +486,7 @@ impl Voting {
             created_by: creator.clone(),
             created_at: now,
             vk_hash,
-            vk_version,
+            vk_version: selected_version,
             eligible_root,
             vote_mode,
             earliest_root_index,
@@ -623,11 +659,7 @@ impl Voting {
         }
 
         // Get verification key pinned to proposal version
-        let vk: VerificationKey = env
-            .storage()
-            .persistent()
-            .get(&DataKey::VkByVersion(dao_id, proposal.vk_version))
-            .unwrap_or_else(|| panic_with_error!(&env, VotingError::VkVersionMismatch));
+        let vk: VerificationKey = Self::get_vk_by_version(&env, dao_id, proposal.vk_version);
 
         // Verify VK matches the snapshot taken at proposal creation
         // This prevents VK changes from invalidating in-flight votes

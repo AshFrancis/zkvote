@@ -904,6 +904,90 @@ fn test_vk_version_mismatch_rejected() {
 }
 
 #[test]
+fn test_create_proposal_with_specific_vk_version() {
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    sbt_client.set_member(&1u64, &member, &true);
+    let root = U256::from_u32(&env, 12345);
+    tree_client.set_root(&1u64, &root);
+    registry_client.set_admin(&1u64, &admin);
+
+    // Set VK v1 and v2
+    let vk1 = create_dummy_vk(&env);
+    voting_client.set_vk(&1u64, &vk1, &admin);
+    let mut vk2 = create_dummy_vk(&env);
+    let mut vk2_ic = soroban_sdk::vec![&env];
+    let ic_point = vk1.ic.get(0).unwrap();
+    for _ in 0..7 {
+        vk2_ic.push_back(ic_point.clone());
+    }
+    vk2.ic = vk2_ic;
+    voting_client.set_vk(&1u64, &vk2, &admin);
+
+    // Create proposal pinned to v1 even though latest is v2
+    let now = env.ledger().timestamp();
+    let proposal_id = voting_client.create_proposal_with_vk_version(
+        &1u64,
+        &String::from_str(&env, "Old VK proposal"),
+        &(now + 3600),
+        &member,
+        &VoteMode::Fixed,
+        &1u32,
+    );
+
+    let proposal = voting_client.get_proposal(&1u64, &proposal_id);
+    assert_eq!(proposal.vk_version, 1);
+
+    let nullifier = U256::from_u32(&env, 99999);
+    let proof = create_dummy_proof(&env);
+
+    voting_client.vote(
+        &1u64,
+        &proposal_id,
+        &true,
+        &nullifier,
+        &proposal.eligible_root,
+        &U256::from_u32(&env, 12345),
+        &proof,
+    );
+}
+
+#[test]
+#[should_panic(expected = "HostError")]
+fn test_create_proposal_with_future_vk_version_rejected() {
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    sbt_client.set_member(&1u64, &member, &true);
+    let root = U256::from_u32(&env, 12345);
+    tree_client.set_root(&1u64, &root);
+    registry_client.set_admin(&1u64, &admin);
+
+    // Only VK v1 exists
+    voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
+
+    let now = env.ledger().timestamp();
+    // Request non-existent future version 2
+    voting_client.create_proposal_with_vk_version(
+        &1u64,
+        &String::from_str(&env, "Future version"),
+        &(now + 3600),
+        &member,
+        &VoteMode::Fixed,
+        &2u32,
+    );
+}
+
+#[test]
 #[should_panic(expected = "HostError")]
 fn test_set_vk_empty_ic_fails() {
     let (env, voting_id, _tree_id, _sbt_id, registry_id, _member) = setup_env_with_registry();
