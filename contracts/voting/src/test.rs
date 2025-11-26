@@ -431,6 +431,22 @@ fn test_double_vote_fails() {
         &U256::from_u32(&env, 12345),
         &proof,
     );
+
+    // Close proposal and ensure subsequent votes fail
+    voting_client.close_proposal(&1u64, &proposal_id, &admin);
+    let closed = voting_client.get_proposal(&1u64, &proposal_id);
+    assert!(closed.closed);
+
+    let nullifier2 = U256::from_u32(&env, 55555);
+    voting_client.vote(
+        &1u64,
+        &proposal_id,
+        &false,
+        &nullifier2,
+        &proposal.eligible_root,
+        &U256::from_u32(&env, 12345),
+        &proof,
+    );
 }
 
 #[test]

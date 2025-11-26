@@ -1658,6 +1658,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "closed"
+                      },
+                      "val": {
+                        "bool": false
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "created_at"
                       },
                       "val": {
