@@ -31,6 +31,21 @@ export async function checkRelayerReady(relayerUrl: string, authToken?: string) 
   }
 }
 
+export type RelayerConfig = {
+  votingContract: string;
+  treeContract: string;
+  networkPassphrase: string;
+  rpc: string;
+  vkVersion?: number;
+};
+
+export async function fetchRelayerConfig(relayerUrl: string, authToken?: string): Promise<RelayerConfig> {
+  const headers: Record<string, string> = {};
+  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+  const res = await axios.get(`${relayerUrl}/config`, { headers });
+  return res.data as RelayerConfig;
+}
+
 /**
  * Build and simulate a contract invocation transaction
  * @param source Source account public key

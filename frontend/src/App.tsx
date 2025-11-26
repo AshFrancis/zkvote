@@ -14,7 +14,7 @@ import { getReadOnlyDaoRegistry } from "./lib/readOnlyContracts";
 import verificationKey from "./lib/verification_key_soroban.json";
 import { CONTRACTS } from "./config/contracts";
 import { validateStaticConfig } from "./config/guardrails";
-import { checkRelayerReady } from "./lib/stellar";
+import { checkRelayerReady, fetchRelayerConfig } from "./lib/stellar";
 // ZK credentials will be generated deterministically after DAO creation
 
 // Component for DAO detail page
@@ -314,6 +314,7 @@ function App() {
   const [success, setSuccess] = useState<string | null>(null);
   const [configErrors, setConfigErrors] = useState<string[]>([]);
   const [relayerStatus, setRelayerStatus] = useState<string | null>(null);
+  const [relayerConfig, setRelayerConfig] = useState<any>(null);
 
   // Determine current view from URL path
   const getCurrentView = (): 'home' | 'browse' | 'votes' => {
@@ -353,6 +354,12 @@ function App() {
         else setRelayerStatus(res.error || "relayer not ready");
       })
       .catch((err) => setRelayerStatus(err?.message || "relayer check failed"));
+
+    fetchRelayerConfig(relayerUrl, authToken || undefined)
+      .then((cfg) => setRelayerConfig(cfg))
+      .catch((err) => {
+        console.warn("relayer config fetch failed", err?.message);
+      });
   }, []);
 
   const handleNavigate = (view: 'home' | 'browse' | 'votes') => {
