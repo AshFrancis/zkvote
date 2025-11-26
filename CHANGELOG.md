@@ -14,5 +14,6 @@
   - Per-version VK storage with proposal pinning; added explicit proposal creation with chosen VK version and view `vk_for_version` for off-chain verification.
   - Proposal `closed` flag + close_proposal helper; nullifier zero rejected; helpers for VK validation/version bump.
   - Added Poseidon/Merkle golden vectors test to validate host hash parity.
+  - Added `Archived` state with close-before-archive enforcement, admin helper reuse, and invalid-state guard on close.
 - Tests:
   - Node built-in tests for relayer auth/health; Rust `cargo test --workspace` green; frontend build passing.
