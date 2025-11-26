@@ -13,5 +13,6 @@
   - Version keys + `ContractUpgraded` events, reinit guards; typed error cleanups and VK version enforcement.
   - Per-version VK storage with proposal pinning; added explicit proposal creation with chosen VK version and view `vk_for_version` for off-chain verification.
   - Proposal `closed` flag + close_proposal helper; nullifier zero rejected; helpers for VK validation/version bump.
+  - Added Poseidon/Merkle golden vectors test to validate host hash parity.
 - Tests:
   - Node built-in tests for relayer auth/health; Rust `cargo test --workspace` green; frontend build passing.
