@@ -212,6 +212,7 @@ app.get('/health', async (_req, res) => {
     base.relayer = relayerKeypair.publicKey();
     base.votingContract = VOTING_CONTRACT_ID;
     base.treeContract = TREE_CONTRACT_ID;
+    base.vkVersion = STATIC_VK_VERSION;
   }
 
   res.json(base);
@@ -233,11 +234,13 @@ app.get('/ready', async (_req, res) => {
           base.relayer = relayerKeypair.publicKey();
           base.votingContract = VOTING_CONTRACT_ID;
           base.treeContract = TREE_CONTRACT_ID;
+          base.vkVersion = STATIC_VK_VERSION;
         }
       } else {
         base.relayer = relayerKeypair.publicKey();
         base.votingContract = VOTING_CONTRACT_ID;
         base.treeContract = TREE_CONTRACT_ID;
+        base.vkVersion = STATIC_VK_VERSION;
       }
     }
     return res.json(base);
