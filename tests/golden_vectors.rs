@@ -1,6 +1,5 @@
 use serde::Deserialize;
-use soroban_sdk::{testutils::Ledger, Env, BytesN};
-use soroban_sdk::crypto::poseidon_hash;
+use soroban_sdk::Env;
 
 #[derive(Deserialize)]
 struct PoseidonVector {
