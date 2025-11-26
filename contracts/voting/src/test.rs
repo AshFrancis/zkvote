@@ -435,7 +435,7 @@ fn test_double_vote_fails() {
     // Close proposal and ensure subsequent votes fail
     voting_client.close_proposal(&1u64, &proposal_id, &admin);
     let closed = voting_client.get_proposal(&1u64, &proposal_id);
-    assert!(closed.closed);
+    assert_eq!(closed.state, ProposalState::Closed);
 
     let nullifier2 = U256::from_u32(&env, 55555);
     voting_client.vote(
