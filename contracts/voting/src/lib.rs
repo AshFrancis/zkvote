@@ -221,17 +221,7 @@ impl Voting {
         }
 
         // Validate VK size to prevent DoS attacks
-        // IC vector must have exactly num_public_signals + 1 elements
-        // Vote circuit has 6 public signals (root, nullifier, daoId, proposalId, voteChoice, commitment)
-        // Therefore IC must have exactly 7 elements
-        if vk.ic.len() != EXPECTED_IC_LENGTH {
-            panic_with_error!(&env, VotingError::VkIcLengthMismatch);
-        }
-
-        // Additional safety check: enforce max limit for any future circuit changes
-        if vk.ic.len() > MAX_IC_LENGTH {
-            panic_with_error!(&env, VotingError::VkIcTooLarge);
-        }
+        Self::validate_vk(&env, &vk);
 
         // Point Validation Strategy:
         // ===========================
@@ -301,10 +291,7 @@ impl Voting {
         // - Groth16 paper Section 3.2 - Verification algorithm
 
         // Bump VK version
-        let version_key = DataKey::VkVersion(dao_id);
-        let current_version: u32 = env.storage().persistent().get(&version_key).unwrap_or(0);
-        let new_version = current_version + 1;
-        env.storage().persistent().set(&version_key, &new_version);
+        let new_version = Self::bump_vk_version(&env, dao_id);
 
         let key = DataKey::VotingKey(dao_id);
         env.storage().persistent().set(&key, &vk);
@@ -323,28 +310,31 @@ impl Voting {
             .unwrap_or_else(|| panic_with_error!(env, VotingError::VkVersionMismatch))
     }
 
-    /// Set verification key from registry during DAO initialization
-    /// This function is called by the registry contract during create_and_init_dao
-    /// to avoid re-entrancy issues. The registry is a trusted system contract.
-    pub fn set_vk_from_registry(env: Env, dao_id: u64, vk: VerificationKey) {
-        // Validate VK size to prevent DoS attacks
-        // IC vector must have exactly num_public_signals + 1 elements
-        // Vote circuit has 6 public signals (root, nullifier, daoId, proposalId, voteChoice, commitment)
-        // Therefore IC must have exactly 7 elements
+    fn validate_vk(env: &Env, vk: &VerificationKey) {
         if vk.ic.len() != EXPECTED_IC_LENGTH {
-            panic_with_error!(&env, VotingError::VkIcLengthMismatch);
+            panic_with_error!(env, VotingError::VkIcLengthMismatch);
         }
-
-        // Additional safety check: enforce max limit for any future circuit changes
         if vk.ic.len() > MAX_IC_LENGTH {
-            panic_with_error!(&env, VotingError::VkIcTooLarge);
+            panic_with_error!(env, VotingError::VkIcTooLarge);
         }
+    }
 
-        // Bump VK version
+    fn bump_vk_version(env: &Env, dao_id: u64) -> u32 {
         let version_key = DataKey::VkVersion(dao_id);
         let current_version: u32 = env.storage().persistent().get(&version_key).unwrap_or(0);
         let new_version = current_version + 1;
         env.storage().persistent().set(&version_key, &new_version);
+        new_version
+    }
+
+    /// Set verification key from registry during DAO initialization
+    /// This function is called by the registry contract during create_and_init_dao
+    /// to avoid re-entrancy issues. The registry is a trusted system contract.
+    pub fn set_vk_from_registry(env: Env, dao_id: u64, vk: VerificationKey) {
+        Self::validate_vk(&env, &vk);
+
+        // Bump VK version
+        let new_version = Self::bump_vk_version(&env, dao_id);
 
         let key = DataKey::VotingKey(dao_id);
         env.storage().persistent().set(&key, &vk);
