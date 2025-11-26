@@ -90,6 +90,13 @@ pub enum VoteMode {
 }
 
 #[contracttype]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProposalState {
+    Active,
+    Closed,
+}
+
+#[contracttype]
 #[derive(Clone)]
 pub struct ProposalInfo {
     pub id: u64,
@@ -100,7 +107,7 @@ pub struct ProposalInfo {
     pub end_time: u64,
     pub created_by: Address,
     pub created_at: u64, // Timestamp when proposal was created (for revocation checks)
-    pub closed: bool,    // Proposal closed flag (FSM guard)
+    pub state: ProposalState, // Proposal state (FSM guard)
     pub vk_hash: BytesN<32>, // SHA256 hash of VK at proposal creation
     pub vk_version: u32, // VK version at proposal creation
     pub eligible_root: U256, // Merkle root at creation - defines eligible voter set
@@ -476,7 +483,7 @@ impl Voting {
             end_time,
             created_by: creator.clone(),
             created_at: now,
-            closed: false,
+            state: ProposalState::Active,
             vk_hash,
             vk_version: selected_version,
             eligible_root,
@@ -557,7 +564,7 @@ impl Voting {
         if proposal.end_time != 0 && now > proposal.end_time {
             panic_with_error!(&env, VotingError::VotingClosed);
         }
-        if proposal.closed {
+        if proposal.state == ProposalState::Closed {
             panic_with_error!(&env, VotingError::VotingClosed);
         }
 
@@ -760,8 +767,10 @@ impl Voting {
             .get(&key)
             .expect("proposal not found");
 
-        proposal.closed = true;
-        env.storage().persistent().set(&key, &proposal);
+        if proposal.state != ProposalState::Closed {
+            proposal.state = ProposalState::Closed;
+            env.storage().persistent().set(&key, &proposal);
+        }
     }
 
     /// Contract version for upgrade tracking.
