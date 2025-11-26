@@ -13,6 +13,7 @@ resolver = "2"
 # P25 Preview SDK with BN254 + Poseidon + BIG-ENDIAN encoding (PR #1614)
 # This commit bumps env to cf58d535 which has the BE encoding fix
 soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "b122dc6cf1ac96c851efc252b370e5384cd973df" }
+num-bigint = "0.4"
 
 [profile.release]
 opt-level = "z"
