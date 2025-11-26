@@ -209,6 +209,7 @@ impl Voting {
     /// Set verification key for a DAO (admin only)
     pub fn set_vk(env: Env, dao_id: u64, vk: VerificationKey, admin: Address) {
         admin.require_auth();
+        Self::assert_admin(&env, dao_id, &admin);
 
         // Verify admin owns the DAO via tree -> sbt -> registry chain
         // 1) Get tree contract (stored at constructor)
@@ -327,6 +328,36 @@ impl Voting {
             .persistent()
             .get(&DataKey::VkByVersion(dao_id, version))
             .unwrap_or_else(|| panic_with_error!(env, VotingError::VkVersionMismatch))
+    }
+
+    fn assert_admin(env: &Env, dao_id: u64, admin: &Address) {
+        // Get tree contract (stored at constructor)
+        let tree_contract: Address = Self::tree_contract(env.clone());
+
+        // From tree, get SBT contract address
+        let sbt_contract: Address = env.invoke_contract(
+            &tree_contract,
+            &symbol_short!("sbt_contr"),
+            soroban_sdk::vec![env],
+        );
+
+        // From SBT, get DAO registry address
+        let registry: Address = env.invoke_contract(
+            &sbt_contract,
+            &symbol_short!("registry"),
+            soroban_sdk::vec![env],
+        );
+
+        // From registry, get admin for this dao_id and compare
+        let dao_admin: Address = env.invoke_contract(
+            &registry,
+            &symbol_short!("get_admin"),
+            soroban_sdk::vec![env, dao_id.into_val(env)],
+        );
+
+        if &dao_admin != admin {
+            panic_with_error!(env, VotingError::NotAdmin);
+        }
     }
 
     fn validate_vk(env: &Env, vk: &VerificationKey) {
@@ -771,6 +802,7 @@ impl Voting {
     /// Close a proposal explicitly (idempotent). End time still enforced in vote.
     pub fn close_proposal(env: Env, dao_id: u64, proposal_id: u64, admin: Address) {
         admin.require_auth();
+        Self::assert_admin(&env, dao_id, &admin);
         let key = DataKey::Proposal(dao_id, proposal_id);
         let mut proposal: ProposalInfo = env
             .storage()
