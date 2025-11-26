@@ -451,6 +451,47 @@ fn test_double_vote_fails() {
 
 #[test]
 #[should_panic(expected = "HostError")]
+fn test_nullifier_zero_rejected() {
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    sbt_client.set_member(&1u64, &member, &true);
+    let root = U256::from_u32(&env, 12345);
+    tree_client.set_root(&1u64, &root);
+
+    registry_client.set_admin(&1u64, &admin);
+    voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
+
+    let now = env.ledger().timestamp();
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Nullifier zero"),
+        &(now + 3600),
+        &member,
+        &VoteMode::Fixed,
+    );
+
+    let proposal = voting_client.get_proposal(&1u64, &proposal_id);
+    let nullifier = U256::from_u32(&env, 0);
+    let proof = create_dummy_proof(&env);
+
+    voting_client.vote(
+        &1u64,
+        &proposal_id,
+        &true,
+        &nullifier,
+        &proposal.eligible_root,
+        &U256::from_u32(&env, 12345),
+        &proof,
+    );
+}
+
+#[test]
+#[should_panic(expected = "HostError")]
 fn test_vote_with_invalid_root_fails() {
     let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);

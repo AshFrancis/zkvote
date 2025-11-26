@@ -538,6 +538,10 @@ impl Voting {
         if env.storage().persistent().has(&null_key) {
             panic_with_error!(&env, VotingError::NullifierUsed);
         }
+        // Additional invariant: nullifier must be non-zero
+        if nullifier == U256::from_u32(&env, 0) {
+            panic_with_error!(&env, VotingError::NullifierUsed);
+        }
 
         // Get proposal
         let prop_key = DataKey::Proposal(dao_id, proposal_id);
