@@ -1093,4 +1093,72 @@ mod tests {
         assert!(cpu_delta <= 500_000, "vote cpu too high (test mode)");
         assert!(mem_delta <= 120_000, "vote mem too high (test mode)");
     }
+
+    #[test]
+    fn test_nullifier_reusable_across_daos() {
+        let system = DaoVoteSystem::new();
+
+        let admin1 = Address::generate(&system.env);
+        let admin2 = Address::generate(&system.env);
+        let member = Address::generate(&system.env);
+
+        // DAO 1
+        let dao1 = system.registry_client().create_dao(
+            &String::from_str(&system.env, "DAO1"),
+            &admin1,
+            &false,
+        );
+        system.tree_client().init_tree(&dao1, &5, &admin1);
+        system.sbt_client().mint(&dao1, &member, &admin1, &None);
+        let commitment = U256::from_u32(&system.env, 123);
+        system
+            .tree_client()
+            .register_with_caller(&dao1, &commitment, &member);
+        let root1 = system.tree_client().current_root(&dao1);
+        let vk1 = system.create_test_vk();
+        system.voting_client().set_vk(&dao1, &vk1, &admin1);
+        let p1 = system
+            .voting_client()
+            .create_proposal(&dao1, &String::from_str(&system.env, "P1"), &0, &member, &VoteMode::Fixed);
+
+        // DAO 2
+        let dao2 = system.registry_client().create_dao(
+            &String::from_str(&system.env, "DAO2"),
+            &admin2,
+            &false,
+        );
+        system.tree_client().init_tree(&dao2, &5, &admin2);
+        system.sbt_client().mint(&dao2, &member, &admin2, &None);
+        system
+            .tree_client()
+            .register_with_caller(&dao2, &commitment, &member);
+        let root2 = system.tree_client().current_root(&dao2);
+        let vk2 = system.create_test_vk();
+        system.voting_client().set_vk(&dao2, &vk2, &admin2);
+        let p2 = system
+            .voting_client()
+            .create_proposal(&dao2, &String::from_str(&system.env, "P2"), &0, &member, &VoteMode::Fixed);
+
+        // Same nullifier scoped per dao/proposal should work
+        let proof = system.create_test_proof();
+        let nullifier = U256::from_u32(&system.env, 555);
+        system.voting_client().vote(
+            &dao1,
+            &p1,
+            &true,
+            &nullifier,
+            &root1,
+            &commitment,
+            &proof,
+        );
+        system.voting_client().vote(
+            &dao2,
+            &p2,
+            &false,
+            &nullifier,
+            &root2,
+            &commitment,
+            &proof,
+        );
+    }
 }
