@@ -725,6 +725,50 @@ fn test_nullifier_duplicate_panics_in_stream() {
 
 #[test]
 #[should_panic(expected = "HostError")]
+fn test_reopen_not_allowed() {
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    sbt_client.set_member(&1u64, &member, &true);
+    let root = U256::from_u32(&env, 12345);
+    tree_client.set_root(&1u64, &root);
+    registry_client.set_admin(&1u64, &admin);
+    voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
+
+    let now = env.ledger().timestamp();
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "No reopen"),
+        &(now + 3600),
+        &member,
+        &VoteMode::Fixed,
+    );
+
+    // Close then archive
+    voting_client.close_proposal(&1u64, &proposal_id, &admin);
+    voting_client.archive_proposal(&1u64, &proposal_id, &admin);
+
+    // Any attempt to vote (i.e., pretend reopen) should panic due to state
+    let proposal = voting_client.get_proposal(&1u64, &proposal_id);
+    let proof = create_dummy_proof(&env);
+    let nullifier = U256::from_u32(&env, 55555);
+    voting_client.vote(
+        &1u64,
+        &proposal_id,
+        &true,
+        &nullifier,
+        &proposal.eligible_root,
+        &U256::from_u32(&env, 12345),
+        &proof,
+    );
+}
+
+#[test]
+#[should_panic(expected = "HostError")]
 fn test_close_proposal_non_admin_fails() {
     let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);

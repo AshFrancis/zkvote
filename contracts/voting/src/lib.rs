@@ -850,7 +850,7 @@ impl Voting {
 
         if proposal.state == ProposalState::Active {
             // Require close before archive to preserve state progression
-            panic_with_error!(&env, VotingError::VotingClosed);
+            panic_with_error!(&env, VotingError::InvalidState);
         }
         if proposal.state != ProposalState::Archived {
             proposal.state = ProposalState::Archived;
