@@ -43,6 +43,7 @@ const VERSION_KEY: Symbol = symbol_short!("ver");
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum VotingError {
     NotAdmin = 1,
+    Unauthorized = 19,
     VkIcLengthMismatch = 2,
     VkIcTooLarge = 3,
     DescriptionTooLong = 4,
@@ -568,13 +569,13 @@ impl Voting {
             .get(&prop_key)
             .expect("proposal not found");
 
-        // Check voting period (voting starts at creation, ends at end_time)
+        // Check voting period and state (voting starts at creation, ends at end_time)
         // If end_time is 0, there's no deadline (voting never closes)
         let now = env.ledger().timestamp();
-        if proposal.end_time != 0 && now > proposal.end_time {
+        if proposal.state != ProposalState::Active {
             panic_with_error!(&env, VotingError::VotingClosed);
         }
-        if proposal.state == ProposalState::Closed {
+        if proposal.end_time != 0 && now > proposal.end_time {
             panic_with_error!(&env, VotingError::VotingClosed);
         }
 
