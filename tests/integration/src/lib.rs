@@ -1161,4 +1161,53 @@ mod tests {
             &proof,
         );
     }
+
+    #[test]
+    fn fuzz_nullifier_uniqueness_over_small_range() {
+        let system = DaoVoteSystem::new();
+        let admin = Address::generate(&system.env);
+        let member = Address::generate(&system.env);
+
+        let dao_id = system.registry_client().create_dao(
+            &String::from_str(&system.env, "Fuzz DAO"),
+            &admin,
+            &false,
+        );
+        system.tree_client().init_tree(&dao_id, &5, &admin);
+        system.sbt_client().mint(&dao_id, &member, &admin, &None);
+        let commitment = U256::from_u32(&system.env, 42);
+        system
+            .tree_client()
+            .register_with_caller(&dao_id, &commitment, &member);
+        let root = system.tree_client().current_root(&dao_id);
+
+        let vk = system.create_test_vk();
+        system.voting_client().set_vk(&dao_id, &vk, &admin);
+
+        let now = system.env.ledger().timestamp();
+        let proposal_id = system.voting_client().create_proposal(
+            &dao_id,
+            &String::from_str(&system.env, "Fuzz Proposal"),
+            &(now + 3600),
+            &member,
+            &VoteMode::Fixed,
+        );
+        let proof = system.create_test_proof();
+
+        for i in 1..20 {
+            let nullifier = U256::from_u32(&system.env, i);
+            system.voting_client().vote(
+                &dao_id,
+                &proposal_id,
+                &(i % 2 == 0),
+                &nullifier,
+                &root,
+                &commitment,
+                &proof,
+            );
+        }
+
+        let prop = system.voting_client().get_proposal(&dao_id, &proposal_id);
+        assert_eq!(prop.yes_votes + prop.no_votes, 19);
+    }
 }
