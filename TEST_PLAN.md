@@ -78,7 +78,7 @@ Comprehensive test gap analysis and implementation roadmap for DaoVote.
 
 **VK Management Tests** (`contracts/voting/src/test.rs`):
 - [x] Set VK as admin - passes ✓
-- [ ] Set VK as non-admin - should panic
+- [x] Set VK as non-admin - should panic ✓
 - [ ] Set VK twice (replacement)
 - [ ] Set different VK per DAO
 - [ ] Vote with old VK hash after VK change (should fail)

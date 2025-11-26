@@ -1638,6 +1638,38 @@ fn test_set_vk_ic_length_5_fails() {
 
 #[test]
 #[should_panic(expected = "HostError")]
+fn test_set_vk_ic_length_6_fails() {
+    let (env, voting_id, _tree_id, _sbt_id, registry_id, _member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+
+    let admin = Address::generate(&env);
+    registry_client.set_admin(&1u64, &admin);
+
+    // Create VK with IC length = 6 (need exactly 7 for vote circuit)
+    let g1 = bn254_g1_generator(&env);
+    let g2 = bn254_g2_generator(&env);
+    let invalid_vk = VerificationKey {
+        alpha: g1.clone(),
+        beta: g2.clone(),
+        gamma: g2.clone(),
+        delta: g2,
+        ic: soroban_sdk::vec![
+            &env,
+            g1.clone(),
+            g1.clone(),
+            g1.clone(),
+            g1.clone(),
+            g1.clone(),
+            g1.clone()
+        ],
+    };
+
+    voting_client.set_vk(&1u64, &invalid_vk, &admin);
+}
+
+#[test]
+#[should_panic(expected = "HostError")]
 fn test_set_vk_ic_length_7_fails() {
     let (env, voting_id, _tree_id, _sbt_id, registry_id, _member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
