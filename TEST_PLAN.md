@@ -114,15 +114,15 @@ Comprehensive test gap analysis and implementation roadmap for DaoVote.
 ### 5. Voting Lifecycle & Isolation
 
 **Cross-DAO Isolation Tests** (`tests/integration/`):
-- [ ] Same nullifier, different DAOs - should both succeed
+- [x] Same nullifier, different DAOs - should both succeed ✓
 - [ ] Same proposalId in different DAOs - isolated
 - [ ] Vote in DAO A with DAO B commitment - should fail
 - [ ] Nullifier formula: verify `Poseidon(secret, daoId, proposalId)` includes daoId
 
 **Nullifier Replay Tests** (`contracts/voting/src/test.rs`):
 - [x] Same nullifier, same proposal - should panic ✓
-- [ ] Same nullifier, different proposals in same DAO - should succeed
-- [ ] Same nullifier, different DAOs - should succeed
+- [x] Same nullifier, different proposals in same DAO - should succeed ✓
+- [x] Same nullifier, different DAOs - should succeed ✓
 - [ ] Verify nullifier storage key: `(symbol, dao_id, proposal_id, nullifier)`
 
 **Voting Window Tests** (`contracts/voting/src/test.rs`):
