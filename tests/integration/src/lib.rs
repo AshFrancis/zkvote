@@ -931,6 +931,8 @@ mod tests {
         let cpu_delta = cpu_after.saturating_sub(cpu_before);
         let mem_delta = mem_after.saturating_sub(mem_before);
         std::println!("[budget] create_dao cpu={} mem={}", cpu_delta, mem_delta);
+        assert!(cpu_delta <= 80_000, "create_dao cpu too high");
+        assert!(mem_delta <= 20_000, "create_dao mem too high");
 
         // Initialize tree and mint SBT
         system.tree_client().init_tree(&dao_id, &5, &admin);
@@ -952,6 +954,8 @@ mod tests {
             cpu_delta,
             mem_delta
         );
+        assert!(cpu_delta <= 10_000_000, "register_with_caller cpu too high");
+        assert!(mem_delta <= 600_000, "register_with_caller mem too high");
 
         // --- set_vk ---
         let vk = system.create_test_vk();
@@ -963,6 +967,8 @@ mod tests {
         let cpu_delta = cpu_after.saturating_sub(cpu_before);
         let mem_delta = mem_after.saturating_sub(mem_before);
         std::println!("[budget] set_vk cpu={} mem={}", cpu_delta, mem_delta);
+        assert!(cpu_delta <= 200_000, "set_vk cpu too high");
+        assert!(mem_delta <= 100_000, "set_vk mem too high");
 
         // --- create_proposal ---
         let cpu_before = system.env.cost_estimate().budget().cpu_instruction_cost();
@@ -983,6 +989,8 @@ mod tests {
             cpu_delta,
             mem_delta
         );
+        assert!(cpu_delta <= 400_000, "create_proposal cpu too high");
+        assert!(mem_delta <= 100_000, "create_proposal mem too high");
 
         // --- vote ---
         let root = system.tree_client().get_root(&dao_id);
@@ -1005,5 +1013,7 @@ mod tests {
         let cpu_delta = cpu_after.saturating_sub(cpu_before);
         let mem_delta = mem_after.saturating_sub(mem_before);
         std::println!("[budget] vote cpu={} mem={}", cpu_delta, mem_delta);
+        assert!(cpu_delta <= 500_000, "vote cpu too high (test mode)");
+        assert!(mem_delta <= 120_000, "vote mem too high (test mode)");
     }
 }
