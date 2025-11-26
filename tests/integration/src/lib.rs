@@ -910,6 +910,83 @@ mod tests {
     }
 
     #[test]
+    fn test_vk_version_pinned_per_proposal() {
+        let system = DaoVoteSystem::new();
+
+        let admin = Address::generate(&system.env);
+        let member = Address::generate(&system.env);
+
+        let dao_id = system
+            .registry_client()
+            .create_dao(&String::from_str(&system.env, "VK DAO"), &admin, &false);
+
+        // Init tree, mint SBT, register commitment
+        system.tree_client().init_tree(&dao_id, &5, &admin);
+        system.sbt_client().mint(&dao_id, &member, &admin, &None);
+        let commitment = U256::from_u32(&system.env, 42);
+        system
+            .tree_client()
+            .register_with_caller(&dao_id, &commitment, &member);
+        let root = system.tree_client().current_root(&dao_id);
+
+        // Set VK v1 and create proposal
+        let vk1 = system.create_test_vk();
+        system.voting_client().set_vk(&dao_id, &vk1, &admin);
+        let proposal1 = system.voting_client().create_proposal(
+            &dao_id,
+            &String::from_str(&system.env, "P1"),
+            &0,
+            &member,
+            &VoteMode::Fixed,
+        );
+
+        // Rotate to VK v2 and create second proposal
+        let mut vk2 = system.create_test_vk();
+        // Tweak IC[0] to make hash different
+        let mut ic0 = vk2.ic.get(0).unwrap().to_array();
+        ic0[31] = 9;
+        vk2.ic.set(0, BytesN::from_array(&system.env, &ic0));
+        system.voting_client().set_vk(&dao_id, &vk2, &admin);
+        let proposal2 = system.voting_client().create_proposal(
+            &dao_id,
+            &String::from_str(&system.env, "P2"),
+            &0,
+            &member,
+            &VoteMode::Fixed,
+        );
+
+        // Proposal 1 pinned to vk_version 1; proposal 2 pinned to vk_version 2
+        let p1 = system.voting_client().get_proposal(&dao_id, &proposal1);
+        let p2 = system.voting_client().get_proposal(&dao_id, &proposal2);
+        assert_eq!(p1.vk_version, 1);
+        assert_eq!(p2.vk_version, 2);
+
+        // Votes still succeed on both proposals after rotation
+        let proof = system.create_test_proof();
+        let nullifier1 = U256::from_u32(&system.env, 111);
+        system.voting_client().vote(
+            &dao_id,
+            &proposal1,
+            &true,
+            &nullifier1,
+            &root,
+            &commitment,
+            &proof,
+        );
+
+        let nullifier2 = U256::from_u32(&system.env, 222);
+        system.voting_client().vote(
+            &dao_id,
+            &proposal2,
+            &false,
+            &nullifier2,
+            &root,
+            &commitment,
+            &proof,
+        );
+    }
+
+    #[test]
     fn budget_baseline_create_proposal_and_vote() {
         let system = DaoVoteSystem::new();
         // Use a finite budget to get measurements
