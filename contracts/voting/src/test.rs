@@ -816,6 +816,58 @@ fn test_randomized_nullifier_sequence_no_duplicates() {
 
 #[test]
 #[should_panic(expected = "HostError")]
+fn test_tampered_vk_hash_rejected() {
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    sbt_client.set_member(&1u64, &member, &true);
+    let root = U256::from_u32(&env, 12345);
+    tree_client.set_root(&1u64, &root);
+    registry_client.set_admin(&1u64, &admin);
+    voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
+
+    let now = env.ledger().timestamp();
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "VK hash tamper"),
+        &(now + 3600),
+        &member,
+        &VoteMode::Fixed,
+    );
+
+    // Tamper vk_hash on stored proposal
+    env.as_contract(&voting_id, || {
+        let mut p = env
+            .storage()
+            .persistent()
+            .get::<_, ProposalInfo>(&DataKey::Proposal(1, proposal_id))
+            .unwrap();
+        let bogus_hash = BytesN::from_array(&env, &[1u8; 32]);
+        p.vk_hash = bogus_hash;
+        env.storage().persistent().set(&DataKey::Proposal(1, proposal_id), &p);
+    });
+
+    let proposal = voting_client.get_proposal(&1u64, &proposal_id);
+    let proof = create_dummy_proof(&env);
+    let nullifier = U256::from_u32(&env, 99999);
+
+    voting_client.vote(
+        &1u64,
+        &proposal_id,
+        &true,
+        &nullifier,
+        &proposal.eligible_root,
+        &U256::from_u32(&env, 12345),
+        &proof,
+    );
+}
+
+#[test]
+#[should_panic(expected = "HostError")]
 fn test_close_proposal_non_admin_fails() {
     let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
