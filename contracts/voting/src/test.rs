@@ -594,6 +594,8 @@ fn test_vote_after_archive_fails() {
         &VoteMode::Fixed,
     );
 
+    // Must close before archive
+    voting_client.close_proposal(&1u64, &proposal_id, &admin);
     voting_client.archive_proposal(&1u64, &proposal_id, &admin);
 
     let proposal = voting_client.get_proposal(&1u64, &proposal_id);
