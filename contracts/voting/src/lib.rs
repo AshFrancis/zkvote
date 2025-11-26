@@ -844,6 +844,10 @@ impl Voting {
             .get(&key)
             .expect("proposal not found");
 
+        if proposal.state == ProposalState::Active {
+            // Require close before archive to preserve state progression
+            panic_with_error!(&env, VotingError::VotingClosed);
+        }
         if proposal.state != ProposalState::Archived {
             proposal.state = ProposalState::Archived;
             env.storage().persistent().set(&key, &proposal);
