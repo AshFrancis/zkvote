@@ -4,9 +4,12 @@
 - **Phase 0 – Baseline & Risk**: Document current architecture/spec alignment, establish threat model (relay/admin), capture budget baselines for critical entrypoints, secret/license scans, identify deprecated/breaking APIs, define migration/rollback expectations.
 - **Phase 1 – Contracts (Rust/Soroban)**: Enforce module boundaries, typed errors, storage/versioning scheme, governance FSM invariants, nullifier/replay safety, VK handling/rotation hooks, budget/meters optimization, minimal privacy-safe events, upgrade/version events.
   - Done: per-DAO VK versioning with `VkByVersion`, proposal pinning, explicit VK selection API, `vk_for_version` getter, VK-change compatibility tests.
+  - Done: Proposal close flag guarded in vote, nullifier zero guard, shared VK validation/version bump helpers; budget smoke tests for core flows.
 - **Phase 2 – Circuits & Crypto**: Contract/circuit consistency (Poseidon params, encodings), VK/circuit rotation with per-proposal vk_id, golden vectors + CI, negative/side-channel-aware error handling, remove dev keys.
 - **Phase 3 – Backend Relay**: Input validation, auth boundaries, privacy/log policy, resilience to RPC failures, env/config validation + healthcheck, removal of debug endpoints, tests for failures/replays/duplicates.
+  - Done: `/config` surfaced (auth-gated) with contract IDs, network, optional vkVersion; health/ready endpoints; hashed-IP limiting and PII redaction; test-mode stubs.
 - **Phase 4 – Frontend (logic only)**: Centralized network/contract/vk config, guardrails against deanonymizing flows, minimal/secure caching of proofs, align bindings/ABIs, remove stale zk/vk assets.
+  - Done: Relayer readiness probe, relayer `/config` fetch with mismatch warnings vs local contracts.
 - **Phase 5 – Docs & DevEx**: THREAT_MODEL, CHANGELOG/Upgrade Guide, migration/rollback/runbooks, clean scripts, pinned tools/images, CI/tooling enforcement.
 
 ## Cross-Cutting Requirements

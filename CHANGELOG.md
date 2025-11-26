@@ -8,8 +8,10 @@
 - Frontend:
   - Relayer readiness check helper and Navbar status surfacing; configurable via `VITE_RELAYER_URL` / `VITE_RELAYER_AUTH`.
   - ZK credential cache namespaced with TTL; config guardrails for network/contract IDs.
+  - Fetch relayer `/config` and flag mismatches vs local contracts; stores relayer-reported `vkVersion` when provided.
 - Contracts:
   - Version keys + `ContractUpgraded` events, reinit guards; typed error cleanups and VK version enforcement.
   - Per-version VK storage with proposal pinning; added explicit proposal creation with chosen VK version and view `vk_for_version` for off-chain verification.
+  - Proposal `closed` flag + close_proposal helper; nullifier zero rejected; helpers for VK validation/version bump.
 - Tests:
   - Node built-in tests for relayer auth/health; Rust `cargo test --workspace` green; frontend build passing.
