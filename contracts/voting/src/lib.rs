@@ -95,6 +95,7 @@ pub enum VoteMode {
 pub enum ProposalState {
     Active,
     Closed,
+    Archived,
 }
 
 #[contracttype]
@@ -163,6 +164,16 @@ pub struct ProposalClosedEvent {
     #[topic]
     pub proposal_id: u64,
     pub closed_by: Address,
+}
+
+#[soroban_sdk::contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProposalArchivedEvent {
+    #[topic]
+    pub dao_id: u64,
+    #[topic]
+    pub proposal_id: u64,
+    pub archived_by: Address,
 }
 
 #[soroban_sdk::contractevent]
@@ -817,6 +828,29 @@ impl Voting {
                 dao_id,
                 proposal_id,
                 closed_by: admin,
+            }
+            .publish(&env);
+        }
+    }
+
+    /// Archive a proposal (idempotent). Prevents further votes and signals off-chain cleanup.
+    pub fn archive_proposal(env: Env, dao_id: u64, proposal_id: u64, admin: Address) {
+        admin.require_auth();
+        Self::assert_admin(&env, dao_id, &admin);
+        let key = DataKey::Proposal(dao_id, proposal_id);
+        let mut proposal: ProposalInfo = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .expect("proposal not found");
+
+        if proposal.state != ProposalState::Archived {
+            proposal.state = ProposalState::Archived;
+            env.storage().persistent().set(&key, &proposal);
+            ProposalArchivedEvent {
+                dao_id,
+                proposal_id,
+                archived_by: admin,
             }
             .publish(&env);
         }
