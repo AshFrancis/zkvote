@@ -156,6 +156,16 @@ pub struct ProposalEvent {
 
 #[soroban_sdk::contractevent]
 #[derive(Clone, Debug, PartialEq)]
+pub struct ProposalClosedEvent {
+    #[topic]
+    pub dao_id: u64,
+    #[topic]
+    pub proposal_id: u64,
+    pub closed_by: Address,
+}
+
+#[soroban_sdk::contractevent]
+#[derive(Clone, Debug, PartialEq)]
 pub struct VoteEvent {
     #[topic]
     pub dao_id: u64,
@@ -770,6 +780,12 @@ impl Voting {
         if proposal.state != ProposalState::Closed {
             proposal.state = ProposalState::Closed;
             env.storage().persistent().set(&key, &proposal);
+            ProposalClosedEvent {
+                dao_id,
+                proposal_id,
+                closed_by: admin,
+            }
+            .publish(&env);
         }
     }
 
