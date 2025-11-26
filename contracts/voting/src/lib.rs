@@ -222,36 +222,6 @@ impl Voting {
     pub fn set_vk(env: Env, dao_id: u64, vk: VerificationKey, admin: Address) {
         admin.require_auth();
         Self::assert_admin(&env, dao_id, &admin);
-
-        // Verify admin owns the DAO via tree -> sbt -> registry chain
-        // 1) Get tree contract (stored at constructor)
-        let tree_contract: Address = Self::tree_contract(env.clone());
-
-        // 2) From tree, get SBT contract address
-        let sbt_contract: Address = env.invoke_contract(
-            &tree_contract,
-            &symbol_short!("sbt_contr"),
-            soroban_sdk::vec![&env],
-        );
-
-        // 3) From SBT, get DAO registry address
-        let registry: Address = env.invoke_contract(
-            &sbt_contract,
-            &symbol_short!("registry"),
-            soroban_sdk::vec![&env],
-        );
-
-        // 4) From registry, get admin for this dao_id and compare
-        let dao_admin: Address = env.invoke_contract(
-            &registry,
-            &symbol_short!("get_admin"),
-            soroban_sdk::vec![&env, dao_id.into_val(&env)],
-        );
-
-        if dao_admin != admin {
-            panic_with_error!(&env, VotingError::NotAdmin);
-        }
-
         // Validate VK size to prevent DoS attacks
         Self::validate_vk(&env, &vk);
 
