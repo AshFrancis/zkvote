@@ -5,6 +5,14 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import crypto from 'crypto';
+import {
+  startIndexer,
+  stopIndexer,
+  getEventsForDao,
+  getIndexedDaos,
+  getIndexerStatus,
+  addManualEvent,
+} from './indexer.js';
 
 dotenv.config();
 
@@ -77,6 +85,12 @@ const GENERIC_ERRORS = process.env.RELAYER_GENERIC_ERRORS === 'true'; // when tr
 // Contract IDs - MUST be set or server won't start
 const VOTING_CONTRACT_ID = process.env.VOTING_CONTRACT_ID;
 const TREE_CONTRACT_ID = process.env.TREE_CONTRACT_ID;
+const DAO_REGISTRY_CONTRACT_ID = process.env.DAO_REGISTRY_CONTRACT_ID;
+const MEMBERSHIP_SBT_CONTRACT_ID = process.env.MEMBERSHIP_SBT_CONTRACT_ID;
+
+// Event Indexer Configuration
+const INDEXER_ENABLED = process.env.INDEXER_ENABLED !== 'false';
+const INDEXER_POLL_INTERVAL_MS = Number(process.env.INDEXER_POLL_INTERVAL_MS || 5000);
 
 function validateEnv() {
   const missing = [];
@@ -542,6 +556,66 @@ app.get('/root/:daoId', queryLimiter, async (req, res) => {
   }
 });
 
+// ============================================
+// EVENT INDEXER ENDPOINTS
+// ============================================
+
+// Get events for a specific DAO
+app.get('/events/:daoId', queryLimiter, (req, res) => {
+  const { daoId } = req.params;
+  const { limit = 50, offset = 0, types } = req.query;
+
+  try {
+    const options = {
+      limit: Math.min(parseInt(limit) || 50, 100),
+      offset: parseInt(offset) || 0,
+      types: types ? types.split(',') : null,
+    };
+
+    const result = getEventsForDao(parseInt(daoId), options);
+    res.json(result);
+  } catch (err) {
+    log('error', 'get_events_failed', { daoId, error: err.message });
+    res.status(500).json({ error: 'Failed to get events' });
+  }
+});
+
+// Get indexer status
+app.get('/indexer/status', queryLimiter, (req, res) => {
+  try {
+    const status = getIndexerStatus();
+    res.json(status);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to get indexer status' });
+  }
+});
+
+// List all indexed DAOs
+app.get('/indexer/daos', queryLimiter, (req, res) => {
+  try {
+    const daos = getIndexedDaos();
+    res.json({ daos });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to get indexed DAOs' });
+  }
+});
+
+// Manual event submission (admin only - requires auth token)
+app.post('/events', authGuard, (req, res) => {
+  const { daoId, type, data } = req.body;
+
+  if (!daoId || !type) {
+    return res.status(400).json({ error: 'daoId and type are required' });
+  }
+
+  try {
+    addManualEvent(daoId, type, data || {});
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to add event' });
+  }
+});
+
 // Global error handler (last middleware)
 app.use((err, req, res, _next) => {
   log('error', 'unhandled_error', { path: req.path, message: err.message });
@@ -751,7 +825,7 @@ function isValidContractId(contractId) {
 
 // Start server unless running under test mode (imports should not bind ports)
 if (process.env.RELAYER_TEST_MODE !== 'true') {
-  app.listen(PORT, () => {
+  app.listen(PORT, async () => {
     log('info', 'relayer_start', {
       port: PORT,
       rpc: RPC_URL,
@@ -763,6 +837,38 @@ if (process.env.RELAYER_TEST_MODE !== 'true') {
     console.log('  POST /vote                - Submit anonymous vote');
     console.log('  GET  /proposal/:dao/:prop - Get vote results');
     console.log('  GET  /root/:dao           - Get current Merkle root');
+    console.log('  GET  /events/:daoId       - Get events for a DAO');
+    console.log('  GET  /indexer/status      - Get indexer status');
+
+    // Start event indexer if enabled
+    if (INDEXER_ENABLED) {
+      const contractIds = [VOTING_CONTRACT_ID, TREE_CONTRACT_ID];
+      if (DAO_REGISTRY_CONTRACT_ID && isValidContractId(DAO_REGISTRY_CONTRACT_ID)) {
+        contractIds.push(DAO_REGISTRY_CONTRACT_ID);
+      }
+      if (MEMBERSHIP_SBT_CONTRACT_ID && isValidContractId(MEMBERSHIP_SBT_CONTRACT_ID)) {
+        contractIds.push(MEMBERSHIP_SBT_CONTRACT_ID);
+      }
+
+      try {
+        await startIndexer(server, contractIds, INDEXER_POLL_INTERVAL_MS);
+        log('info', 'indexer_enabled', { contracts: contractIds.length });
+      } catch (err) {
+        log('warn', 'indexer_start_failed', { error: err.message });
+      }
+    }
+  });
+
+  // Graceful shutdown
+  process.on('SIGTERM', () => {
+    log('info', 'shutdown_signal');
+    stopIndexer();
+    process.exit(0);
+  });
+  process.on('SIGINT', () => {
+    log('info', 'shutdown_signal');
+    stopIndexer();
+    process.exit(0);
   });
 }
 

@@ -10,7 +10,12 @@ import {
 } from "../lib/zk";
 import { isUserRejection } from "../lib/utils";
 import { Badge, Alert, LoadingSpinner, CreateProposalForm } from "./ui";
+import { Button } from "./ui/Button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/Card";
 import ProposalList from "./ProposalList";
+import ManageMembers from "./ManageMembers";
+import DAOInfoPanel from "./DAOInfoPanel";
+import { Shield, Users, Lock, Unlock, FileText, CheckCircle, AlertCircle, PlusCircle, X, Home } from "lucide-react";
 
 interface DAODashboardProps {
   publicKey: string | null;
@@ -51,6 +56,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
   const [showCreateProposal, setShowCreateProposal] = useState(false);
   const [creatingProposal, setCreatingProposal] = useState(false);
   const [proposalKey, setProposalKey] = useState(0);
+  const [activeTab, setActiveTab] = useState<'info' | 'proposals' | 'members'>('proposals');
 
   useEffect(() => {
     if (publicKey) {
@@ -391,114 +397,133 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
 
   if (!dao) {
     return (
-      <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-        <p className="text-gray-600 dark:text-gray-400">DAO not found</p>
-      </div>
+      <Card>
+        <CardContent className="p-6">
+          <p className="text-muted-foreground">DAO not found</p>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-              {dao.name}
-            </h2>
-            {dao.isAdmin ? (
-              <Badge variant="blue">Admin</Badge>
-            ) : dao.hasMembership ? (
-              <Badge variant="green">Member</Badge>
-            ) : (
-              <Badge variant="gray">Non-member</Badge>
-            )}
-            {dao.membershipOpen ? (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="w-3.5 h-3.5">
-                  <rect width="12" height="8.571" x="6" y="12.071" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" rx="2"/>
-                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16.286 8.643a4.286 4.286 0 0 0-8.572 0v3.428"/>
-                </svg>
-                Open DAO
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="w-3.5 h-3.5">
-                  <rect width="12.526" height="8.947" x="5.737" y="12.053" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" rx="2"/>
-                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7.526 12.053v-3.58a4.474 4.474 0 0 1 8.948 0v3.58"/>
-                </svg>
-                Private DAO
-              </span>
-            )}
+    <>
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="space-y-1">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h2 className="text-3xl font-bold tracking-tight text-foreground">
+                {dao.name}
+              </h2>
+              {dao.isAdmin ? (
+                <Badge variant="blue" className="gap-1"><Shield className="w-3 h-3" /> Admin</Badge>
+              ) : dao.hasMembership ? (
+                <Badge variant="success" className="gap-1"><Users className="w-3 h-3" /> Member</Badge>
+              ) : (
+                <Badge variant="gray" className="gap-1"><Users className="w-3 h-3" /> Non-member</Badge>
+              )}
+              {dao.membershipOpen ? (
+                <Badge variant="success" className="gap-1"><Unlock className="w-3 h-3" /> Open</Badge>
+              ) : (
+                <Badge variant="secondary" className="gap-1"><Lock className="w-3 h-3" /> Private</Badge>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <span className="font-mono text-xs bg-muted/50 px-1.5 py-0.5 rounded">ID: {dao.id}</span>
+              <span>•</span>
+              <span>Created by {dao.creator.slice(0, 4)}...{dao.creator.slice(-4)}</span>
+            </p>
           </div>
-          <div className="flex items-center gap-3">
-            <button className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-              View Log
-            </button>
-            <button
-              onClick={() => navigate(`/daos/${daoId}/members`)}
-              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              {dao.isAdmin ? 'Manage Members' : 'Members'}
-            </button>
-            {!dao.hasMembership && dao.membershipOpen && publicKey && (
-              <button
-                onClick={handleJoinDao}
-                disabled={joining}
-                className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-green-600 rounded-md hover:bg-green-700 disabled:bg-green-400 transition-colors flex items-center gap-2"
-              >
-                {joining && <LoadingSpinner size="sm" color="white" />}
-                {joining ? "Joining..." : "Join DAO"}
-              </button>
-            )}
-            {(() => {
-              const shouldShowRegisterButton = dao.hasMembership && !isRegistered && publicKey;
-              const buttonText = hasUnregisteredCredentials ? "Complete Registration" : "Register to Vote";
+        </div>
 
-              return shouldShowRegisterButton && (
-                <button
-                  onClick={handleRegisterForVoting}
-                  disabled={registering}
-                  className="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-purple-600 rounded-md hover:bg-purple-700 disabled:bg-purple-400 transition-colors flex items-center gap-2"
-                >
-                  {registering && <LoadingSpinner size="sm" color="white" />}
-                  {registering ? (registrationStatus || "Registering...") : buttonText}
-                </button>
-              );
-            })()}
-            {dao.isAdmin && dao.vkSet && (
-              <button
-                onClick={() => setShowCreateProposal(true)}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={activeTab === 'proposals' ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('proposals')}
+            className="gap-2"
+          >
+            <Home className="w-4 h-4" />
+            Overview
+          </Button>
+          <Button
+            variant={activeTab === 'info' ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('info')}
+            className="gap-2"
+          >
+            <FileText className="w-4 h-4" /> Info
+          </Button>
+          <Button
+            variant={activeTab === 'members' ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('members')}
+            className="gap-2"
+          >
+            <Users className="w-4 h-4" />
+            Members
+          </Button>
+          {dao.isAdmin && dao.vkSet && (
+            <Button
+              variant="outline"
+              onClick={() => setShowCreateProposal(true)}
+              size="sm"
+              className="gap-2"
+            >
+              <PlusCircle className="w-4 h-4" />
+              Add Proposal
+            </Button>
+          )}
+
+          {!dao.hasMembership && dao.membershipOpen && publicKey && (
+            <Button
+              variant="outline"
+              onClick={handleJoinDao}
+              disabled={joining}
+              size="sm"
+              className="gap-2"
+            >
+              {joining && <LoadingSpinner size="sm" color="white" />}
+              {joining ? "Joining..." : "Join DAO"}
+            </Button>
+          )}
+
+          {(() => {
+            const shouldShowRegisterButton = dao.hasMembership && !isRegistered && publicKey;
+            const buttonText = hasUnregisteredCredentials ? "Complete Registration" : "Register to Vote";
+
+            return shouldShowRegisterButton && (
+              <Button
+                variant="outline"
+                onClick={handleRegisterForVoting}
+                disabled={registering}
+                size="sm"
+                className="gap-2"
               >
-                Create Proposal
-              </button>
-            )}
-          </div>
+                {registering ? (
+                  <>
+                    <LoadingSpinner size="sm" color="white" />
+                    {registrationStatus || "Registering..."}
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    {buttonText}
+                  </>
+                )}
+              </Button>
+            );
+          })()}
         </div>
       </div>
 
       {error && <Alert variant="error" className="mb-4">{error}</Alert>}
 
-      {showCreateProposal && (
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-            New Proposal
-          </h3>
-          <CreateProposalForm
-            onSubmit={handleCreateProposal}
-            onCancel={() => {
-              setShowCreateProposal(false);
-              setError(null);
-            }}
-            isSubmitting={creatingProposal}
-          />
-        </div>
+      {activeTab === 'info' && (
+        <DAOInfoPanel daoId={daoId} publicKey={publicKey} />
       )}
 
-      <div>
-        <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-          Proposals
-        </h3>
+      {activeTab === 'proposals' && (
         <ProposalList
           key={proposalKey}
           publicKey={publicKey}
@@ -508,7 +533,52 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
           vkSet={dao.vkSet}
           isInitializing={isInitializing}
         />
-      </div>
+      )}
+
+      {activeTab === 'members' && (
+        <ManageMembers
+          daoId={daoId}
+          publicKey={publicKey}
+          isAdmin={dao.isAdmin}
+        />
+      )}
     </div>
+
+    {/* Create Proposal Modal */}
+    {showCreateProposal && (
+      <div
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-fade-in"
+        onClick={() => setShowCreateProposal(false)}
+      >
+        <div className="relative w-full max-w-xl" onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowCreateProposal(false)}
+            className="absolute -top-10 right-0 h-8 w-8 rounded-full text-white hover:bg-white/20"
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </Button>
+          <Card className="w-full shadow-xl border-none">
+            <CardHeader>
+              <CardTitle>New Proposal</CardTitle>
+              <CardDescription>Create a new proposal for the community to vote on.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CreateProposalForm
+                onSubmit={handleCreateProposal}
+                onCancel={() => {
+                  setShowCreateProposal(false);
+                  setError(null);
+                }}
+                isSubmitting={creatingProposal}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

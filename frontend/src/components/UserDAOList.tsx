@@ -94,13 +94,13 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
 
   if (loading && daos.length === 0) {
     return (
-      <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+      <div className="rounded-xl border bg-card p-6">
+        <h2 className="text-lg font-semibold text-foreground mb-4">
           Your DAOs
         </h2>
         <div className="flex items-center justify-center py-8">
           <LoadingSpinner size="md" />
-          <span className="ml-3 text-gray-600 dark:text-gray-400">Loading your DAOs...</span>
+          <span className="ml-3 text-muted-foreground">Loading your DAOs...</span>
         </div>
       </div>
     );
@@ -108,14 +108,14 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
 
   if (error) {
     return (
-      <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+      <div className="rounded-xl border bg-card p-6">
+        <h2 className="text-lg font-semibold text-foreground mb-4">
           Your DAOs
         </h2>
         <Alert variant="error">{error}</Alert>
         <button
           onClick={loadUserDaos}
-          className="mt-4 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"
+          className="mt-4 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring transition-colors"
         >
           Retry
         </button>
@@ -128,12 +128,12 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
 
   if (filteredDaos.length === 0) {
     return (
-      <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+      <div className="rounded-xl border bg-card p-6">
+        <h2 className="text-lg font-semibold text-foreground mb-4">
           Your DAOs
         </h2>
         <div className="text-center py-8">
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
+          <p className="text-muted-foreground mb-4">
             You are not a member or admin of any DAOs yet.
           </p>
         </div>
@@ -142,8 +142,8 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+    <div className="rounded-xl border bg-card p-6">
+      <h2 className="text-lg font-semibold text-foreground mb-4">
         Your DAOs ({filteredDaos.length})
       </h2>
 
@@ -154,18 +154,18 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
             onClick={() => onSelectDao(dao.id)}
             className={`text-left p-4 rounded-lg border transition-colors ${
               selectedDaoId === dao.id
-                ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700'
-                : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'
+                ? 'bg-primary/10 border-primary/50'
+                : 'bg-muted/50 border-border hover:bg-muted'
             }`}
           >
             <div className="flex flex-col">
               <div className="flex items-start justify-between mb-2">
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate flex-1">
+                <h3 className="text-sm font-semibold text-foreground truncate flex-1">
                   {dao.name}
                 </h3>
                 {selectedDaoId === dao.id && (
                   <svg
-                    className="w-4 h-4 text-purple-600 dark:text-purple-400 flex-shrink-0 ml-1"
+                    className="w-4 h-4 text-primary flex-shrink-0 ml-1"
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >
@@ -178,10 +178,10 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-muted-foreground">
                   DAO #{dao.id}
                 </p>
-                <Badge variant={dao.role === 'admin' ? 'blue' : 'green'} size="sm">
+                <Badge variant={dao.role === 'admin' ? 'blue' : 'success'} size="sm">
                   {dao.role}
                 </Badge>
               </div>

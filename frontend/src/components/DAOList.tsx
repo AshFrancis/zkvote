@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { getAllDaos } from '../lib/readOnlyContracts';
 import { CONTRACTS } from '../config/contracts';
-import { Alert, LoadingSpinner } from './ui';
+import { Alert, LoadingSpinner, Badge } from './ui';
+import { Card, CardContent } from './ui/Card';
+import { Lock, Unlock, Users } from 'lucide-react';
 
 interface DAO {
   id: number;
@@ -80,106 +82,104 @@ export default function DAOList({ onSelectDao, selectedDaoId, isConnected, userD
 
   if (loading && daos.length === 0) {
     return (
-      <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          {title}
-        </h2>
-        <div className="flex items-center justify-center py-8">
-          <LoadingSpinner size="md" />
-          <span className="ml-3 text-gray-600 dark:text-gray-400">Loading DAOs...</span>
-        </div>
-      </div>
+      <Card>
+        <CardContent className="p-6">
+          <h2 className="text-lg font-semibold mb-4">
+            {title}
+          </h2>
+          <div className="flex items-center justify-center py-8">
+            <LoadingSpinner size="md" />
+            <span className="ml-3 text-muted-foreground">Loading DAOs...</span>
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          {title}
-        </h2>
-        <Alert variant="error">{error}</Alert>
-        <button
-          onClick={loadDaos}
-          className="mt-4 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"
-        >
-          Retry
-        </button>
-      </div>
+      <Card>
+        <CardContent className="p-6">
+          <h2 className="text-lg font-semibold mb-4">
+            {title}
+          </h2>
+          <Alert variant="error">{error}</Alert>
+          <button
+            onClick={loadDaos}
+            className="mt-4 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"
+          >
+            Retry
+          </button>
+        </CardContent>
+      </Card>
     );
   }
 
   if (filteredDaos.length === 0) {
     return (
-      <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          {title}
-        </h2>
-        <div className="text-center py-8">
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            {isConnected ? 'No other DAOs found.' : 'No DAOs found. Connect your wallet to create the first DAO!'}
-          </p>
-        </div>
-      </div>
+      <Card>
+        <CardContent className="p-6">
+          <h2 className="text-lg font-semibold mb-4">
+            {title}
+          </h2>
+          <div className="text-center py-8">
+            <p className="text-muted-foreground mb-4">
+              {isConnected ? 'No other DAOs found.' : 'No DAOs found. Connect your wallet to create the first DAO!'}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-        {title} ({filteredDaos.length})
-      </h2>
+    <Card>
+      <CardContent className="p-6">
+        <h2 className="text-lg font-semibold mb-4">
+          {title} ({filteredDaos.length})
+        </h2>
 
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-        {filteredDaos.map((dao) => (
-          <button
-            key={dao.id}
-            onClick={() => onSelectDao(dao.id)}
-            className={`text-left p-4 rounded-lg border transition-colors ${
-              selectedDaoId === dao.id
-                ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700'
-                : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'
-            }`}
-          >
-            <div className="flex flex-col">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                    {dao.name}
-                  </h3>
-                  {dao.membership_open ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0">
-                      <rect width="12" height="8.571" x="6" y="12.071" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" rx="2"/>
-                      <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16.286 8.643a4.286 4.286 0 0 0-8.572 0v3.428"/>
-                    </svg>
-                  ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0">
-                      <rect width="12.526" height="8.947" x="5.737" y="12.053" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" rx="2"/>
-                      <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7.526 12.053v-3.58a4.474 4.474 0 0 1 8.948 0v3.58"/>
-                    </svg>
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+          {filteredDaos.map((dao) => (
+            <button
+              key={dao.id}
+              onClick={() => onSelectDao(dao.id)}
+              className={`text-left p-4 rounded-lg border transition-all hover:shadow-sm ${selectedDaoId === dao.id
+                  ? 'bg-primary/5 border-primary ring-1 ring-primary'
+                  : 'bg-card border-border hover:bg-accent hover:text-accent-foreground'
+                }`}
+            >
+              <div className="flex flex-col h-full justify-between gap-2">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    <h3 className="text-sm font-semibold truncate">
+                      {dao.name}
+                    </h3>
+                  </div>
+                  {selectedDaoId === dao.id && (
+                    <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0 mt-1.5" />
                   )}
                 </div>
-                {selectedDaoId === dao.id && (
-                  <svg
-                    className="w-4 h-4 text-purple-600 dark:text-purple-400 flex-shrink-0 ml-1"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                )}
+
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    #{dao.id}
+                  </p>
+                  {dao.membership_open ? (
+                    <Badge variant="success" className="h-5 px-1 text-[10px] gap-0.5">
+                      <Unlock className="w-2.5 h-2.5" /> Open
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="h-5 px-1 text-[10px] gap-0.5">
+                      <Lock className="w-2.5 h-2.5" /> Private
+                    </Badge>
+                  )}
+                </div>
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                DAO #{dao.id}
-              </p>
-            </div>
-          </button>
-        ))}
-      </div>
-    </div>
+            </button>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

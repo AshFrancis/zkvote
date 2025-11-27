@@ -1,8 +1,11 @@
 import { useState } from "react";
 import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 import { getZKCredentials } from "../lib/zk";
-import { Badge } from "./ui";
+import { Badge } from "./ui/Badge";
+import { Button } from "./ui/Button";
+import { Card, CardContent, CardFooter, CardHeader } from "./ui/Card";
 import VoteModal from "./VoteModal";
+import { Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 
 interface ProposalCardProps {
   proposal: {
@@ -63,85 +66,101 @@ export default function ProposalCard({
   };
 
   const getDeadlineColor = (): string => {
-    if (!hasDeadline) return "text-gray-600 dark:text-gray-400";
-    if (isPastDeadline) return "text-red-600 dark:text-red-400";
+    if (!hasDeadline) return "text-muted-foreground";
+    if (isPastDeadline) return "text-destructive";
 
     const timeLeft = proposal.endTime - now;
-    if (timeLeft < 86400) return "text-orange-600 dark:text-orange-400";
-    return "text-gray-600 dark:text-gray-400";
+    if (timeLeft < 86400) return "text-orange-500";
+    return "text-muted-foreground";
   };
 
   return (
     <>
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5">
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                Proposal #{proposal.id}
-              </span>
-              {proposal.vkVersion !== undefined && proposal.vkVersion !== null && (
-                <Badge variant="purple">VK v{proposal.vkVersion}</Badge>
-              )}
-              <Badge variant={proposal.voteMode === "Fixed" ? "amber" : "teal"}>
-                {proposal.voteMode}
-              </Badge>
-              {proposal.hasVoted && <Badge variant="blue">Voted</Badge>}
-              {isPastDeadline && <Badge variant="red">Closed</Badge>}
-            </div>
-            {hasDeadline && (
-              <div className={`text-sm font-medium mb-2 ${getDeadlineColor()}`}>
-                {formatDeadline(proposal.endTime)}
+      <Card className="transition-all hover:shadow-md">
+        <CardContent className="p-6">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-muted-foreground">
+                    #{proposal.id}
+                  </span>
+                  {proposal.vkVersion !== undefined && proposal.vkVersion !== null && (
+                    <Badge variant="purple" className="text-[10px] px-1.5 py-0 h-5">v{proposal.vkVersion}</Badge>
+                  )}
+                  <Badge variant={proposal.voteMode === "Fixed" ? "warning" : "success"} className="text-[10px] px-1.5 py-0 h-5">
+                    {proposal.voteMode}
+                  </Badge>
+                  {proposal.hasVoted && <Badge variant="blue" className="text-[10px] px-1.5 py-0 h-5">Voted</Badge>}
+                  {isPastDeadline && <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-5">Closed</Badge>}
+                </div>
+                <p className="text-base font-medium leading-normal">
+                  {proposal.description}
+                </p>
               </div>
-            )}
-            <p className="text-gray-900 dark:text-gray-100 mb-4">
-              {proposal.description}
-            </p>
 
-            <div>
-              <div className="flex items-center justify-between text-sm mb-1">
-                <span className="font-medium text-green-600 dark:text-green-400">
-                  Yes: {proposal.yesVotes}
-                </span>
-                <span className="font-medium text-red-600 dark:text-red-400">
-                  No: {proposal.noVotes}
+              {hasDeadline && (
+                <div className={`flex items-center gap-1.5 text-xs font-medium ${getDeadlineColor()}`}>
+                  <Clock className="w-3.5 h-3.5" />
+                  {formatDeadline(proposal.endTime)}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center gap-1.5 font-medium text-green-600 dark:text-green-500">
+                    <CheckCircle className="w-4 h-4" />
+                    {proposal.yesVotes}
+                  </span>
+                  <span className="flex items-center gap-1.5 font-medium text-red-600 dark:text-red-500">
+                    <XCircle className="w-4 h-4" />
+                    {proposal.noVotes}
+                  </span>
+                </div>
+                <span className="text-muted-foreground text-xs">
+                  {totalVotes} votes total
                 </span>
               </div>
-              <div className="w-full flex h-3 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
+
+              <div className="h-2 w-full rounded-full bg-secondary overflow-hidden flex">
                 <div
-                  className="bg-green-600 transition-all"
+                  className="bg-green-500 transition-all duration-500"
                   style={{ width: `${yesPercentage}%` }}
                 />
                 <div
-                  className="bg-red-600 transition-all"
+                  className="bg-red-500 transition-all duration-500"
                   style={{ width: `${noPercentage}%` }}
                 />
               </div>
             </div>
-          </div>
-        </div>
 
-        {hasMembership && !proposal.hasVoted && (
-          <button
-            onClick={() => setShowVoteModal(true)}
-            disabled={!isRegistered || isPastDeadline}
-            className={`w-full mt-4 font-medium px-4 py-2 rounded-md transition-colors ${
-              isRegistered && !isPastDeadline
-                ? "bg-blue-600 hover:bg-blue-700 text-white"
-                : "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
-            }`}
-            title={
-              !isRegistered
-                ? "Please register for voting first"
-                : isPastDeadline
-                ? "Voting period has ended"
-                : ""
-            }
-          >
-            {isPastDeadline ? "Voting Closed" : "Vote (Anonymous)"}
-          </button>
-        )}
-      </div>
+            {hasMembership && !proposal.hasVoted && (
+              <div className="pt-2">
+                <Button
+                  onClick={() => setShowVoteModal(true)}
+                  disabled={!isRegistered || isPastDeadline}
+                  className="w-full sm:w-auto"
+                  variant={isRegistered && !isPastDeadline ? "default" : "secondary"}
+                  size="sm"
+                >
+                  {!isRegistered ? (
+                    <>
+                      <AlertCircle className="w-4 h-4 mr-2" />
+                      Register to Vote
+                    </>
+                  ) : isPastDeadline ? (
+                    "Voting Closed"
+                  ) : (
+                    "Vote (Anonymous)"
+                  )}
+                </Button>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {showVoteModal && (
         <VoteModal

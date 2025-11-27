@@ -42,12 +42,12 @@ export async function generateDeterministicZKCredentials(
   // Create deterministic message with strong domain separation
   // Format: [domain] [action] [context] [unique-id]
   // This prevents cross-site replay attacks
-  const message = `[DaoVote App - DO NOT SIGN ON OTHER SITES]
+  const message = `[ZKVote App - DO NOT SIGN ON OTHER SITES]
 
 Action: Generate anonymous voting credentials
 DAO ID: ${daoId}
 Purpose: This signature creates your secret voting key for this DAO.
-Warning: Only sign this on the official DaoVote application.
+Warning: Only sign this on the official ZKVote application.
 
 By signing, you acknowledge that anyone who obtains this signature can vote on your behalf in DAO ${daoId}.`;
 

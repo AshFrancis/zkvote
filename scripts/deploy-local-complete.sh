@@ -201,8 +201,25 @@ stellar contract invoke \
   --depth 18 > /dev/null 2>&1
 success "Merkle tree initialized (depth 18, capacity 262,144)"
 
-warn "NOTE: Verification key must be set manually through the frontend UI"
-echo "      Navigate to the Public Votes page and click 'Set Verification Key' as admin"
+# Set verification key for Public DAO
+echo "Setting verification key..."
+VK_FILE="frontend/src/lib/verification_key_soroban.json"
+if [ -f "$VK_FILE" ]; then
+  VK_JSON=$(cat "$VK_FILE")
+  stellar contract invoke \
+    --id "$VOTING_ID" \
+    --rpc-url "$RPC_URL" \
+    --network-passphrase "$NETWORK_PASSPHRASE" \
+    --source "$KEY_NAME" \
+    -- set_vk \
+    --dao_id "$DAO_ID" \
+    --vk "$VK_JSON" \
+    --admin "$ADMIN_ADDRESS" > /dev/null 2>&1
+  success "Verification key set for Public DAO"
+else
+  warn "Verification key file not found at $VK_FILE"
+  warn "You'll need to set it manually through the frontend UI"
+fi
 
 # Step 4: Update frontend configuration
 step "Updating frontend configuration..."

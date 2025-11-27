@@ -197,12 +197,12 @@ export async function getOrDeriveEncryptionKey(
   }
 
   // Need to derive key from signature
-  const message = `[DaoVote App - DO NOT SIGN ON OTHER SITES]
+  const message = `[ZKVote App - DO NOT SIGN ON OTHER SITES]
 
 Action: Unlock member alias encryption key
 DAO ID: ${daoId}
 Purpose: This signature decrypts member nicknames for DAO admins.
-Warning: Only sign this on the official DaoVote application.
+Warning: Only sign this on the official ZKVote application.
 
 By signing, you acknowledge that this reveals member aliases you've set for DAO ${daoId}.`;
 

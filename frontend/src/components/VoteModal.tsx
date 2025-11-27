@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { Button, Banner } from "@stellar/design-system";
+import { Button } from "./ui/Button";
+import Alert from "./ui/Alert";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "./ui/Card";
 import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 import { initializeContractClients } from "../lib/contracts";
 import {
@@ -15,6 +17,7 @@ import {
   storeZKCredentials,
 } from "../lib/zk";
 import { LoadingSpinner } from "./ui";
+import { CheckCircle, XCircle, AlertTriangle, Loader2, X } from "lucide-react";
 
 interface VoteModalProps {
   proposalId: number;
@@ -256,127 +259,120 @@ export default function VoteModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="relative bg-white dark:bg-gray-800 rounded-lg max-w-md w-full p-6">
-        {/* Close button - positioned outside modal */}
-        <button
+    <div
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-fade-in"
+      onClick={onClose}
+    >
+      <div className="relative w-full max-w-xl" onClick={(e) => e.stopPropagation()}>
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={onClose}
-          className="absolute -top-2 -right-2 p-1 hover:opacity-70 transition-opacity"
-          aria-label="Close"
+          className="absolute -top-10 right-0 h-8 w-8 rounded-full text-white hover:bg-white/20"
         >
-          <svg
-            className="w-4 h-4 text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={3}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </Button>
+        <Card className="w-full shadow-xl border-none">
 
         {step === "select" && (
           <>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-              Cast Your Anonymous Vote
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Your vote will be verified using zero-knowledge proofs to ensure anonymity
-              while proving you're a DAO member.
-              {voteMode === "Fixed" ? (
-                <span className="block mt-2 text-sm text-yellow-600 dark:text-yellow-400">
-                  Note: Only members who were present when this proposal was created can vote (snapshot voting).
-                </span>
-              ) : (
-                <span className="block mt-2 text-sm text-green-600 dark:text-green-400">
-                  Note: Members can vote even if they joined after this proposal was created.
-                </span>
+            <CardHeader>
+              <CardTitle>Cast Anonymous Vote</CardTitle>
+              <CardDescription>
+                Your vote will be verified using zero-knowledge proofs to ensure anonymity while proving membership.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {voteMode === "Fixed" && (
+                <Alert variant="warning" className="text-xs">
+                  <AlertTriangle className="h-4 w-4" />
+                  Only members present when this proposal was created can vote (snapshot voting).
+                </Alert>
               )}
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => handleVote(true)}
-                className="flex-1 px-6 py-3 text-white bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition-colors shadow-sm hover:shadow-md"
-              >
-                Vote Yes
-              </button>
-              <button
-                onClick={() => handleVote(false)}
-                className="flex-1 px-6 py-3 text-white bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors shadow-sm hover:shadow-md"
-              >
-                Vote No
-              </button>
-            </div>
+
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <Button
+                  onClick={() => handleVote(true)}
+                  variant="outline"
+                  className="h-12 text-lg"
+                >
+                  Vote Yes
+                </Button>
+                <Button
+                  onClick={() => handleVote(false)}
+                  variant="outline"
+                  className="h-12 text-lg"
+                >
+                  Vote No
+                </Button>
+              </div>
+            </CardContent>
           </>
         )}
 
         {(step === "generating" || step === "submitting") && (
-          <>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-              {step === "generating" ? "Generating Proof" : "Submitting Vote"}
-            </h3>
-            <div className="flex flex-col items-center py-8">
-              <LoadingSpinner size="lg" color="blue" className="mb-4" />
-              <p className="text-gray-600 dark:text-gray-400 text-center">{progress}</p>
+          <CardContent className="py-12 flex flex-col items-center text-center space-y-4">
+            <div className="relative">
+              <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping" />
+              <div className="relative bg-background rounded-full p-4 border shadow-sm">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
             </div>
-            <Banner variant="primary">
-              This may take a minute. Please don't close this window.
-            </Banner>
-          </>
+            <div className="space-y-2">
+              <h3 className="font-semibold text-lg">
+                {step === "generating" ? "Generating Proof" : "Submitting Vote"}
+              </h3>
+              <p className="text-sm text-muted-foreground max-w-[260px] mx-auto">
+                {progress}
+              </p>
+            </div>
+            <Alert className="mt-4 bg-muted/50 border-none">
+              <p className="text-xs text-muted-foreground">
+                This process uses heavy cryptography in your browser. Please don't close this window.
+              </p>
+            </Alert>
+          </CardContent>
         )}
 
         {step === "success" && (
-          <>
-            <div className="text-center py-8">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
-                <svg
-                  className="h-6 w-6 text-green-600 dark:text-green-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-                Vote Submitted!
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Your anonymous vote has been recorded.
+          <CardContent className="py-12 flex flex-col items-center text-center space-y-4">
+            <div className="h-16 w-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-2">
+              <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-bold text-xl">Vote Submitted!</h3>
+              <p className="text-muted-foreground">
+                Your anonymous vote has been recorded on the blockchain.
               </p>
             </div>
-          </>
+          </CardContent>
         )}
 
         {step === "error" && (
           <>
-            <h3 className="text-xl font-bold mb-4">
-              Error
-            </h3>
-            <div className="mb-6">
-              <Banner variant="error">
+            <CardHeader>
+              <CardTitle className="text-destructive flex items-center gap-2">
+                <XCircle className="h-5 w-5" />
+                Error
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert variant="error">
                 {error}
-              </Banner>
-            </div>
-            <Button
-              variant="secondary"
-              size="lg"
-              isFullWidth
-              onClick={onClose}
-            >
-              Close
-            </Button>
+              </Alert>
+              <Button
+                variant="secondary"
+                size="lg"
+                className="w-full"
+                onClick={onClose}
+              >
+                Close
+              </Button>
+            </CardContent>
           </>
         )}
+        </Card>
       </div>
     </div>
   );

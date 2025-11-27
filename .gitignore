@@ -56,3 +56,6 @@ claude.md
 CLAUDE.md
 audit.md
 trusted-setup/*.ptau
+
+# Third-party reference code
+webgl-particle-head/

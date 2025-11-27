@@ -1,11 +1,17 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { initializeContractClients } from "../lib/contracts";
 import { getReadOnlyDaoRegistry, getReadOnlyMembershipSbt, getReadOnlyMembershipTree, getReadOnlyVoting } from "../lib/readOnlyContracts";
 import { useWallet } from "../hooks/useWallet";
 import ProposalList from "./ProposalList";
+import ManageMembers from "./ManageMembers";
+import DAOInfoPanel from "./DAOInfoPanel";
 import { getZKCredentials, storeZKCredentials, generateDeterministicZKCredentials } from "../lib/zk";
 import { isUserRejection } from "../lib/utils";
 import { Alert, LoadingSpinner, CreateProposalForm } from "./ui";
+import { Button } from "./ui/Button";
+import { FileText, Users, PlusCircle, X, Home } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/Card";
 
 interface PublicVotesProps {
   publicKey: string | null;
@@ -23,16 +29,29 @@ interface DAOInfo {
   vkVersion: number | null;
 }
 
+const PUBLIC_DAO_ID = 1;
+const PUBLIC_DAO_CACHE_KEY = `public_dao_info_${PUBLIC_DAO_ID}`;
+
 export default function PublicVotes({ publicKey, isConnected, isInitializing = false }: PublicVotesProps) {
   const { kit } = useWallet();
-  const [dao, setDao] = useState<DAOInfo | null>(null);
-  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  const [dao, setDao] = useState<DAOInfo | null>(() => {
+    // Initialize from cache for instant display
+    const cached = localStorage.getItem(PUBLIC_DAO_CACHE_KEY);
+    return cached ? JSON.parse(cached) : null;
+  });
+  const [loading, setLoading] = useState(() => {
+    // Only show loading spinner if no cache exists
+    const cached = localStorage.getItem(PUBLIC_DAO_CACHE_KEY);
+    return !cached;
+  });
   const [error, setError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [proposalKey, setProposalKey] = useState(0);
   const [showCreateProposal, setShowCreateProposal] = useState(false);
   const [creatingProposal, setCreatingProposal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'info' | 'proposals' | 'members'>('proposals');
 
   useEffect(() => {
     if (isInitializing) {
@@ -43,10 +62,17 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
 
   const loadPublicDAO = async () => {
     try {
-      setLoading(true);
+      // Load from cache first for instant display
+      const cached = localStorage.getItem(PUBLIC_DAO_CACHE_KEY);
+      if (cached) {
+        setDao(JSON.parse(cached));
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
       setError(null);
 
-      const publicDaoId = 1;
+      const publicDaoId = PUBLIC_DAO_ID;
 
       let result;
       let vkResult;
@@ -186,7 +212,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
         console.error("Failed to get member count:", err);
       }
 
-      setDao({
+      const daoInfo = {
         id: publicDaoId,
         name: result.result.name,
         creator: result.result.admin,
@@ -194,10 +220,16 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
         isRegistered,
         memberCount,
         vkVersion: vkResult?.result !== undefined ? Number(vkResult.result) : null,
-      });
+      };
+      setDao(daoInfo);
+      // Cache the DAO info for instant loading next time
+      localStorage.setItem(PUBLIC_DAO_CACHE_KEY, JSON.stringify(daoInfo));
     } catch (err) {
       console.error("Failed to load public DAO:", err);
-      setError("Failed to load public DAO. Make sure DAO #1 exists and is public.");
+      // Only show error if we don't have cached data to display
+      if (!localStorage.getItem(PUBLIC_DAO_CACHE_KEY)) {
+        setError("Failed to load public DAO. Make sure DAO #1 exists and is public.");
+      }
     } finally {
       setLoading(false);
     }
@@ -363,8 +395,8 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
 
   if (error && !dao) {
     return (
-      <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+      <div className="rounded-xl border bg-card p-6">
+        <h2 className="text-xl font-semibold mb-4">
           Public Votes
         </h2>
         <Alert variant="error">{error}</Alert>
@@ -373,103 +405,158 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
   }
 
   return (
+    <>
     <div className="space-y-6">
-      <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
-              {dao?.name || "Public Votes"}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="space-y-1">
+            <h2 className="text-3xl font-bold tracking-tight text-foreground">
+              {dao?.name || "Public DAO"}
             </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Open DAO • {dao?.memberCount || 0} members • VK v{dao?.vkVersion ?? "?"} • Anyone can join and vote
+            <p className="text-sm text-muted-foreground">
+              Open DAO • {dao?.memberCount || 0} member{dao?.memberCount !== 1 ? 's' : ''} • VK v{dao?.vkVersion ?? "?"} • Anyone can join and vote
             </p>
           </div>
-          {isConnected && dao && dao.isRegistered && (
-            <button
-              onClick={() => setShowCreateProposal(!showCreateProposal)}
-              className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 transition-colors"
-            >
-              Create Proposal
-            </button>
-          )}
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={activeTab === 'proposals' ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('proposals')}
+            className="gap-2"
+          >
+            <Home className="w-4 h-4" />
+            Overview
+          </Button>
+          <Button
+            variant={activeTab === 'info' ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('info')}
+            className="gap-2"
+          >
+            <FileText className="w-4 h-4" /> Info
+          </Button>
+          <Button
+            variant={activeTab === 'members' ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('members')}
+            className="gap-2"
+          >
+            <Users className="w-4 h-4" />
+            Members
+          </Button>
+          {isConnected && dao && dao.isRegistered && (
+            <Button
+              variant="outline"
+              onClick={() => setShowCreateProposal(true)}
+              size="sm"
+              className="gap-2"
+            >
+              <PlusCircle className="w-4 h-4" />
+              Add Proposal
+            </Button>
+          )}
 
-        {error && <Alert variant="error" className="mb-4">{error}</Alert>}
-
-        {isConnected && dao && !dao.hasMembership && (
-          <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
-            <h3 className="text-lg font-semibold text-purple-900 dark:text-purple-100 mb-2">
-              Join Public DAO
-            </h3>
-            <p className="text-sm text-purple-800 dark:text-purple-200 mb-3">
-              Join this public DAO to create proposals and vote anonymously.
-            </p>
-            <button
+          {isConnected && dao && !dao.hasMembership && (
+            <Button
+              variant="outline"
               onClick={handleJoinDAO}
               disabled={joining}
-              className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+              size="sm"
+              className="gap-2"
             >
               {joining && <LoadingSpinner size="sm" color="white" />}
               {joining ? "Joining..." : "Join DAO"}
-            </button>
-          </div>
-        )}
-
-        {isConnected && dao && dao.hasMembership && !dao.isRegistered && (
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-            <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-2">
-              Register to Vote
-            </h3>
-            <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
-              Generate your anonymous voting credentials to participate in proposals.
-            </p>
-            <button
+            </Button>
+          )}
+          {isConnected && dao && dao.hasMembership && !dao.isRegistered && (
+            <Button
+              variant="outline"
               onClick={handleRegisterToVote}
               disabled={registering}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+              size="sm"
+              className="gap-2"
             >
               {registering && <LoadingSpinner size="sm" color="white" />}
               {registering ? "Registering..." : "Register to Vote"}
-            </button>
-          </div>
-        )}
-
-        {!isConnected && (
-          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-            <p className="text-gray-600 dark:text-gray-400">
-              Connect your wallet to join this public DAO and vote on proposals.
-            </p>
-          </div>
-        )}
+            </Button>
+          )}
+        </div>
       </div>
 
-      {showCreateProposal && dao && (
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-            New Proposal
-          </h3>
-          <CreateProposalForm
-            onSubmit={handleCreateProposal}
-            onCancel={() => {
-              setShowCreateProposal(false);
-              setError(null);
-            }}
-            isSubmitting={creatingProposal}
-          />
-        </div>
+      {error && <Alert variant="error">{error}</Alert>}
+
+      {activeTab === 'info' && dao && (
+        <DAOInfoPanel daoId={dao.id} publicKey={publicKey} />
       )}
 
-      {dao && (
-        <ProposalList
-          key={proposalKey}
-          publicKey={publicKey}
+      {activeTab === 'proposals' && (
+        <>
+          {!isConnected && (
+            <div className="rounded-xl border bg-card p-6">
+              <p className="text-muted-foreground">
+                Connect your wallet to join this public DAO and vote on proposals.
+              </p>
+            </div>
+          )}
+
+          {dao && (
+            <ProposalList
+              key={proposalKey}
+              publicKey={publicKey}
+              daoId={dao.id}
+              kit={kit}
+              hasMembership={dao.hasMembership}
+              vkSet={true}
+              isInitializing={isInitializing}
+            />
+          )}
+        </>
+      )}
+
+      {activeTab === 'members' && dao && (
+        <ManageMembers
           daoId={dao.id}
-          kit={kit}
-          hasMembership={dao.hasMembership}
-          vkSet={true}
-          isInitializing={isInitializing}
+          publicKey={publicKey}
+          isAdmin={false}
         />
       )}
     </div>
+
+    {/* Create Proposal Modal */}
+    {showCreateProposal && (
+      <div
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-fade-in"
+        onClick={() => setShowCreateProposal(false)}
+      >
+        <div className="relative w-full max-w-xl" onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowCreateProposal(false)}
+            className="absolute -top-10 right-0 h-8 w-8 rounded-full text-white hover:bg-white/20"
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </Button>
+          <Card className="w-full shadow-xl border-none">
+            <CardHeader>
+              <CardTitle>Create Proposal</CardTitle>
+              <CardDescription>
+                Create a new proposal for members to vote on.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CreateProposalForm
+                onSubmit={handleCreateProposal}
+                onCancel={() => setShowCreateProposal(false)}
+                isSubmitting={creatingProposal}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

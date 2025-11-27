@@ -11,7 +11,7 @@ const sizeStyles = {
 };
 
 const colorStyles = {
-  purple: "border-purple-600",
+  purple: "border-border",
   blue: "border-blue-600",
   white: "border-white",
 };
@@ -33,7 +33,7 @@ export function LoadingPage({ message }: { message?: string }) {
     <div className="flex flex-col items-center justify-center p-8">
       <LoadingSpinner size="lg" />
       {message && (
-        <p className="mt-4 text-gray-600 dark:text-gray-400">{message}</p>
+        <p className="mt-4 text-muted-foreground">{message}</p>
       )}
     </div>
   );

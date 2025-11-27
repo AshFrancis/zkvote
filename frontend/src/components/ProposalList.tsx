@@ -37,10 +37,13 @@ export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkS
       try {
         const parsed = JSON.parse(cached);
         // Convert eligibleRoot strings back to bigints
-        return parsed.map((p: any) => ({
+        const proposals = parsed.map((p: any) => ({
           ...p,
           eligibleRoot: BigInt(p.eligibleRoot)
         }));
+        // Sort by proposal ID descending (newest first)
+        proposals.sort((a: Proposal, b: Proposal) => b.id - a.id);
+        return proposals;
       } catch {
         return [];
       }
@@ -76,6 +79,8 @@ export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkS
             ...p,
             eligibleRoot: BigInt(p.eligibleRoot)
           }));
+          // Sort by proposal ID descending (newest first)
+          proposals.sort((a: Proposal, b: Proposal) => b.id - a.id);
           setProposals(proposals);
           setLoading(false);
         } catch {
@@ -92,6 +97,9 @@ export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkS
       const loadedProposals = (await Promise.all(proposalPromises)).filter(
         (p): p is Proposal => p !== null
       );
+
+      // Sort by proposal ID descending (newest first)
+      loadedProposals.sort((a, b) => b.id - a.id);
 
       setProposals(loadedProposals);
 
@@ -177,8 +185,8 @@ export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkS
     <div className="space-y-4">
       {/* Proposals List */}
       {proposals.length === 0 ? (
-        <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8 text-center">
-          <p className="text-gray-600 dark:text-gray-400">No proposals yet</p>
+        <div className="rounded-xl border bg-card p-8 text-center">
+          <p className="text-muted-foreground">No proposals yet</p>
         </div>
       ) : (
         <div className="space-y-3">

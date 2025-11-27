@@ -34,9 +34,11 @@ if (typeof window !== 'undefined') {
 export const networks = {
   futurenet: {
     networkPassphrase: "Test SDF Future Network ; October 2022",
-    contractId: "CBYFTZ7TM37Q3G4S2FUAV55RP2EKVE7JNKBFHCSV4MKPMPIHQVX2VTDW",
+    contractId: "CBHOLY46RUFIL56EWK5HP7XG6W5AIKXCWS5KTF6G5F3OJ4TRJGXTXTNO",
   }
 } as const
+
+export type DataKey = {tag: "Member", values: readonly [u64, string]} | {tag: "Alias", values: readonly [u64, string]} | {tag: "Revoked", values: readonly [u64, string]} | {tag: "MemberCount", values: readonly [u64]} | {tag: "MemberAtIndex", values: readonly [u64, u64]};
 
 export const SbtError = {
   1: {message:"NotDaoAdmin"},
@@ -46,13 +48,17 @@ export const SbtError = {
   5: {message:"AlreadyInitialized"}
 }
 
-export type DataKey = {tag: "Member", values: readonly [u64, string]} | {tag: "Alias", values: readonly [u64, string]} | {tag: "Revoked", values: readonly [u64, string]} | {tag: "MemberCount", values: readonly [u64]} | {tag: "MemberAtIndex", values: readonly [u64, u64]};
-
 
 
 
 
 export interface Client {
+  /**
+   * Construct and simulate a has transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Check if address has SBT for a specific DAO (and is not revoked)
+   */
+  has: ({dao_id, of}: {dao_id: u64, of: string}, options?: MethodOptions) => Promise<AssembledTransaction<boolean>>
+
   /**
    * Construct and simulate a mint transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Mint SBT to address for a specific DAO
@@ -63,18 +69,24 @@ export interface Client {
   mint: ({dao_id, to, admin, encrypted_alias}: {dao_id: u64, to: string, admin: string, encrypted_alias: Option<string>}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
-   * Construct and simulate a mint_from_registry transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Mint SBT from registry during DAO initialization
-   * This function is called by the registry contract during create_and_init_dao
-   * to avoid re-entrancy issues. The registry is a trusted system contract.
+   * Construct and simulate a leave transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Leave DAO voluntarily (member self-revokes)
+   * Sets revocation flag, keeping member entry and alias intact
    */
-  mint_from_registry: ({dao_id, to}: {dao_id: u64, to: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+  leave: ({dao_id, member}: {dao_id: u64, member: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
-   * Construct and simulate a has transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Check if address has SBT for a specific DAO (and is not revoked)
+   * Construct and simulate a revoke transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Revoke an SBT (admin only)
+   * Sets revocation flag, keeping member entry and alias intact
    */
-  has: ({dao_id, of}: {dao_id: u64, of: string}, options?: MethodOptions) => Promise<AssembledTransaction<boolean>>
+  revoke: ({dao_id, member, admin}: {dao_id: u64, member: string, admin: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a version transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Contract version for upgrade tracking.
+   */
+  version: (options?: MethodOptions) => Promise<AssembledTransaction<u32>>
 
   /**
    * Construct and simulate a registry transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -89,25 +101,18 @@ export interface Client {
   get_alias: ({dao_id, member}: {dao_id: u64, member: string}, options?: MethodOptions) => Promise<AssembledTransaction<Option<string>>>
 
   /**
-   * Construct and simulate a revoke transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Revoke an SBT (admin only)
-   * Sets revocation flag, keeping member entry and alias intact
-   */
-  revoke: ({dao_id, member, admin}: {dao_id: u64, member: string, admin: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
-
-  /**
-   * Construct and simulate a leave transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Leave DAO voluntarily (member self-revokes)
-   * Sets revocation flag, keeping member entry and alias intact
-   */
-  leave: ({dao_id, member}: {dao_id: u64, member: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
-
-  /**
    * Construct and simulate a self_join transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Self-join a DAO with open membership
    * Allows users to mint their own SBT if the DAO allows open membership
    */
   self_join: ({dao_id, member, encrypted_alias}: {dao_id: u64, member: string, encrypted_alias: Option<string>}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a get_members transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Get a batch of members for a DAO
+   * Returns addresses from offset to offset+limit (or end of list)
+   */
+  get_members: ({dao_id, offset, limit}: {dao_id: u64, offset: u64, limit: u64}, options?: MethodOptions) => Promise<AssembledTransaction<Array<string>>>
 
   /**
    * Construct and simulate a update_alias transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -122,23 +127,18 @@ export interface Client {
   get_member_count: ({dao_id}: {dao_id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<u64>>
 
   /**
+   * Construct and simulate a mint_from_registry transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Mint SBT from registry during DAO initialization
+   * This function is called by the registry contract during create_and_init_dao
+   * to avoid re-entrancy issues. The registry is a trusted system contract.
+   */
+  mint_from_registry: ({dao_id, to}: {dao_id: u64, to: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
    * Construct and simulate a get_member_at_index transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Get member address at a specific index
    */
   get_member_at_index: ({dao_id, index}: {dao_id: u64, index: u64}, options?: MethodOptions) => Promise<AssembledTransaction<Option<string>>>
-
-  /**
-   * Construct and simulate a get_members transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Get a batch of members for a DAO
-   * Returns addresses from offset to offset+limit (or end of list)
-   */
-  get_members: ({dao_id, offset, limit}: {dao_id: u64, offset: u64, limit: u64}, options?: MethodOptions) => Promise<AssembledTransaction<Array<string>>>
-
-  /**
-   * Construct and simulate a version transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Contract version for upgrade tracking.
-   */
-  version: (options?: MethodOptions) => Promise<AssembledTransaction<u32>>
 
 }
 export class Client extends ContractClient {
@@ -160,42 +160,42 @@ export class Client extends ContractClient {
   }
   constructor(public readonly options: ContractClientOptions) {
     super(
-      new ContractSpec([ "AAAABAAAAAAAAAAAAAAACFNidEVycm9yAAAABQAAAAAAAAALTm90RGFvQWRtaW4AAAAAAQAAAAAAAAANQWxyZWFkeU1pbnRlZAAAAAAAAAIAAAAAAAAACU5vdE1lbWJlcgAAAAAAAAMAAAAAAAAAEU5vdE9wZW5NZW1iZXJzaGlwAAAAAAAABAAAAAAAAAASQWxyZWFkeUluaXRpYWxpemVkAAAAAAAF",
-        "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAABQAAAAEAAAAAAAAABk1lbWJlcgAAAAAAAgAAAAYAAAATAAAAAQAAAAAAAAAFQWxpYXMAAAAAAAACAAAABgAAABMAAAABAAAAAAAAAAdSZXZva2VkAAAAAAIAAAAGAAAAEwAAAAEAAAAAAAAAC01lbWJlckNvdW50AAAAAAEAAAAGAAAAAQAAAAAAAAANTWVtYmVyQXRJbmRleAAAAAAAAAIAAAAGAAAABg==",
-        "AAAABQAAAAAAAAAAAAAADFNidE1pbnRFdmVudAAAAAEAAAAOc2J0X21pbnRfZXZlbnQAAAAAAAIAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAAAAAAAAnRvAAAAAAATAAAAAAAAAAI=",
-        "AAAABQAAAAAAAAAAAAAADlNidFJldm9rZUV2ZW50AAAAAAABAAAAEHNidF9yZXZva2VfZXZlbnQAAAACAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAAAAAAZtZW1iZXIAAAAAABMAAAAAAAAAAg==",
-        "AAAABQAAAAAAAAAAAAAADVNidExlYXZlRXZlbnQAAAAAAAABAAAAD3NidF9sZWF2ZV9ldmVudAAAAAACAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAAAAAAZtZW1iZXIAAAAAABMAAAAAAAAAAg==",
-        "AAAABQAAAAAAAAAAAAAAEENvbnRyYWN0VXBncmFkZWQAAAABAAAAEWNvbnRyYWN0X3VwZ3JhZGVkAAAAAAAAAgAAAAAAAAAEZnJvbQAAAAQAAAAAAAAAAAAAAAJ0bwAAAAAABAAAAAAAAAAC",
-        "AAAAAAAAADpDb25zdHJ1Y3RvcjogSW5pdGlhbGl6ZSBjb250cmFjdCB3aXRoIERBTyBSZWdpc3RyeSBhZGRyZXNzAAAAAAANX19jb25zdHJ1Y3RvcgAAAAAAAAEAAAAAAAAACHJlZ2lzdHJ5AAAAEwAAAAA=",
-        "AAAAAAAAALRNaW50IFNCVCB0byBhZGRyZXNzIGZvciBhIHNwZWNpZmljIERBTwpPbmx5IERBTyBhZG1pbiBjYW4gbWludCAodmVyaWZpZWQgdmlhIHJlZ2lzdHJ5KQpPcHRpb25hbGx5IHN0b3JlcyBhbiBlbmNyeXB0ZWQgYWxpYXMgZm9yIHRoZSBtZW1iZXIKQ2FuIHJlLW1pbnQgdG8gcHJldmlvdXNseSByZXZva2VkIG1lbWJlcnMAAAAEbWludAAAAAQAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAACdG8AAAAAABMAAAAAAAAABWFkbWluAAAAAAAAEwAAAAAAAAAPZW5jcnlwdGVkX2FsaWFzAAAAA+gAAAAQAAAAAA==",
-        "AAAAAAAAAMRNaW50IFNCVCBmcm9tIHJlZ2lzdHJ5IGR1cmluZyBEQU8gaW5pdGlhbGl6YXRpb24KVGhpcyBmdW5jdGlvbiBpcyBjYWxsZWQgYnkgdGhlIHJlZ2lzdHJ5IGNvbnRyYWN0IGR1cmluZyBjcmVhdGVfYW5kX2luaXRfZGFvCnRvIGF2b2lkIHJlLWVudHJhbmN5IGlzc3Vlcy4gVGhlIHJlZ2lzdHJ5IGlzIGEgdHJ1c3RlZCBzeXN0ZW0gY29udHJhY3QuAAAAEm1pbnRfZnJvbV9yZWdpc3RyeQAAAAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAJ0bwAAAAAAEwAAAAA=",
+      new ContractSpec([ "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAABQAAAAEAAAAAAAAABk1lbWJlcgAAAAAAAgAAAAYAAAATAAAAAQAAAAAAAAAFQWxpYXMAAAAAAAACAAAABgAAABMAAAABAAAAAAAAAAdSZXZva2VkAAAAAAIAAAAGAAAAEwAAAAEAAAAAAAAAC01lbWJlckNvdW50AAAAAAEAAAAGAAAAAQAAAAAAAAANTWVtYmVyQXRJbmRleAAAAAAAAAIAAAAGAAAABg==",
+        "AAAABAAAAAAAAAAAAAAACFNidEVycm9yAAAABQAAAAAAAAALTm90RGFvQWRtaW4AAAAAAQAAAAAAAAANQWxyZWFkeU1pbnRlZAAAAAAAAAIAAAAAAAAACU5vdE1lbWJlcgAAAAAAAAMAAAAAAAAAEU5vdE9wZW5NZW1iZXJzaGlwAAAAAAAABAAAAAAAAAASQWxyZWFkeUluaXRpYWxpemVkAAAAAAAF",
         "AAAAAAAAAEBDaGVjayBpZiBhZGRyZXNzIGhhcyBTQlQgZm9yIGEgc3BlY2lmaWMgREFPIChhbmQgaXMgbm90IHJldm9rZWQpAAAAA2hhcwAAAAACAAAAAAAAAAZkYW9faWQAAAAAAAYAAAAAAAAAAm9mAAAAAAATAAAAAQAAAAE=",
-        "AAAAAAAAABRHZXQgcmVnaXN0cnkgYWRkcmVzcwAAAAhyZWdpc3RyeQAAAAAAAAABAAAAEw==",
-        "AAAAAAAAAClHZXQgZW5jcnlwdGVkIGFsaWFzIGZvciBhIG1lbWJlciAoaWYgc2V0KQAAAAAAAAlnZXRfYWxpYXMAAAAAAAACAAAAAAAAAAZkYW9faWQAAAAAAAYAAAAAAAAABm1lbWJlcgAAAAAAEwAAAAEAAAPoAAAAEA==",
-        "AAAAAAAAAFZSZXZva2UgYW4gU0JUIChhZG1pbiBvbmx5KQpTZXRzIHJldm9jYXRpb24gZmxhZywga2VlcGluZyBtZW1iZXIgZW50cnkgYW5kIGFsaWFzIGludGFjdAAAAAAABnJldm9rZQAAAAAAAwAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAZtZW1iZXIAAAAAABMAAAAAAAAABWFkbWluAAAAAAAAEwAAAAA=",
+        "AAAAAAAAALRNaW50IFNCVCB0byBhZGRyZXNzIGZvciBhIHNwZWNpZmljIERBTwpPbmx5IERBTyBhZG1pbiBjYW4gbWludCAodmVyaWZpZWQgdmlhIHJlZ2lzdHJ5KQpPcHRpb25hbGx5IHN0b3JlcyBhbiBlbmNyeXB0ZWQgYWxpYXMgZm9yIHRoZSBtZW1iZXIKQ2FuIHJlLW1pbnQgdG8gcHJldmlvdXNseSByZXZva2VkIG1lbWJlcnMAAAAEbWludAAAAAQAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAACdG8AAAAAABMAAAAAAAAABWFkbWluAAAAAAAAEwAAAAAAAAAPZW5jcnlwdGVkX2FsaWFzAAAAA+gAAAAQAAAAAA==",
         "AAAAAAAAAGdMZWF2ZSBEQU8gdm9sdW50YXJpbHkgKG1lbWJlciBzZWxmLXJldm9rZXMpClNldHMgcmV2b2NhdGlvbiBmbGFnLCBrZWVwaW5nIG1lbWJlciBlbnRyeSBhbmQgYWxpYXMgaW50YWN0AAAAAAVsZWF2ZQAAAAAAAAIAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAAGbWVtYmVyAAAAAAATAAAAAA==",
+        "AAAAAAAAAFZSZXZva2UgYW4gU0JUIChhZG1pbiBvbmx5KQpTZXRzIHJldm9jYXRpb24gZmxhZywga2VlcGluZyBtZW1iZXIgZW50cnkgYW5kIGFsaWFzIGludGFjdAAAAAAABnJldm9rZQAAAAAAAwAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAZtZW1iZXIAAAAAABMAAAAAAAAABWFkbWluAAAAAAAAEwAAAAA=",
+        "AAAABQAAAAAAAAAAAAAADFNidE1pbnRFdmVudAAAAAEAAAAOc2J0X21pbnRfZXZlbnQAAAAAAAIAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAAAAAAAAnRvAAAAAAATAAAAAAAAAAI=",
+        "AAAAAAAAACZDb250cmFjdCB2ZXJzaW9uIGZvciB1cGdyYWRlIHRyYWNraW5nLgAAAAAAB3ZlcnNpb24AAAAAAAAAAAEAAAAE",
+        "AAAABQAAAAAAAAAAAAAADVNidExlYXZlRXZlbnQAAAAAAAABAAAAD3NidF9sZWF2ZV9ldmVudAAAAAACAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAAAAAAZtZW1iZXIAAAAAABMAAAAAAAAAAg==",
+        "AAAAAAAAABRHZXQgcmVnaXN0cnkgYWRkcmVzcwAAAAhyZWdpc3RyeQAAAAAAAAABAAAAEw==",
+        "AAAABQAAAAAAAAAAAAAADlNidFJldm9rZUV2ZW50AAAAAAABAAAAEHNidF9yZXZva2VfZXZlbnQAAAACAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAAAAAAZtZW1iZXIAAAAAABMAAAAAAAAAAg==",
+        "AAAAAAAAAClHZXQgZW5jcnlwdGVkIGFsaWFzIGZvciBhIG1lbWJlciAoaWYgc2V0KQAAAAAAAAlnZXRfYWxpYXMAAAAAAAACAAAAAAAAAAZkYW9faWQAAAAAAAYAAAAAAAAABm1lbWJlcgAAAAAAEwAAAAEAAAPoAAAAEA==",
         "AAAAAAAAAGlTZWxmLWpvaW4gYSBEQU8gd2l0aCBvcGVuIG1lbWJlcnNoaXAKQWxsb3dzIHVzZXJzIHRvIG1pbnQgdGhlaXIgb3duIFNCVCBpZiB0aGUgREFPIGFsbG93cyBvcGVuIG1lbWJlcnNoaXAAAAAAAAAJc2VsZl9qb2luAAAAAAAAAwAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAZtZW1iZXIAAAAAABMAAAAAAAAAD2VuY3J5cHRlZF9hbGlhcwAAAAPoAAAAEAAAAAA=",
-        "AAAAAAAAADBVcGRhdGUgZW5jcnlwdGVkIGFsaWFzIGZvciBhIG1lbWJlciAoYWRtaW4gb25seSkAAAAMdXBkYXRlX2FsaWFzAAAABAAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAZtZW1iZXIAAAAAABMAAAAAAAAABWFkbWluAAAAAAAAEwAAAAAAAAATbmV3X2VuY3J5cHRlZF9hbGlhcwAAAAAQAAAAAA==",
-        "AAAAAAAAACBHZXQgdG90YWwgbWVtYmVyIGNvdW50IGZvciBhIERBTwAAABBnZXRfbWVtYmVyX2NvdW50AAAAAQAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAQAAAAY=",
-        "AAAAAAAAACZHZXQgbWVtYmVyIGFkZHJlc3MgYXQgYSBzcGVjaWZpYyBpbmRleAAAAAAAE2dldF9tZW1iZXJfYXRfaW5kZXgAAAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAVpbmRleAAAAAAAAAYAAAABAAAD6AAAABM=",
+        "AAAABQAAAAAAAAAAAAAAEENvbnRyYWN0VXBncmFkZWQAAAABAAAAEWNvbnRyYWN0X3VwZ3JhZGVkAAAAAAAAAgAAAAAAAAAEZnJvbQAAAAQAAAAAAAAAAAAAAAJ0bwAAAAAABAAAAAAAAAAC",
         "AAAAAAAAAF9HZXQgYSBiYXRjaCBvZiBtZW1iZXJzIGZvciBhIERBTwpSZXR1cm5zIGFkZHJlc3NlcyBmcm9tIG9mZnNldCB0byBvZmZzZXQrbGltaXQgKG9yIGVuZCBvZiBsaXN0KQAAAAALZ2V0X21lbWJlcnMAAAAAAwAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAZvZmZzZXQAAAAAAAYAAAAAAAAABWxpbWl0AAAAAAAABgAAAAEAAAPqAAAAEw==",
-        "AAAAAAAAACZDb250cmFjdCB2ZXJzaW9uIGZvciB1cGdyYWRlIHRyYWNraW5nLgAAAAAAB3ZlcnNpb24AAAAAAAAAAAEAAAAE" ]),
+        "AAAAAAAAADBVcGRhdGUgZW5jcnlwdGVkIGFsaWFzIGZvciBhIG1lbWJlciAoYWRtaW4gb25seSkAAAAMdXBkYXRlX2FsaWFzAAAABAAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAZtZW1iZXIAAAAAABMAAAAAAAAABWFkbWluAAAAAAAAEwAAAAAAAAATbmV3X2VuY3J5cHRlZF9hbGlhcwAAAAAQAAAAAA==",
+        "AAAAAAAAADpDb25zdHJ1Y3RvcjogSW5pdGlhbGl6ZSBjb250cmFjdCB3aXRoIERBTyBSZWdpc3RyeSBhZGRyZXNzAAAAAAANX19jb25zdHJ1Y3RvcgAAAAAAAAEAAAAAAAAACHJlZ2lzdHJ5AAAAEwAAAAA=",
+        "AAAAAAAAACBHZXQgdG90YWwgbWVtYmVyIGNvdW50IGZvciBhIERBTwAAABBnZXRfbWVtYmVyX2NvdW50AAAAAQAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAQAAAAY=",
+        "AAAAAAAAAMRNaW50IFNCVCBmcm9tIHJlZ2lzdHJ5IGR1cmluZyBEQU8gaW5pdGlhbGl6YXRpb24KVGhpcyBmdW5jdGlvbiBpcyBjYWxsZWQgYnkgdGhlIHJlZ2lzdHJ5IGNvbnRyYWN0IGR1cmluZyBjcmVhdGVfYW5kX2luaXRfZGFvCnRvIGF2b2lkIHJlLWVudHJhbmN5IGlzc3Vlcy4gVGhlIHJlZ2lzdHJ5IGlzIGEgdHJ1c3RlZCBzeXN0ZW0gY29udHJhY3QuAAAAEm1pbnRfZnJvbV9yZWdpc3RyeQAAAAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAJ0bwAAAAAAEwAAAAA=",
+        "AAAAAAAAACZHZXQgbWVtYmVyIGFkZHJlc3MgYXQgYSBzcGVjaWZpYyBpbmRleAAAAAAAE2dldF9tZW1iZXJfYXRfaW5kZXgAAAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAVpbmRleAAAAAAAAAYAAAABAAAD6AAAABM=" ]),
       options
     )
   }
   public readonly fromJSON = {
-    mint: this.txFromJSON<null>,
-        mint_from_registry: this.txFromJSON<null>,
-        has: this.txFromJSON<boolean>,
+    has: this.txFromJSON<boolean>,
+        mint: this.txFromJSON<null>,
+        leave: this.txFromJSON<null>,
+        revoke: this.txFromJSON<null>,
+        version: this.txFromJSON<u32>,
         registry: this.txFromJSON<string>,
         get_alias: this.txFromJSON<Option<string>>,
-        revoke: this.txFromJSON<null>,
-        leave: this.txFromJSON<null>,
         self_join: this.txFromJSON<null>,
+        get_members: this.txFromJSON<Array<string>>,
         update_alias: this.txFromJSON<null>,
         get_member_count: this.txFromJSON<u64>,
-        get_member_at_index: this.txFromJSON<Option<string>>,
-        get_members: this.txFromJSON<Array<string>>,
-        version: this.txFromJSON<u32>
+        mint_from_registry: this.txFromJSON<null>,
+        get_member_at_index: this.txFromJSON<Option<string>>
   }
 }

@@ -66,7 +66,7 @@ export default function WalletConnect({
       <h3 className="text-lg font-semibold mb-2">
         Connect Wallet
       </h3>
-      <p className="text-gray-600 dark:text-gray-400 mb-4">
+      <p className="text-muted-foreground mb-4">
         Connect your Stellar wallet (Freighter, xBull, Albedo, etc.) to interact with the DAO.
       </p>
       {error && (

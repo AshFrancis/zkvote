@@ -12,7 +12,6 @@ import { Alert, LoadingSpinner, Badge } from './ui';
 interface ManageMembersProps {
   publicKey: string | null;
   daoId: number;
-  daoName: string;
   isAdmin: boolean;
   isInitializing?: boolean;
 }
@@ -31,7 +30,7 @@ interface Member {
   isAdmin?: boolean;
 }
 
-export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isInitializing = false }: ManageMembersProps) {
+export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializing = false }: ManageMembersProps) {
   const { kit } = useWallet();
   const [loading, setLoading] = useState(() => {
     // Only show loading indicator if no cache exists
@@ -513,7 +512,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
   };
 
   const handleLeave = async () => {
-    if (!confirm(`Leave ${daoName}? You will no longer be able to vote in this DAO.`)) {
+    if (!confirm(`Leave this DAO? You will no longer be able to vote.`)) {
       return;
     }
 
@@ -536,7 +535,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
 
       await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
 
-      setSuccess(`You have left ${daoName}`);
+      setSuccess(`You have left the DAO`);
 
       // Update local state
       const updatedMembers = members.filter(m => m.address !== publicKey);
@@ -624,89 +623,74 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-          Members
-        </h2>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          {daoName} (DAO #{daoId})
-        </p>
-        {treeInfo?.vkVersion !== null && treeInfo?.vkVersion !== undefined && (
-          <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-            Verifying key version: {treeInfo.vkVersion}
-          </p>
-        )}
-      </div>
-
       {/* Statistics Dashboard */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-          <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+        <div className="rounded-xl border bg-card p-6">
+          <h3 className="text-sm font-medium text-muted-foreground mb-1">
             Merkle Tree Depth
           </h3>
-          <p className="text-3xl font-bold text-gray-900 dark:text-white">
+          <p className="text-3xl font-bold text-foreground">
             {treeInfo?.depth || 0}
           </p>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-          <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+        <div className="rounded-xl border bg-card p-6">
+          <h3 className="text-sm font-medium text-muted-foreground mb-1">
             Registered Voters
           </h3>
-          <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
+          <p className="text-3xl font-bold text-primary">
             {treeInfo?.leafCount || 0}
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             Registered in Merkle tree
           </p>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-          <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+        <div className="rounded-xl border bg-card p-6">
+          <h3 className="text-sm font-medium text-muted-foreground mb-1">
             Tree Capacity
           </h3>
-          <p className="text-3xl font-bold text-gray-900 dark:text-white">
+          <p className="text-3xl font-bold text-foreground">
             {treeInfo?.depth ? Math.pow(2, treeInfo.depth).toLocaleString() : 0}
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             Maximum members
           </p>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-          <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+        <div className="rounded-xl border bg-card p-6">
+          <h3 className="text-sm font-medium text-muted-foreground mb-1">
             Verifying Key Version
           </h3>
-          <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
+          <p className="text-3xl font-bold text-primary">
             {treeInfo?.vkVersion ?? 'N/A'}
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             Proofs must match this version
           </p>
         </div>
       </div>
 
       {/* Merkle Root */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+      <div className="rounded-xl border bg-card p-6">
+        <h3 className="text-sm font-semibold text-foreground mb-2">
           Current Merkle Root
         </h3>
-        <p className="font-mono text-xs text-gray-600 dark:text-gray-400 break-all">
+        <p className="font-mono text-xs text-muted-foreground break-all">
           {treeInfo?.root || 'N/A'}
         </p>
       </div>
 
       {/* Current Members */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+      <div className="rounded-xl border bg-card p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+          <h3 className="text-lg font-semibold text-foreground">
             Current Members ({members.length})
           </h3>
           {isAdmin && encryptedAliases.size > 0 && (
             <button
               onClick={toggleAliasVisibility}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-primary bg-primary/10 border border-primary/20 rounded-md hover:bg-primary/20 transition-colors"
             >
               {aliasesVisible ? (
                 <>
@@ -728,7 +712,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
           )}
         </div>
         {members.length === 0 ? (
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-sm text-muted-foreground">
             No members yet. {isAdmin ? 'Mint an SBT to add members.' : ''}
           </p>
         ) : (
@@ -736,7 +720,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
             {members.map((member) => (
               <div
                 key={member.address}
-                className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                className="p-3 bg-muted/50 rounded-lg"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 flex-1">
@@ -756,7 +740,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
                             }
                           }}
                           placeholder="Enter new alias..."
-                          className="text-sm font-medium px-2 py-1 border border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400"
+                          className="text-sm font-medium px-2 py-1 border border-primary/30 rounded bg-background text-primary"
                           autoFocus
                         />
                       ) : (
@@ -764,24 +748,27 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
                           <div className="min-h-[20px] transition-all duration-200">
                             {aliasesVisible ? (
                               memberAliases.has(member.address) && (
-                                <p className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                                <p className="text-sm font-medium text-primary">
                                   {memberAliases.get(member.address)}
                                 </p>
                               )
                             ) : (
-                              <p className="text-sm font-medium text-gray-500 dark:text-gray-500 truncate max-w-xs">
+                              <p className="text-sm font-medium text-muted-foreground truncate max-w-xs">
                                 {encryptedAliases.get(member.address)}
                               </p>
                             )}
                           </div>
                         )
                       )}
-                      <p className="font-mono text-xs text-gray-600 dark:text-gray-400">
+                      <p className="font-mono text-xs text-muted-foreground">
                         {member.address}
                       </p>
                     </div>
                     {member.isAdmin && (
-                      <Badge variant="blue" size="sm">Admin</Badge>
+                      <Badge variant="blue">Admin</Badge>
+                    )}
+                    {member.address === publicKey && (
+                      <Badge variant="secondary">You</Badge>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
@@ -791,7 +778,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
                           setEditingAlias(member.address);
                           setNewAlias(memberAliases.get(member.address) || "");
                         }}
-                        className="p-1 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded transition-colors"
+                        className="p-1 text-primary hover:bg-primary/10 rounded transition-colors"
                         title="Edit alias"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -804,7 +791,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
                         <button
                           onClick={() => handleUpdateAlias(member.address)}
                           disabled={updatingAlias}
-                          className="p-1 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 rounded transition-colors disabled:opacity-50"
+                          className="p-1 text-green-600 dark:text-green-400 hover:bg-green-500/10 rounded transition-colors disabled:opacity-50"
                           title="Save alias"
                         >
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -817,7 +804,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
                             setNewAlias("");
                           }}
                           disabled={updatingAlias}
-                          className="p-1 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-900/30 rounded transition-colors disabled:opacity-50"
+                          className="p-1 text-muted-foreground hover:bg-muted rounded transition-colors disabled:opacity-50"
                           title="Cancel"
                         >
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -829,7 +816,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
                     {isAdmin && member.address !== publicKey && !member.isAdmin && editingAlias !== member.address && (
                       <button
                         onClick={() => handleRemoveMember(member.address)}
-                        className="p-1 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-colors"
+                        className="p-1 text-destructive hover:bg-destructive/10 rounded transition-colors"
                         title="Revoke membership"
                       >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -841,7 +828,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
                       <button
                         onClick={handleLeave}
                         disabled={leaving}
-                        className="px-3 py-1 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50"
+                        className="px-3 py-1 text-sm font-medium text-destructive bg-destructive/10 border border-destructive/20 rounded-md hover:bg-destructive/20 transition-colors disabled:opacity-50"
                         title="Leave DAO"
                       >
                         {leaving ? "Leaving..." : "Leave"}
@@ -857,17 +844,17 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
 
       {/* Removed Members */}
       {removedMembers.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+        <div className="rounded-xl border bg-card p-6">
+          <h3 className="text-lg font-semibold text-foreground mb-4">
             Removed Members ({removedMembers.length})
           </h3>
           <div className="space-y-2">
             {removedMembers.map((address) => (
               <div
                 key={address}
-                className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg"
+                className="p-3 bg-destructive/10 rounded-lg"
               >
-                <p className="font-mono text-sm text-gray-700 dark:text-gray-300">
+                <p className="font-mono text-sm text-foreground">
                   {address}
                 </p>
               </div>
@@ -884,98 +871,78 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
 
       {/* Mint SBT Form - Admin Only */}
       {isAdmin && (
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+        <div className="rounded-xl border bg-card p-6">
+          <h3 className="text-lg font-semibold text-foreground mb-4">
             Mint Membership SBT
           </h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-          Grant membership by minting a soulbound token to a Stellar address. Members can then register for anonymous voting.
-        </p>
+          <p className="text-sm text-muted-foreground mb-4">
+            Grant membership by minting a soulbound token to a Stellar address. Members can then register for anonymous voting.
+          </p>
 
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Recipient Address
-            </label>
-            <input
-              type="text"
-              value={mintAddress}
-              onChange={(e) => setMintAddress(e.target.value)}
-              placeholder="G... (Stellar address)"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Member Alias (Optional)
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Recipient Address
               </label>
-              <button
-                onClick={toggleAliasInput}
-                type="button"
-                className="p-1.5 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
-                title={aliasInputUnlocked ? "Lock alias input" : "Unlock alias input"}
-              >
-                {aliasInputUnlocked ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="w-4 h-4">
-                    <rect width="12" height="8.571" x="6" y="12.071" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" rx="2"/>
-                    <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16.286 8.643a4.286 4.286 0 0 0-8.572 0v3.428"/>
-                  </svg>
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="w-4 h-4">
-                    <rect width="12.526" height="8.947" x="5.737" y="12.053" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" rx="2"/>
-                    <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7.526 12.053v-3.58a4.474 4.474 0 0 1 8.948 0v3.58"/>
-                  </svg>
-                )}
-              </button>
+              <input
+                type="text"
+                value={mintAddress}
+                onChange={(e) => setMintAddress(e.target.value)}
+                placeholder="G... (Stellar address)"
+                className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-ring focus:border-transparent"
+              />
             </div>
-            <input
-              type="text"
-              value={memberAlias}
-              onChange={(e) => setMemberAlias(e.target.value)}
-              disabled={!aliasInputUnlocked}
-              placeholder="e.g., Alice, Bob, Team Lead..."
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
-            />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {aliasInputUnlocked
-                ? "Encrypted and stored on-chain. Only you can decrypt it."
-                : "Click the lock icon to unlock and add an alias."}
-            </p>
-          </div>
 
-          <button
-            onClick={handleMintSBT}
-            disabled={minting || !mintAddress.trim()}
-            className="w-full px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 disabled:cursor-not-allowed rounded-md transition-colors"
-          >
-            {minting ? "Minting..." : "Mint SBT"}
-          </button>
-        </div>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-foreground">
+                  Member Alias (Optional)
+                </label>
+                <button
+                  onClick={toggleAliasInput}
+                  type="button"
+                  className="p-1.5 text-primary bg-primary/10 border border-primary/20 rounded-md hover:bg-primary/20 transition-colors"
+                  title={aliasInputUnlocked ? "Lock alias input" : "Unlock alias input"}
+                >
+                  {aliasInputUnlocked ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="w-4 h-4">
+                      <rect width="12" height="8.571" x="6" y="12.071" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" rx="2" />
+                      <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16.286 8.643a4.286 4.286 0 0 0-8.572 0v3.428" />
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="w-4 h-4">
+                      <rect width="12.526" height="8.947" x="5.737" y="12.053" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" rx="2" />
+                      <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7.526 12.053v-3.58a4.474 4.474 0 0 1 8.948 0v3.58" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              <input
+                type="text"
+                value={memberAlias}
+                onChange={(e) => setMemberAlias(e.target.value)}
+                disabled={!aliasInputUnlocked}
+                placeholder="e.g., Alice, Bob, Team Lead..."
+                className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-ring focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                {aliasInputUnlocked
+                  ? "Encrypted and stored on-chain. Only you can decrypt it."
+                  : "Click the lock icon to unlock and add an alias."}
+              </p>
+            </div>
+
+            <button
+              onClick={handleMintSBT}
+              disabled={minting || !mintAddress.trim()}
+              className="w-full px-4 py-2 text-sm font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors"
+            >
+              {minting ? "Minting..." : "Mint SBT"}
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Info Note */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-        <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
-          How Membership Works
-        </h3>
-        <ul className="space-y-2 text-sm text-blue-800 dark:text-blue-200">
-          <li className="flex items-start">
-            <span className="mr-2">1.</span>
-            <span><strong>Mint SBT:</strong> Admin grants membership by minting a soulbound (non-transferable) token to a member's address</span>
-          </li>
-          <li className="flex items-start">
-            <span className="mr-2">2.</span>
-            <span><strong>Register for Voting:</strong> Member registers a secret commitment in the Merkle tree to enable anonymous voting</span>
-          </li>
-          <li className="flex items-start">
-            <span className="mr-2">3.</span>
-            <span><strong>Vote Anonymously:</strong> Member can now vote on proposals using ZK proofs without revealing their identity</span>
-          </li>
-        </ul>
-      </div>
     </div>
   );
 }
