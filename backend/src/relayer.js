@@ -72,6 +72,7 @@ const STRIP_REQUEST_BODIES = process.env.STRIP_REQUEST_BODIES === 'true'; // dro
 const STATIC_VK_VERSION = process.env.VOTING_VK_VERSION
   ? Number(process.env.VOTING_VK_VERSION)
   : undefined;
+const GENERIC_ERRORS = process.env.RELAYER_GENERIC_ERRORS === 'true'; // when true, avoid detailed errors in /vote responses
 
 // Contract IDs - MUST be set or server won't start
 const VOTING_CONTRACT_ID = process.env.VOTING_CONTRACT_ID;
@@ -275,11 +276,6 @@ app.post('/vote', authGuard, voteLimiter, async (req, res) => {
     ? {}
     : req.body;
 
-  if (process.env.RELAYER_TEST_MODE === 'true') {
-    // In test mode, avoid hitting real RPC/contract constructors
-    return res.status(400).json({ error: 'Simulation failed (test mode)' });
-  }
-
   // Validate required fields
   if (daoId === undefined || proposalId === undefined || choice === undefined ||
       !nullifier || !root || !commitment || !proof) {
@@ -298,14 +294,14 @@ app.post('/vote', authGuard, voteLimiter, async (req, res) => {
   }
 
   // Validate U256 hex strings
-  if (!isValidU256Hex(nullifier)) {
-    return res.status(400).json({ error: 'nullifier must be a valid hex string (up to 64 chars)' });
+  if (!isValidU256Hex(nullifier) || !isWithinField(nullifier)) {
+    return res.status(400).json({ error: 'nullifier must be a valid hex string < BN254 modulus' });
   }
-  if (!isValidU256Hex(root)) {
-    return res.status(400).json({ error: 'root must be a valid hex string (up to 64 chars)' });
+  if (!isValidU256Hex(root) || !isWithinField(root)) {
+    return res.status(400).json({ error: 'root must be a valid hex string < BN254 modulus' });
   }
-  if (!isValidU256Hex(commitment)) {
-    return res.status(400).json({ error: 'commitment must be a valid hex string (up to 64 chars)' });
+  if (!isValidU256Hex(commitment) || !isWithinField(commitment)) {
+    return res.status(400).json({ error: 'commitment must be a valid hex string < BN254 modulus' });
   }
 
   // Validate proof structure
@@ -325,19 +321,39 @@ app.post('/vote', authGuard, voteLimiter, async (req, res) => {
   try {
     log('info', 'vote_request', { daoId, proposalId });
 
+    // Convert inputs to Soroban types with validation
+    let scNullifier, scRoot, scCommitment, scProof;
+    try {
+      scNullifier = u256ToScVal(nullifier);
+      scRoot = u256ToScVal(root);
+      scCommitment = u256ToScVal(commitment);
+      scProof = proofToScVal(proof);
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+
+    if (process.env.RELAYER_TEST_MODE === 'true') {
+      // In test mode, stop after validation/conversion
+      return res.status(400).json({ error: 'Simulation failed (test mode)' });
+    }
+
     // Build the contract call
     const contract = new StellarSdk.Contract(VOTING_CONTRACT_ID);
 
-    // Convert inputs to Soroban types
     const args = [
       StellarSdk.nativeToScVal(daoId, { type: 'u64' }),                    // dao_id
       StellarSdk.nativeToScVal(proposalId, { type: 'u64' }),               // proposal_id
       StellarSdk.nativeToScVal(choice, { type: 'bool' }),                  // choice
-      u256ToScVal(nullifier),                                              // nullifier
-      u256ToScVal(root),                                                   // root
-      u256ToScVal(commitment),                                             // commitment (NEW)
-      proofToScVal(proof)                                                  // proof
+      scNullifier,                                                         // nullifier
+      scRoot,                                                              // root
+      scCommitment,                                                        // commitment (NEW)
+      scProof                                                              // proof
     ];
+
+    if (process.env.RELAYER_TEST_MODE === 'true') {
+      // In test mode, stop after validation/conversion
+      return res.status(400).json({ error: 'Simulation failed (test mode)' });
+    }
 
     const operation = contract.call('vote', ...args);
 
@@ -435,10 +451,11 @@ app.post('/vote', authGuard, voteLimiter, async (req, res) => {
     }
   } catch (err) {
     log('error', 'vote_exception', { message: err.message, stack: err.stack });
-    res.status(500).json({
-      error: 'Internal server error',
-      message: err.message
-    });
+    res.status(500).json(
+      GENERIC_ERRORS
+        ? { error: 'Internal server error' }
+        : { error: 'Internal server error', message: err.message }
+    );
   }
 });
 
@@ -705,6 +722,16 @@ function isValidHex(str, maxHexChars) {
   const hex = str.startsWith('0x') ? str.slice(2) : str;
   if (hex.length > maxHexChars) return false;
   return /^[0-9a-fA-F]*$/.test(hex);
+}
+
+// Helper: Check BN254 field bound (p)
+// p = 21888242871839275222246405745257275088548364400416034343698204186575808495617
+const BN254_MODULUS = BigInt('21888242871839275222246405745257275088548364400416034343698204186575808495617');
+function isWithinField(str) {
+  if (!isValidU256Hex(str)) return false;
+  const hex = str.startsWith('0x') ? str.slice(2) : str;
+  const val = BigInt('0x' + hex);
+  return val < BN254_MODULUS;
 }
 
 // Helper: Check if byte array is all zeros

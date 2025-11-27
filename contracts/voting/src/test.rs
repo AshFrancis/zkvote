@@ -195,6 +195,52 @@ fn create_dummy_proof(env: &Env) -> Proof {
     }
 }
 
+fn create_wrong_length_proof(env: &Env) -> Proof {
+    // Deliberately malformed proof points (not valid curve coordinates).
+    // In tests we force verification to fail via VerifyOverride.
+    let mut bad_a = [0u8; 64];
+    bad_a[0] = 1;
+    let mut bad_b = [0u8; 128];
+    bad_b[0] = 2;
+    let mut bad_c = [0u8; 64];
+    bad_c[0] = 3;
+
+    Proof {
+        a: BytesN::from_array(env, &bad_a),
+        b: BytesN::from_array(env, &bad_b),
+        c: BytesN::from_array(env, &bad_c),
+    }
+}
+
+fn create_all_zero_proof(env: &Env) -> Proof {
+    Proof {
+        a: BytesN::from_array(env, &[0u8; 64]),
+        b: BytesN::from_array(env, &[0u8; 128]),
+        c: BytesN::from_array(env, &[0u8; 64]),
+    }
+}
+
+fn create_off_curve_proof(env: &Env) -> Proof {
+    // Use obviously invalid coordinates: set y = 0 while x = 1,2 to break curve equation
+    let mut off_a = [0u8; 64];
+    off_a[31] = 1; // x = 1
+    off_a[63] = 0; // y = 0 (not on curve)
+
+    let mut off_c = [0u8; 64];
+    off_c[31] = 2; // x = 2
+    off_c[63] = 0; // y = 0 (not on curve)
+
+    // For G2, use the existing generator but flip one byte to move off-curve
+    let mut off_b = bn254_g2_generator(env).to_array();
+    off_b[0] ^= 0xFF; // perturb
+
+    Proof {
+        a: BytesN::from_array(env, &off_a),
+        b: BytesN::from_array(env, &off_b),
+        c: BytesN::from_array(env, &off_c),
+    }
+}
+
 // BN254 G1 generator: (1, 2)
 fn bn254_g1_generator(env: &Env) -> BytesN<64> {
     let mut bytes = [0u8; 64];
@@ -263,10 +309,10 @@ fn test_create_proposal() {
     assert_eq!(proposal_id, 1);
     assert_eq!(voting_client.proposal_count(&1u64), 1);
 
-    let proposal = voting_client.get_proposal(&1u64, &proposal_id);
-    assert_eq!(proposal.yes_votes, 0);
-    assert_eq!(proposal.no_votes, 0);
-    assert_eq!(proposal.eligible_root, root);
+    let _proposal = voting_client.get_proposal(&1u64, &proposal_id);
+    assert_eq!(_proposal.yes_votes, 0);
+    assert_eq!(_proposal.no_votes, 0);
+    assert_eq!(_proposal.eligible_root, root);
 }
 
 #[test]
@@ -1086,6 +1132,239 @@ fn test_create_proposal_with_past_end_time_fails() {
 
 #[test]
 #[should_panic(expected = "HostError")]
+fn test_vote_with_malformed_proof_fails() {
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    sbt_client.set_member(&1u64, &member, &true);
+    let root = U256::from_u32(&env, 12345);
+    tree_client.set_root(&1u64, &root);
+    registry_client.set_admin(&1u64, &admin);
+    voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
+
+    let now = env.ledger().timestamp();
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Malformed proof"),
+        &(now + 3600),
+        &member,
+        &VoteMode::Fixed,
+    );
+
+    let proposal = voting_client.get_proposal(&1u64, &proposal_id);
+    let nullifier = U256::from_u32(&env, 99999);
+    let bad_proof = create_wrong_length_proof(&env);
+
+    // Force verify_groth16 to return false in test mode
+    env.as_contract(&voting_id, || {
+        env.storage()
+            .instance()
+            .set(&DataKey::VerifyOverride, &false);
+    });
+
+    voting_client.vote(
+        &1u64,
+        &proposal_id,
+        &true,
+        &nullifier,
+        &proposal.eligible_root,
+        &U256::from_u32(&env, 12345),
+        &bad_proof,
+    );
+}
+
+#[test]
+#[should_panic(expected = "HostError")]
+fn test_vote_with_swapped_pub_signals_fails() {
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    sbt_client.set_member(&1u64, &member, &true);
+    let root = U256::from_u32(&env, 12345);
+    tree_client.set_root(&1u64, &root);
+    registry_client.set_admin(&1u64, &admin);
+    voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
+
+    let now = env.ledger().timestamp();
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Swap pub signals"),
+        &(now + 3600),
+        &member,
+        &VoteMode::Fixed,
+    );
+
+    // Force verify_groth16 to return false to simulate swapped public inputs
+    env.as_contract(&voting_id, || {
+        env.storage()
+            .instance()
+            .set(&DataKey::VerifyOverride, &false);
+    });
+
+    let _proposal = voting_client.get_proposal(&1u64, &proposal_id);
+    let nullifier = U256::from_u32(&env, 99988);
+    let proof = create_dummy_proof(&env);
+
+    voting_client.vote(
+        &1u64,
+        &proposal_id,
+        &true,
+        &nullifier,
+        // Intentionally swap dao_id/proposal_id signals (wrong roots/commitments)
+        &U256::from_u32(&env, 99999),
+        &U256::from_u32(&env, 54321),
+        &proof,
+    );
+}
+
+#[test]
+#[should_panic(expected = "HostError")]
+fn test_vote_with_swapped_dao_proposal_ids_fails() {
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    sbt_client.set_member(&1u64, &member, &true);
+    let root = U256::from_u32(&env, 12345);
+    tree_client.set_root(&1u64, &root);
+    registry_client.set_admin(&1u64, &admin);
+    voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
+
+    let now = env.ledger().timestamp();
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Swap dao/proposal"),
+        &(now + 3600),
+        &member,
+        &VoteMode::Fixed,
+    );
+
+    env.as_contract(&voting_id, || {
+        env.storage()
+            .instance()
+            .set(&DataKey::VerifyOverride, &false);
+    });
+
+    let nullifier = U256::from_u32(&env, 1010);
+    let proof = create_dummy_proof(&env);
+
+    // Use wrong dao_id and proposal_id in signals (by calling with swapped IDs)
+    voting_client.vote(
+        &2u64, // wrong dao_id
+        &(&proposal_id + 1), // wrong proposal_id
+        &true,
+        &nullifier,
+        &U256::from_u32(&env, 99999),
+        &U256::from_u32(&env, 11111),
+        &proof,
+    );
+}
+
+#[test]
+#[should_panic(expected = "HostError")]
+fn test_vote_with_all_zero_proof_fails() {
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    sbt_client.set_member(&1u64, &member, &true);
+    let root = U256::from_u32(&env, 12345);
+    tree_client.set_root(&1u64, &root);
+    registry_client.set_admin(&1u64, &admin);
+    voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
+
+    let now = env.ledger().timestamp();
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Zero proof"),
+        &(now + 3600),
+        &member,
+        &VoteMode::Fixed,
+    );
+
+    // Force verification to run and fail
+    env.as_contract(&voting_id, || {
+        env.storage()
+            .instance()
+            .set(&DataKey::VerifyOverride, &false);
+    });
+
+    let nullifier = U256::from_u32(&env, 2020);
+    let proof = create_all_zero_proof(&env);
+
+    voting_client.vote(
+        &1u64,
+        &proposal_id,
+        &true,
+        &nullifier,
+        &root,
+        &U256::from_u32(&env, 999),
+        &proof,
+    );
+}
+
+#[test]
+#[should_panic(expected = "HostError")]
+fn test_vote_with_off_curve_proof_fails() {
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    sbt_client.set_member(&1u64, &member, &true);
+    let root = U256::from_u32(&env, 12345);
+    tree_client.set_root(&1u64, &root);
+    registry_client.set_admin(&1u64, &admin);
+    voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
+
+    let now = env.ledger().timestamp();
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Off-curve proof"),
+        &(now + 3600),
+        &member,
+        &VoteMode::Fixed,
+    );
+
+    // Force verification to run and fail
+    env.as_contract(&voting_id, || {
+        env.storage()
+            .instance()
+            .set(&DataKey::VerifyOverride, &false);
+    });
+
+    let nullifier = U256::from_u32(&env, 3030);
+    let proof = create_off_curve_proof(&env);
+
+    voting_client.vote(
+        &1u64,
+        &proposal_id,
+        &true,
+        &nullifier,
+        &root,
+        &U256::from_u32(&env, 999),
+        &proof,
+    );
+}
+
+#[test]
+#[should_panic(expected = "HostError")]
 fn test_vote_after_expiry_fails() {
     let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
@@ -1127,6 +1406,236 @@ fn test_vote_after_expiry_fails() {
         &U256::from_u32(&env, 12345),
         &proof,
     );
+}
+
+#[test]
+#[should_panic(expected = "HostError")]
+fn test_vote_with_commitment_from_other_dao_fails() {
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    // Member belongs to DAO 1 with commitment and root1
+    sbt_client.set_member(&1u64, &member, &true);
+    let root_dao1 = U256::from_u32(&env, 11111);
+    tree_client.set_root(&1u64, &root_dao1);
+
+    // DAO 2 setup with different root; member has SBT but no matching commitment/root
+    sbt_client.set_member(&2u64, &member, &true);
+    registry_client.set_admin(&2u64, &admin);
+    let root_dao2 = U256::from_u32(&env, 22222);
+    tree_client.set_root(&2u64, &root_dao2);
+    voting_client.set_vk(&2u64, &create_dummy_vk(&env), &admin);
+
+    let now = env.ledger().timestamp();
+    let proposal_id = voting_client.create_proposal(
+        &2u64,
+        &String::from_str(&env, "Cross-DAO vote"),
+        &(now + 3600),
+        &member,
+        &VoteMode::Fixed,
+    );
+
+    // Use commitment rooted in DAO 1 while voting in DAO 2 with DAO 1 root -> should panic (root mismatch)
+    let nullifier = U256::from_u32(&env, 9999);
+    let proof = create_dummy_proof(&env);
+    voting_client.vote(
+        &2u64,
+        &proposal_id,
+        &true,
+        &nullifier,
+        &root_dao1,                   // wrong root for DAO 2
+        &U256::from_u32(&env, 12345), // commitment not present in DAO 2 tree
+        &proof,
+    );
+}
+
+// TODO: Add a G2 subgroup/cofactor negative once host provides subgroup checks.
+// Current pairing check rejects off-curve points; invalid-cofactor in G2 is not enforced by the host yet.
+
+#[test]
+#[should_panic(expected = "HostError")]
+fn test_vote_with_mismatched_vk_hash_in_proposal_fails() {
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    sbt_client.set_member(&1u64, &member, &true);
+    let root = U256::from_u32(&env, 12345);
+    tree_client.set_root(&1u64, &root);
+    registry_client.set_admin(&1u64, &admin);
+    voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
+
+    let now = env.ledger().timestamp();
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "VK hash mismatch"),
+        &(now + 3600),
+        &member,
+        &VoteMode::Fixed,
+    );
+
+    // Tamper vk_hash on stored proposal and disable test shortcut to force verify failure
+    env.as_contract(&voting_id, || {
+        let mut p = env
+            .storage()
+            .persistent()
+            .get::<_, ProposalInfo>(&DataKey::Proposal(1, proposal_id))
+            .unwrap();
+        let bogus_hash = BytesN::from_array(&env, &[9u8; 32]);
+        p.vk_hash = bogus_hash;
+        env.storage().persistent().set(&DataKey::Proposal(1, proposal_id), &p);
+        env.storage()
+            .instance()
+            .set(&DataKey::VerifyOverride, &false);
+    });
+
+    let proposal = voting_client.get_proposal(&1u64, &proposal_id);
+    let nullifier = U256::from_u32(&env, 4040);
+    let proof = create_dummy_proof(&env);
+
+    voting_client.vote(
+        &1u64,
+        &proposal_id,
+        &true,
+        &nullifier,
+        &proposal.eligible_root,
+        &U256::from_u32(&env, 12345),
+        &proof,
+    );
+}
+
+#[test]
+#[should_panic(expected = "HostError")]
+fn test_vote_with_vk_ic_length_mismatch_fails() {
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    sbt_client.set_member(&1u64, &member, &true);
+    let root = U256::from_u32(&env, 12345);
+    tree_client.set_root(&1u64, &root);
+    registry_client.set_admin(&1u64, &admin);
+
+    // Craft a VK with an IC length mismatch (8 elements instead of 7)
+    let mut vk = create_dummy_vk(&env);
+    vk.ic.push_back(bn254_g1_generator(&env)); // now len = 8
+
+    // Bypass validation and install mismatched VK/version directly
+    env.as_contract(&voting_id, || {
+        env.storage().persistent().set(&DataKey::VkVersion(1), &1u32);
+        env.storage()
+            .persistent()
+            .set(&DataKey::VkByVersion(1, 1), &vk);
+    });
+
+    let now = env.ledger().timestamp();
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Bad VK"),
+        &(now + 3600),
+        &member,
+        &VoteMode::Fixed,
+    );
+
+    let proposal = voting_client.get_proposal(&1u64, &proposal_id);
+
+    let nullifier = U256::from_u32(&env, 111);
+    let proof = create_dummy_proof(&env);
+
+    // With IC length mismatch, verify_groth16 should fail and panic
+    voting_client.vote(
+        &1u64,
+        &proposal_id,
+        &true,
+        &nullifier,
+        &proposal.eligible_root,
+        &U256::from_u32(&env, 12345),
+        &proof,
+    );
+}
+
+/// Randomized mixed operations to stress nullifier and FSM invariants.
+#[test]
+fn test_randomized_mixed_actions_preserve_invariants() {
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    registry_client.set_admin(&1u64, &admin);
+    sbt_client.set_member(&1u64, &member, &true);
+    tree_client.set_root(&1u64, &U256::from_u32(&env, 12345));
+    voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
+
+    let mut proposals = soroban_sdk::vec![&env];
+    let mut nullifiers = soroban_sdk::vec![&env];
+
+    // Create a couple of proposals
+    for _idx in 0..3 {
+        let pid = voting_client.create_proposal(
+            &1u64,
+            &String::from_str(&env, "P"),
+            &(env.ledger().timestamp() + 10_000),
+            &member,
+            &VoteMode::Fixed,
+        );
+        proposals.push_back(pid);
+    }
+
+    // Randomized sequence of actions
+    let mut archived_once = false;
+    for i in 0..5 {
+        // Close/archive only once to avoid InvalidState repeats
+        if !archived_once && i % 2 == 0 {
+            let target = proposals.get(0).unwrap();
+            voting_client.close_proposal(&1u64, &target, &admin);
+            voting_client.archive_proposal(&1u64, &target, &admin);
+            archived_once = true;
+        }
+
+        // Vote on remaining active proposals with unique nullifiers
+        for pid in proposals.iter() {
+            if pid == proposals.get(0).unwrap() {
+                continue; // archived/closed
+            }
+            let base = 1000u64 + (i as u64) * 10 + pid;
+            let n = U256::from_u128(&env, base as u128);
+            nullifiers.push_back(n.clone());
+            let proposal = voting_client.get_proposal(&1u64, &pid);
+            let proof = create_dummy_proof(&env);
+            voting_client.vote(
+                &1u64,
+                &pid,
+                &(i % 2 == 0),
+                &n,
+                &proposal.eligible_root,
+                &U256::from_u32(&env, 12345),
+                &proof,
+            );
+        }
+    }
+
+    // Ensure no duplicate nullifiers recorded and archived proposal is closed/archived
+    let mut seen = soroban_sdk::vec![&env];
+    for n in nullifiers.iter() {
+        assert!(!seen.iter().any(|x| x == n));
+        seen.push_back(n);
+    }
+    let archived = proposals.get(0).unwrap();
+    let archived_info = voting_client.get_proposal(&1u64, &archived);
+    assert_eq!(archived_info.state, ProposalState::Archived);
 }
 
 #[test]

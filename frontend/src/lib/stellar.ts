@@ -24,10 +24,11 @@ export async function checkRelayerReady(relayerUrl: string, authToken?: string) 
   const headers: Record<string, string> = {};
   if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
   try {
-    const res = await axios.get(`${relayerUrl}/ready`, { headers });
-    return { ok: res.data?.status === "ready", details: res.data };
+    // Use /health endpoint - /ready is stricter and may return degraded when RPC is slow
+    const res = await axios.get(`${relayerUrl}/health`, { headers });
+    return { ok: res.data?.status === "ok", details: res.data };
   } catch (err: any) {
-    return { ok: false, error: err?.message || "ready check failed" };
+    return { ok: false, error: err?.message || "health check failed" };
   }
 }
 

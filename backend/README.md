@@ -40,6 +40,11 @@ VOTING_CONTRACT_ID=CXXXX...
 TREE_CONTRACT_ID=CXXXX...
 
 PORT=3001
+# Optional hardening
+RELAYER_AUTH_TOKEN=shared-secret          # gates write/config endpoints
+LOG_CLIENT_IP=hash                        # hash IPs (or omit to drop)
+STRIP_REQUEST_BODIES=true                 # drop request bodies from logs/handlers in prod
+VOTING_VK_VERSION=1                       # optional pinned vk version
 ```
 
 ### 3. Create Relayer Account
@@ -90,8 +95,8 @@ Content-Type: application/json
   "daoId": 1,
   "proposalId": 1,
   "choice": true,
-  "nullifier": "0x123...",
-  "root": "0xabc...",
+  "nullifier": "0x123...",   // < BN254 modulus, 32 bytes max
+  "root": "0xabc...",       // < BN254 modulus, 32 bytes max
   "proof": {
     "a": "0x...",  // 64 bytes (G1 point)
     "b": "0x...",  // 128 bytes (G2 point)

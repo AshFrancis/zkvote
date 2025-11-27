@@ -14,6 +14,8 @@ This contract now stores verification keys per DAO per version (`VkByVersion(dao
 ## Rollback
 - If a new VK is faulty, you can rotate back by calling `set_vk` again with the prior VK. The version number will increment, but existing proposals remain pinned to their original version.
 - For proposals that should remain on VK N while latest is M, pass `vk_version = N` explicitly at creation time.
+- Emit/observe `ContractUpgraded(from,to)` (constructor already emits on init) and `VKSetEvent` for audit trails.
+- Threat-model note: nullifiers are domain-separated by `(dao_id, proposal_id)` in the circuit and stored on-chain under `(dao_id, proposal_id, nullifier)`.
 
 ## Tests to Run After Rotation
 - `cargo test -p voting --lib` (includes:
@@ -25,6 +27,7 @@ This contract now stores verification keys per DAO per version (`VkByVersion(dao
 
 ## Backfilling Legacy Deployments
 - If migrating an existing deployment without versioned VK history, set the current VK once with `set_vk` to initialize `VkVersion` and `VkByVersion`. Existing proposals must then be re-created; legacy proposals without a stored versioned VK are not supported by this build.
+- Dry-run on a snapshot of production state (roots/proposals/members) before rotating on mainnet; keep prior VK handy for rollback.
 
 ## Off-chain Consumers
 - Use `vk_version(dao_id)` to display the latest version.

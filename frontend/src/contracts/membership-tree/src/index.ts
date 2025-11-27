@@ -34,11 +34,30 @@ if (typeof window !== 'undefined') {
 export const networks = {
   futurenet: {
     networkPassphrase: "Test SDF Future Network ; October 2022",
-    contractId: "CCVGLYQD2WJYCTJEDQF6RRPV2TCM6NQBCZ5LXEZCE6PBWBAFCIQ2FCA4",
+    contractId: "CDF3FRS4733EDQQTC2RFPMTCUA3M74WRL2XTUII3ZMXIQELI5XPQZPY2",
   }
 } as const
 
+export const TreeError = {
+  1: {message:"NotAdmin"},
+  2: {message:"InvalidDepth"},
+  3: {message:"TreeInitialized"},
+  4: {message:"TreeNotInitialized"},
+  5: {message:"CommitmentExists"},
+  6: {message:"MemberExists"},
+  7: {message:"TreeFull"},
+  8: {message:"NoSbt"},
+  9: {message:"NotOpenMembership"},
+  10: {message:"LeafOutOfBounds"},
+  11: {message:"MemberRemoved"},
+  12: {message:"MemberNotInTree"},
+  13: {message:"RootNotFound"},
+  14: {message:"AlreadyInitialized"}
+}
+
 export type DataKey = {tag: "TreeDepth", values: readonly [u64]} | {tag: "NextLeafIndex", values: readonly [u64]} | {tag: "FilledSubtrees", values: readonly [u64]} | {tag: "Roots", values: readonly [u64]} | {tag: "LeafIndex", values: readonly [u64, u256]} | {tag: "MemberLeafIndex", values: readonly [u64, string]} | {tag: "LeafValue", values: readonly [u64, u32]} | {tag: "NextRootIndex", values: readonly [u64]} | {tag: "RootIndex", values: readonly [u64, u256]} | {tag: "RevokedAt", values: readonly [u64, u256]} | {tag: "ReinstatedAt", values: readonly [u64, u256]};
+
+
 
 
 
@@ -49,22 +68,7 @@ export interface Client {
    * Initialize a tree for a specific DAO
    * Only DAO admin can initialize (via SBT contract which checks registry)
    */
-  init_tree: ({dao_id, depth, admin}: {dao_id: u64, depth: u32, admin: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<null>>
+  init_tree: ({dao_id, depth, admin}: {dao_id: u64, depth: u32, admin: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
    * Construct and simulate a init_tree_from_registry transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -72,22 +76,7 @@ export interface Client {
    * This function is called by the registry contract during create_and_init_dao
    * to avoid re-entrancy issues. The registry is a trusted system contract.
    */
-  init_tree_from_registry: ({dao_id, depth}: {dao_id: u64, depth: u32}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<null>>
+  init_tree_from_registry: ({dao_id, depth}: {dao_id: u64, depth: u32}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
    * Construct and simulate a register_from_registry transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -96,212 +85,62 @@ export interface Client {
    * to automatically register the creator's commitment.
    * The registry is trusted to have already verified SBT ownership.
    */
-  register_from_registry: ({dao_id, commitment, member}: {dao_id: u64, commitment: u256, member: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<null>>
+  register_from_registry: ({dao_id, commitment, member}: {dao_id: u64, commitment: u256, member: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
    * Construct and simulate a register_with_caller transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Register a commitment with explicit caller (requires SBT membership)
    */
-  register_with_caller: ({dao_id, commitment, caller}: {dao_id: u64, commitment: u256, caller: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<null>>
+  register_with_caller: ({dao_id, commitment, caller}: {dao_id: u64, commitment: u256, caller: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
    * Construct and simulate a self_register transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Self-register a commitment in a public DAO (requires SBT membership)
    * For public DAOs, anyone with an SBT can register their commitment
    */
-  self_register: ({dao_id, commitment, member}: {dao_id: u64, commitment: u256, member: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<null>>
+  self_register: ({dao_id, commitment, member}: {dao_id: u64, commitment: u256, member: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
    * Construct and simulate a current_root transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Get current root for a DAO
    */
-  current_root: ({dao_id}: {dao_id: u64}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<u256>>
+  current_root: ({dao_id}: {dao_id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<u256>>
 
   /**
    * Construct and simulate a get_root transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Get current root (short alias for cross-contract calls)
    */
-  get_root: ({dao_id}: {dao_id: u64}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<u256>>
+  get_root: ({dao_id}: {dao_id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<u256>>
 
   /**
    * Construct and simulate a root_ok transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Check if a root is valid (in history)
    */
-  root_ok: ({dao_id, root}: {dao_id: u64, root: u256}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<boolean>>
+  root_ok: ({dao_id, root}: {dao_id: u64, root: u256}, options?: MethodOptions) => Promise<AssembledTransaction<boolean>>
 
   /**
    * Construct and simulate a root_idx transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Get root index for a specific root (for vote mode validation)
    */
-  root_idx: ({dao_id, root}: {dao_id: u64, root: u256}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<u32>>
+  root_idx: ({dao_id, root}: {dao_id: u64, root: u256}, options?: MethodOptions) => Promise<AssembledTransaction<u32>>
 
   /**
    * Construct and simulate a curr_idx transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Get current root index (for proposal creation)
    */
-  curr_idx: ({dao_id}: {dao_id: u64}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<u32>>
+  curr_idx: ({dao_id}: {dao_id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<u32>>
 
   /**
    * Construct and simulate a get_leaf_index transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Get leaf index for a commitment
    */
-  get_leaf_index: ({dao_id, commitment}: {dao_id: u64, commitment: u256}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<u32>>
+  get_leaf_index: ({dao_id, commitment}: {dao_id: u64, commitment: u256}, options?: MethodOptions) => Promise<AssembledTransaction<u32>>
 
   /**
    * Construct and simulate a get_tree_info transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Get tree info for a DAO
    */
-  get_tree_info: ({dao_id}: {dao_id: u64}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<readonly [u32, u32, u256]>>
+  get_tree_info: ({dao_id}: {dao_id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<readonly [u32, u32, u256]>>
 
   /**
    * Construct and simulate a get_merkle_path transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -310,65 +149,20 @@ export interface Client {
    * - pathElements[i] is the sibling hash at level i
    * - pathIndices[i] is 0 if leaf is left child, 1 if right child
    */
-  get_merkle_path: ({dao_id, leaf_index}: {dao_id: u64, leaf_index: u32}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<readonly [Array<u256>, Array<u32>]>>
+  get_merkle_path: ({dao_id, leaf_index}: {dao_id: u64, leaf_index: u32}, options?: MethodOptions) => Promise<AssembledTransaction<readonly [Array<u256>, Array<u32>]>>
 
   /**
    * Construct and simulate a sbt_contr transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Get SBT contract address
    */
-  sbt_contr: (options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<string>>
+  sbt_contr: (options?: MethodOptions) => Promise<AssembledTransaction<string>>
 
   /**
    * Construct and simulate a init_zeros_cache transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Pre-initialize the zeros cache to avoid budget issues during first tree operations.
    * This should be called once during deployment to precompute zero values for all levels.
    */
-  init_zeros_cache: (options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<null>>
+  init_zeros_cache: (options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
    * Construct and simulate a remove_member transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -377,88 +171,34 @@ export interface Client {
    * Remove member by recording revocation timestamp (cheap, no tree update)
    * This prevents the member from voting on proposals created after this timestamp
    */
-  remove_member: ({dao_id, member, admin}: {dao_id: u64, member: string, admin: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<null>>
+  remove_member: ({dao_id, member, admin}: {dao_id: u64, member: string, admin: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
    * Construct and simulate a reinstate_member transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Reinstate a previously removed member
    * Records the reinstatement timestamp, allowing them to vote on future proposals
    */
-  reinstate_member: ({dao_id, member, admin}: {dao_id: u64, member: string, admin: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<null>>
+  reinstate_member: ({dao_id, member, admin}: {dao_id: u64, member: string, admin: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
    * Construct and simulate a revok_at transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Get revocation timestamp for a commitment (returns None if never revoked)
    * Used by voting contract to check if member was revoked
    */
-  revok_at: ({dao_id, commitment}: {dao_id: u64, commitment: u256}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<Option<u64>>>
+  revok_at: ({dao_id, commitment}: {dao_id: u64, commitment: u256}, options?: MethodOptions) => Promise<AssembledTransaction<Option<u64>>>
 
   /**
    * Construct and simulate a reinst_at transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Get reinstatement timestamp for a commitment (returns None if never reinstated)
    * Used by voting contract to check if member was reinstated after revocation
    */
-  reinst_at: ({dao_id, commitment}: {dao_id: u64, commitment: u256}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
+  reinst_at: ({dao_id, commitment}: {dao_id: u64, commitment: u256}, options?: MethodOptions) => Promise<AssembledTransaction<Option<u64>>>
 
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<Option<u64>>>
+  /**
+   * Construct and simulate a version transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Contract version for upgrade tracking.
+   */
+  version: (options?: MethodOptions) => Promise<AssembledTransaction<u32>>
 
 }
 export class Client extends ContractClient {
@@ -480,10 +220,13 @@ export class Client extends ContractClient {
   }
   constructor(public readonly options: ContractClientOptions) {
     super(
-      new ContractSpec([ "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAACwAAAAEAAAAAAAAACVRyZWVEZXB0aAAAAAAAAAEAAAAGAAAAAQAAAAAAAAANTmV4dExlYWZJbmRleAAAAAAAAAEAAAAGAAAAAQAAAAAAAAAORmlsbGVkU3VidHJlZXMAAAAAAAEAAAAGAAAAAQAAAAAAAAAFUm9vdHMAAAAAAAABAAAABgAAAAEAAAAAAAAACUxlYWZJbmRleAAAAAAAAAIAAAAGAAAADAAAAAEAAAAAAAAAD01lbWJlckxlYWZJbmRleAAAAAACAAAABgAAABMAAAABAAAAAAAAAAlMZWFmVmFsdWUAAAAAAAACAAAABgAAAAQAAAABAAAAAAAAAA1OZXh0Um9vdEluZGV4AAAAAAAAAQAAAAYAAAABAAAAAAAAAAlSb290SW5kZXgAAAAAAAACAAAABgAAAAwAAAABAAAAAAAAAAlSZXZva2VkQXQAAAAAAAACAAAABgAAAAwAAAABAAAAAAAAAAxSZWluc3RhdGVkQXQAAAACAAAABgAAAAw=",
+      new ContractSpec([ "AAAABAAAAAAAAAAAAAAACVRyZWVFcnJvcgAAAAAAAA4AAAAAAAAACE5vdEFkbWluAAAAAQAAAAAAAAAMSW52YWxpZERlcHRoAAAAAgAAAAAAAAAPVHJlZUluaXRpYWxpemVkAAAAAAMAAAAAAAAAElRyZWVOb3RJbml0aWFsaXplZAAAAAAABAAAAAAAAAAQQ29tbWl0bWVudEV4aXN0cwAAAAUAAAAAAAAADE1lbWJlckV4aXN0cwAAAAYAAAAAAAAACFRyZWVGdWxsAAAABwAAAAAAAAAFTm9TYnQAAAAAAAAIAAAAAAAAABFOb3RPcGVuTWVtYmVyc2hpcAAAAAAAAAkAAAAAAAAAD0xlYWZPdXRPZkJvdW5kcwAAAAAKAAAAAAAAAA1NZW1iZXJSZW1vdmVkAAAAAAAACwAAAAAAAAAPTWVtYmVyTm90SW5UcmVlAAAAAAwAAAAAAAAADFJvb3ROb3RGb3VuZAAAAA0AAAAAAAAAEkFscmVhZHlJbml0aWFsaXplZAAAAAAADg==",
+        "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAACwAAAAEAAAAAAAAACVRyZWVEZXB0aAAAAAAAAAEAAAAGAAAAAQAAAAAAAAANTmV4dExlYWZJbmRleAAAAAAAAAEAAAAGAAAAAQAAAAAAAAAORmlsbGVkU3VidHJlZXMAAAAAAAEAAAAGAAAAAQAAAAAAAAAFUm9vdHMAAAAAAAABAAAABgAAAAEAAAAAAAAACUxlYWZJbmRleAAAAAAAAAIAAAAGAAAADAAAAAEAAAAAAAAAD01lbWJlckxlYWZJbmRleAAAAAACAAAABgAAABMAAAABAAAAAAAAAAlMZWFmVmFsdWUAAAAAAAACAAAABgAAAAQAAAABAAAAAAAAAA1OZXh0Um9vdEluZGV4AAAAAAAAAQAAAAYAAAABAAAAAAAAAAlSb290SW5kZXgAAAAAAAACAAAABgAAAAwAAAABAAAAAAAAAAlSZXZva2VkQXQAAAAAAAACAAAABgAAAAwAAAABAAAAAAAAAAxSZWluc3RhdGVkQXQAAAACAAAABgAAAAw=",
         "AAAABQAAAAAAAAAAAAAADVRyZWVJbml0RXZlbnQAAAAAAAABAAAAD3RyZWVfaW5pdF9ldmVudAAAAAAEAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAAAAAAVkZXB0aAAAAAAAAAQAAAAAAAAAAAAAAAplbXB0eV9yb290AAAAAAAMAAAAAAAAAAAAAAAKcm9vdF9pbmRleAAAAAAABAAAAAAAAAAC",
         "AAAABQAAAAAAAAAAAAAAC0NvbW1pdEV2ZW50AAAAAAEAAAAMY29tbWl0X2V2ZW50AAAABQAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAQAAAAAAAAAKY29tbWl0bWVudAAAAAAADAAAAAAAAAAAAAAABWluZGV4AAAAAAAABAAAAAAAAAAAAAAACG5ld19yb290AAAADAAAAAAAAAAAAAAACnJvb3RfaW5kZXgAAAAAAAQAAAAAAAAAAg==",
         "AAAABQAAAAAAAAAAAAAADFJlbW92YWxFdmVudAAAAAEAAAANcmVtb3ZhbF9ldmVudAAAAAAAAAUAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAAAAAAABm1lbWJlcgAAAAAAEwAAAAEAAAAAAAAABWluZGV4AAAAAAAABAAAAAAAAAAAAAAACG5ld19yb290AAAADAAAAAAAAAAAAAAACnJvb3RfaW5kZXgAAAAAAAQAAAAAAAAAAg==",
+        "AAAABQAAAAAAAAAAAAAAElJlaW5zdGF0ZW1lbnRFdmVudAAAAAAAAQAAABNyZWluc3RhdGVtZW50X2V2ZW50AAAAAAMAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAAAAAAABm1lbWJlcgAAAAAAEwAAAAEAAAAAAAAADXJlaW5zdGF0ZWRfYXQAAAAAAAAGAAAAAAAAAAI=",
+        "AAAABQAAAAAAAAAAAAAAEENvbnRyYWN0VXBncmFkZWQAAAABAAAAEWNvbnRyYWN0X3VwZ3JhZGVkAAAAAAAAAgAAAAAAAAAEZnJvbQAAAAQAAAAAAAAAAAAAAAJ0bwAAAAAABAAAAAAAAAAC",
         "AAAAAAAAAJRDb25zdHJ1Y3RvcjogSW5pdGlhbGl6ZSBjb250cmFjdCB3aXRoIFNCVCBjb250cmFjdCBhZGRyZXNzCkFsc28gcHJlLWNvbXB1dGVzIHplcm9zIGNhY2hlIHRvIGF2b2lkIGV4cGVuc2l2ZSBpbml0aWFsaXphdGlvbiBkdXJpbmcgZmlyc3QgREFPIGNyZWF0aW9uAAAADV9fY29uc3RydWN0b3IAAAAAAAABAAAAAAAAAAxzYnRfY29udHJhY3QAAAATAAAAAA==",
         "AAAAAAAAAGtJbml0aWFsaXplIGEgdHJlZSBmb3IgYSBzcGVjaWZpYyBEQU8KT25seSBEQU8gYWRtaW4gY2FuIGluaXRpYWxpemUgKHZpYSBTQlQgY29udHJhY3Qgd2hpY2ggY2hlY2tzIHJlZ2lzdHJ5KQAAAAAJaW5pdF90cmVlAAAAAAAAAwAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAVkZXB0aAAAAAAAAAQAAAAAAAAABWFkbWluAAAAAAAAEwAAAAA=",
         "AAAAAAAAAMtJbml0aWFsaXplIHRyZWUgZnJvbSByZWdpc3RyeSBkdXJpbmcgREFPIGluaXRpYWxpemF0aW9uClRoaXMgZnVuY3Rpb24gaXMgY2FsbGVkIGJ5IHRoZSByZWdpc3RyeSBjb250cmFjdCBkdXJpbmcgY3JlYXRlX2FuZF9pbml0X2Rhbwp0byBhdm9pZCByZS1lbnRyYW5jeSBpc3N1ZXMuIFRoZSByZWdpc3RyeSBpcyBhIHRydXN0ZWQgc3lzdGVtIGNvbnRyYWN0LgAAAAAXaW5pdF90cmVlX2Zyb21fcmVnaXN0cnkAAAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAVkZXB0aAAAAAAAAAQAAAAA",
@@ -503,7 +246,8 @@ export class Client extends ContractClient {
         "AAAAAAAAAPBSZW1vdmUgYSBtZW1iZXIgYnkgemVyb2luZyB0aGVpciBsZWFmIGFuZCByZWNvbXB1dGluZyB0aGUgcm9vdApPbmx5IGNhbGxhYmxlIGJ5IERBTyBhZG1pbgpSZW1vdmUgbWVtYmVyIGJ5IHJlY29yZGluZyByZXZvY2F0aW9uIHRpbWVzdGFtcCAoY2hlYXAsIG5vIHRyZWUgdXBkYXRlKQpUaGlzIHByZXZlbnRzIHRoZSBtZW1iZXIgZnJvbSB2b3Rpbmcgb24gcHJvcG9zYWxzIGNyZWF0ZWQgYWZ0ZXIgdGhpcyB0aW1lc3RhbXAAAAANcmVtb3ZlX21lbWJlcgAAAAAAAAMAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAAGbWVtYmVyAAAAAAATAAAAAAAAAAVhZG1pbgAAAAAAABMAAAAA",
         "AAAAAAAAAHRSZWluc3RhdGUgYSBwcmV2aW91c2x5IHJlbW92ZWQgbWVtYmVyClJlY29yZHMgdGhlIHJlaW5zdGF0ZW1lbnQgdGltZXN0YW1wLCBhbGxvd2luZyB0aGVtIHRvIHZvdGUgb24gZnV0dXJlIHByb3Bvc2FscwAAABByZWluc3RhdGVfbWVtYmVyAAAAAwAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAZtZW1iZXIAAAAAABMAAAAAAAAABWFkbWluAAAAAAAAEwAAAAA=",
         "AAAAAAAAAIBHZXQgcmV2b2NhdGlvbiB0aW1lc3RhbXAgZm9yIGEgY29tbWl0bWVudCAocmV0dXJucyBOb25lIGlmIG5ldmVyIHJldm9rZWQpClVzZWQgYnkgdm90aW5nIGNvbnRyYWN0IHRvIGNoZWNrIGlmIG1lbWJlciB3YXMgcmV2b2tlZAAAAAhyZXZva19hdAAAAAIAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAAKY29tbWl0bWVudAAAAAAADAAAAAEAAAPoAAAABg==",
-        "AAAAAAAAAJpHZXQgcmVpbnN0YXRlbWVudCB0aW1lc3RhbXAgZm9yIGEgY29tbWl0bWVudCAocmV0dXJucyBOb25lIGlmIG5ldmVyIHJlaW5zdGF0ZWQpClVzZWQgYnkgdm90aW5nIGNvbnRyYWN0IHRvIGNoZWNrIGlmIG1lbWJlciB3YXMgcmVpbnN0YXRlZCBhZnRlciByZXZvY2F0aW9uAAAAAAAJcmVpbnN0X2F0AAAAAAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAApjb21taXRtZW50AAAAAAAMAAAAAQAAA+gAAAAG" ]),
+        "AAAAAAAAAJpHZXQgcmVpbnN0YXRlbWVudCB0aW1lc3RhbXAgZm9yIGEgY29tbWl0bWVudCAocmV0dXJucyBOb25lIGlmIG5ldmVyIHJlaW5zdGF0ZWQpClVzZWQgYnkgdm90aW5nIGNvbnRyYWN0IHRvIGNoZWNrIGlmIG1lbWJlciB3YXMgcmVpbnN0YXRlZCBhZnRlciByZXZvY2F0aW9uAAAAAAAJcmVpbnN0X2F0AAAAAAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAApjb21taXRtZW50AAAAAAAMAAAAAQAAA+gAAAAG",
+        "AAAAAAAAACZDb250cmFjdCB2ZXJzaW9uIGZvciB1cGdyYWRlIHRyYWNraW5nLgAAAAAAB3ZlcnNpb24AAAAAAAAAAAEAAAAE" ]),
       options
     )
   }
@@ -526,6 +270,7 @@ export class Client extends ContractClient {
         remove_member: this.txFromJSON<null>,
         reinstate_member: this.txFromJSON<null>,
         revok_at: this.txFromJSON<Option<u64>>,
-        reinst_at: this.txFromJSON<Option<u64>>
+        reinst_at: this.txFromJSON<Option<u64>>,
+        version: this.txFromJSON<u32>
   }
 }

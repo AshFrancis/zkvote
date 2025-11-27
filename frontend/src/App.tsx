@@ -11,10 +11,13 @@ import { useWallet } from "./hooks/useWallet";
 import { useTheme } from "./hooks/useTheme";
 import { initializeContractClients } from "./lib/contracts";
 import { getReadOnlyDaoRegistry } from "./lib/readOnlyContracts";
+import { truncateText } from "./lib/utils";
 import verificationKey from "./lib/verification_key_soroban.json";
-import { CONTRACTS, NETWORK_CONFIG } from "./config/contracts";
+import { CONTRACTS } from "./config/contracts";
 import { validateStaticConfig } from "./config/guardrails";
-import { checkRelayerReady, fetchRelayerConfig } from "./lib/stellar";
+import { useRelayerStatus } from "./hooks/useRelayerStatus";
+import { RelayerStatus as RelayerStatusComponent } from "./components/RelayerStatus";
+import { Alert, LoadingSpinner } from "./components/ui";
 // ZK credentials will be generated deterministically after DAO creation
 
 // Component for DAO detail page
@@ -114,10 +117,6 @@ function DAODetailPage({ publicKey, isInitializing }: { publicKey: string | null
     }
   };
 
-  const truncateDaoName = (name: string) => {
-    return name.length > 30 ? `${name.substring(0, 30)}...` : name;
-  };
-
   return (
     <div className="space-y-6">
       {/* Breadcrumbs */}
@@ -130,7 +129,7 @@ function DAODetailPage({ publicKey, isInitializing }: { publicKey: string | null
         </button>
         <span className="text-gray-400 dark:text-gray-600">/</span>
         <span className="text-gray-900 dark:text-gray-100 font-medium">
-          {loading ? 'Loading...' : truncateDaoName(daoName)}
+          {loading ? 'Loading...' : truncateText(daoName, 30)}
         </span>
       </nav>
 
@@ -262,14 +261,10 @@ function ManageMembersPage({ publicKey, isInitializing }: { publicKey: string | 
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
-
-  const truncateDaoName = (name: string) => {
-    return name.length > 30 ? `${name.substring(0, 30)}...` : name;
-  };
 
   return (
     <div className="space-y-6">
@@ -286,7 +281,7 @@ function ManageMembersPage({ publicKey, isInitializing }: { publicKey: string | 
           onClick={() => navigate(`/daos/${daoId}`)}
           className="text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
         >
-          {truncateDaoName(daoName)}
+          {truncateText(daoName, 30)}
         </button>
         <span className="text-gray-400 dark:text-gray-600">/</span>
         <span className="text-gray-900 dark:text-gray-100 font-medium">Members</span>
@@ -313,8 +308,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [configErrors, setConfigErrors] = useState<string[]>([]);
-  const [relayerStatus, setRelayerStatus] = useState<string | null>(null);
-  const [relayerConfig, setRelayerConfig] = useState<any>(null);
+  const { status: relayerStatusState, relayerConfig } = useRelayerStatus();
 
   // Determine current view from URL path
   const getCurrentView = (): 'home' | 'browse' | 'votes' => {
@@ -340,65 +334,11 @@ function App() {
     }
   }, []);
 
-  // Relayer readiness (best effort)
-  useEffect(() => {
-    const relayerUrl = import.meta?.env?.VITE_RELAYER_URL || "";
-    const authToken = import.meta?.env?.VITE_RELAYER_AUTH || "";
-    if (!relayerUrl) {
-      setRelayerStatus("Relayer URL not configured");
-      return;
-    }
-    checkRelayerReady(relayerUrl, authToken || undefined)
-      .then((res) => {
-        if (res.ok) setRelayerStatus("ready");
-        else setRelayerStatus(res.error || "relayer not ready");
-      })
-      .catch((err) => setRelayerStatus(err?.message || "relayer check failed"));
-
-    fetchRelayerConfig(relayerUrl, authToken || undefined)
-      .then((cfg) => setRelayerConfig(cfg))
-      .catch((err) => {
-        console.warn("relayer config fetch failed", err?.message);
-      });
-  }, []);
-
-  // Cross-check relayer config against local contract config to prevent mispointing
-  useEffect(() => {
-    if (!relayerConfig) return;
-    const mismatches: string[] = [];
-    if (relayerConfig.votingContract && relayerConfig.votingContract !== CONTRACTS.VOTING_ID) {
-      mismatches.push(
-        `Relayer votingContract (${relayerConfig.votingContract}) differs from local config (${CONTRACTS.VOTING_ID})`
-      );
-    }
-    if (relayerConfig.treeContract && relayerConfig.treeContract !== CONTRACTS.TREE_ID) {
-      mismatches.push(
-        `Relayer treeContract (${relayerConfig.treeContract}) differs from local config (${CONTRACTS.TREE_ID})`
-      );
-    }
-    if (
-      relayerConfig.networkPassphrase &&
-      relayerConfig.networkPassphrase !== NETWORK_CONFIG.networkPassphrase
-    ) {
-      mismatches.push(
-        `Relayer networkPassphrase differs from local config (${NETWORK_CONFIG.networkPassphrase})`
-      );
-    }
-    if (relayerConfig.rpc && relayerConfig.rpc !== NETWORK_CONFIG.rpcUrl) {
-      mismatches.push(`Relayer RPC differs from local config (${NETWORK_CONFIG.rpcUrl})`);
-    }
-    if (
-      typeof relayerConfig.vkVersion === "number" &&
-      relayerConfig.vkVersion > 0 &&
-      relayerConfig.vkVersion !== undefined
-    ) {
-      // If front-end ever hardcodes vk version, compare; otherwise just log for awareness
-      console.info("Relayer reports vkVersion", relayerConfig.vkVersion);
-    }
-    if (mismatches.length) {
-      setConfigErrors((prev) => Array.from(new Set([...prev, ...mismatches])));
-    }
-  }, [relayerConfig]);
+  // Relayer readiness/mismatch handled via useRelayerStatus
+  const relayerStatus =
+    relayerStatusState?.state === "ready"
+      ? "ready"
+      : relayerStatusState?.message || null;
 
   const handleNavigate = (view: 'home' | 'browse' | 'votes') => {
     if (view === 'home') navigate('/');
@@ -524,6 +464,9 @@ function App() {
         onNavigate={handleNavigate}
         relayerStatus={relayerStatus}
       />
+      <div className="px-4 py-2">
+        <RelayerStatusComponent status={relayerStatus} errors={configErrors} />
+      </div>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -564,17 +507,8 @@ function App() {
           </div>
 
           {/* Success/Error Messages */}
-          {success && (
-            <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-100 px-4 py-3 rounded-lg">
-              {success}
-            </div>
-          )}
-
-          {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-100 px-4 py-3 rounded-lg">
-              {error}
-            </div>
-          )}
+          {success && <Alert variant="success">{success}</Alert>}
+          {error && <Alert variant="error">{error}</Alert>}
 
           {/* Create DAO Form */}
           {isConnected && showCreateForm && (
@@ -616,12 +550,7 @@ function App() {
                       disabled={creating || isInitializing || !kit}
                       className="flex-1 px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                     >
-                      {creating && (
-                        <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                      )}
+                      {creating && <LoadingSpinner size="sm" color="white" />}
                       {creating ? "Creating..." : "Create"}
                     </button>
                     <button

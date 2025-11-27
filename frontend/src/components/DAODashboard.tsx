@@ -3,13 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { initializeContractClients } from "../lib/contracts";
 import { getReadOnlyDaoRegistry, getReadOnlyMembershipSbt, getReadOnlyMembershipTree } from "../lib/readOnlyContracts";
 import { useWallet } from "../hooks/useWallet";
-import { generateSecret, calculateCommitment } from "../lib/zkproof";
 import {
-  generateRandomZKCredentials,
   generateDeterministicZKCredentials,
   getZKCredentials,
   storeZKCredentials,
 } from "../lib/zk";
+import { isUserRejection } from "../lib/utils";
+import { Badge, Alert, LoadingSpinner, CreateProposalForm } from "./ui";
 import ProposalList from "./ProposalList";
 
 interface DAODashboardProps {
@@ -33,34 +33,25 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
   const { kit } = useWallet();
   const navigate = useNavigate();
   const [dao, setDao] = useState<DAOInfo | null>(() => {
-    // Initialize with cached data if available
     const cacheKey = `dao_info_${daoId}`;
     const cached = localStorage.getItem(cacheKey);
     return cached ? JSON.parse(cached) : null;
   });
   const [loading, setLoading] = useState(() => {
-    // Only show loading indicator if no cache exists
     const cacheKey = `dao_info_${daoId}`;
     const cached = localStorage.getItem(cacheKey);
     return !cached;
   });
   const [error, setError] = useState<string | null>(null);
-  const [mintAddress, setMintAddress] = useState("");
-  const [minting, setMinting] = useState(false);
-  const [showMintForm, setShowMintForm] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [registrationStatus, setRegistrationStatus] = useState<string | null>(null);
   const [isRegistered, setIsRegistered] = useState(false);
   const [hasUnregisteredCredentials, setHasUnregisteredCredentials] = useState(false);
   const [joining, setJoining] = useState(false);
   const [showCreateProposal, setShowCreateProposal] = useState(false);
-  const [proposalDescription, setProposalDescription] = useState("");
   const [creatingProposal, setCreatingProposal] = useState(false);
   const [proposalKey, setProposalKey] = useState(0);
-  const [voteMode, setVoteMode] = useState<"fixed" | "trailing">("fixed");
-  const [deadlineSeconds, setDeadlineSeconds] = useState<string>(String(7 * 24 * 60 * 60)); // Default: 7 days in seconds
 
-  // Optimistically check registration from cache when publicKey changes
   useEffect(() => {
     if (publicKey) {
       const cached = getZKCredentials(daoId, publicKey);
@@ -69,16 +60,12 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
   }, [publicKey, daoId]);
 
   useEffect(() => {
-    // Wait for wallet initialization before loading
     if (isInitializing) {
       return;
     }
     loadDAOInfo();
     checkRegistrationStatus();
   }, [daoId, publicKey, isInitializing]);
-
-  // Note: Auto-registration removed - users must manually click "Register for Voting"
-  // This gives users explicit control over when they set up voting credentials
 
   const checkRegistrationStatus = async () => {
     const cached = publicKey ? getZKCredentials(daoId, publicKey) : null;
@@ -89,8 +76,6 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
       return;
     }
 
-    // Validate that the cached registration actually exists on-chain
-    // This handles contract redeployments where localStorage has stale data
     try {
       const clients = initializeContractClients(publicKey || "");
 
@@ -105,7 +90,6 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
         setIsRegistered(true);
         setHasUnregisteredCredentials(false);
       } else {
-        // stale cache; clear
         if (publicKey) {
           const legacyKey = `voting_registration_${daoId}_${publicKey}`;
           localStorage.removeItem(legacyKey);
@@ -114,8 +98,6 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
         setHasUnregisteredCredentials(false);
       }
     } catch (err) {
-      // If the commitment doesn't exist on-chain, keep the credentials
-      // and show "Complete Registration" button
       setIsRegistered(false);
       setHasUnregisteredCredentials(true);
     }
@@ -125,7 +107,6 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
     const cacheKey = `dao_info_${daoId}`;
 
     try {
-      // Load from cache first
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
         const cachedDao = JSON.parse(cached);
@@ -135,11 +116,9 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
 
       setError(null);
 
-      // Determine if we should use read-only mode
       let useReadOnly = !publicKey;
       let daoResult;
 
-      // Try to load DAO info with wallet client first, fall back to read-only if unfunded
       if (publicKey && !useReadOnly) {
         try {
           const clients = initializeContractClients(publicKey);
@@ -147,7 +126,6 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
             dao_id: BigInt(daoId),
           });
         } catch (err) {
-          // If account not found, fall back to read-only mode
           const errorMessage = err instanceof Error ? err.message : String(err);
           if (errorMessage.includes('Account not found') || errorMessage.includes('does not exist')) {
             console.warn('Connected wallet account not found on network, using read-only mode');
@@ -158,7 +136,6 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
         }
       }
 
-      // If we need read-only mode, get DAO info with read-only client
       if (useReadOnly || !daoResult) {
         const registry = getReadOnlyDaoRegistry();
         daoResult = await registry.get_dao({
@@ -166,13 +143,9 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
         });
       }
 
-      // Check if user has SBT (only if wallet connected and funded)
       const hasSBT = !useReadOnly && publicKey ? await checkMembership() : false;
-
-      // Check initialization status (always use read-only)
       const treeInitialized = await checkTreeInitialized();
       const vkSet = await checkVKSet();
-
       const isAdmin = !useReadOnly && publicKey ? (daoResult.result.admin === publicKey) : false;
 
       const daoInfo = {
@@ -187,8 +160,6 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
       };
 
       setDao(daoInfo);
-
-      // Cache the DAO info
       localStorage.setItem(cacheKey, JSON.stringify(daoInfo));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load DAO");
@@ -201,7 +172,6 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
   const checkMembership = async (): Promise<boolean> => {
     if (!publicKey) return false;
     try {
-      // Try with wallet client first, fall back to read-only if unfunded
       try {
         const clients = initializeContractClients(publicKey);
         const result = await clients.membershipSbt.has({
@@ -210,7 +180,6 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
         });
         return result.result;
       } catch (err) {
-        // If account not found, use read-only client
         const errorMessage = err instanceof Error ? err.message : String(err);
         if (errorMessage.includes('Account not found') || errorMessage.includes('does not exist')) {
           const sbtClient = getReadOnlyMembershipSbt();
@@ -230,15 +199,10 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
 
   const checkTreeInitialized = async (): Promise<boolean> => {
     try {
-      // Always use read-only client for this check
       const treeClient = getReadOnlyMembershipTree();
-
       const result = await treeClient.get_tree_info({
         dao_id: BigInt(daoId),
       });
-
-      // get_tree_info returns [depth, leaf_count, root] as a tuple
-      // Check if depth > 0 to confirm tree is initialized
       const depth = Number(result.result[0]);
       return depth > 0;
     } catch (err) {
@@ -248,65 +212,10 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
   };
 
   const checkVKSet = async (): Promise<boolean> => {
-    // Note: There's no get_vk function in the contract, so we can't reliably check
-    // if VK is set without creating a proposal first. We'll assume it's set for now.
-    // If it's not set, proposal creation will fail with an error.
-    // TODO: Add get_vk function to voting contract for proper validation
     return true;
   };
 
-  const handleMintSBT = async () => {
-    if (!mintAddress.trim()) {
-      setError("Address is required");
-      return;
-    }
-
-    try {
-      setMinting(true);
-      setError(null);
-
-      const clients = initializeContractClients(publicKey);
-
-      // Check if address already has an SBT
-      const alreadyHas = await clients.membershipSbt.has({
-        dao_id: BigInt(daoId),
-        of: mintAddress,
-      });
-
-      if (alreadyHas.result) {
-        setError(`Address ${mintAddress.substring(0, 8)}... already has a membership SBT for this DAO`);
-        setMinting(false);
-        return;
-      }
-
-      const tx = await clients.membershipSbt.mint({
-        dao_id: BigInt(daoId),
-        to: mintAddress,
-        admin: publicKey,
-        encrypted_alias: "",
-      });
-
-      if (!kit) {
-        throw new Error("Wallet kit not available");
-      }
-
-      await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
-
-      setMintAddress("");
-      setShowMintForm(false);
-
-      // Reload DAO info to update membership status
-      await loadDAOInfo();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to mint SBT");
-      console.error("Failed to mint SBT:", err);
-    } finally {
-      setMinting(false);
-    }
-  };
-
   const handleRegisterForVoting = async () => {
-    // Prevent duplicate calls
     if (registering) {
       console.log("[Registration] Already in progress, ignoring duplicate call");
       return;
@@ -323,18 +232,15 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
 
       let secret: string, salt: string, commitment: string;
 
-      // Check if we already have unregistered credentials
       const cached = publicKey ? getZKCredentials(daoId, publicKey) : null;
 
       if (hasUnregisteredCredentials && cached) {
-        // Skip Step 1 - we already have credentials!
         console.log("[Registration] Using existing credentials, skipping signature step");
         secret = cached.secret;
         salt = cached.salt;
         commitment = cached.commitment;
         setRegistrationStatus("Using existing credentials...");
       } else {
-        // Step 1: Generate deterministic credentials from wallet signature
         setRegistrationStatus("Step 1/2: Generating secret (sign message)...");
         console.log("[Registration] Step 1: Generating deterministic credentials from wallet signature...");
         let credentials;
@@ -349,16 +255,10 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
         salt = credentials.salt;
         commitment = credentials.commitment;
 
-        console.log("[Registration] Step 1 complete - Generated voting credentials:");
-        console.log("Secret:", secret);
-        console.log("Salt:", salt);
-        console.log("Commitment:", commitment);
-
-        // Small delay to ensure Step 1 UI updates before Step 2 popup
+        console.log("[Registration] Step 1 complete - Generated voting credentials");
         await new Promise(resolve => setTimeout(resolve, 500));
       }
 
-      // Step 2: Register commitment in Merkle tree
       setRegistrationStatus("Step 2/2: Registering commitment (sign transaction)...");
       console.log("[Registration] Step 2: Registering commitment in Merkle tree...");
       const clients = initializeContractClients(publicKey);
@@ -375,21 +275,17 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
         console.log("[Registration] Step 2 complete - Transaction signed and sent:", result);
       } catch (err: any) {
         console.error("[Registration] Step 2 (signAndSend) failed:", err);
-        // Re-throw with more context
         const enhancedError = new Error(`Transaction signing failed: ${err?.message || 'Unknown error'}`);
         (enhancedError as any).originalError = err;
         throw enhancedError;
       }
 
-      // Step 3: Get the leaf index
       const leafIndexResult = await clients.membershipTree.get_leaf_index({
         dao_id: BigInt(daoId),
         commitment: BigInt(commitment),
       });
 
       const leafIndex = Number(leafIndexResult.result);
-
-      // Step 4: Store credentials in localStorage (cache for convenience)
       storeZKCredentials(daoId, publicKey || "", { secret, salt, commitment }, leafIndex);
 
       setIsRegistered(true);
@@ -397,14 +293,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
       setRegistrationStatus("Registration complete!");
       console.log("Registration successful! Leaf index:", leafIndex);
     } catch (err: any) {
-      // Check if user rejected the request (don't show error for intentional cancellation)
-      const isUserRejection =
-        err?.code === -4 ||
-        err?.message?.includes("User rejected") ||
-        err?.message?.includes("user rejected") ||
-        err?.message?.includes("declined");
-
-      if (isUserRejection) {
+      if (isUserRejection(err)) {
         console.log("User cancelled registration");
         setRegistrationStatus(null);
       } else {
@@ -428,7 +317,6 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
         throw new Error("Wallet kit not available");
       }
 
-      // Call self_join on the membership-sbt contract
       const tx = await clients.membershipSbt.self_join({
         dao_id: BigInt(daoId),
         member: publicKey,
@@ -436,8 +324,6 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
       });
 
       await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
-
-      // Reload DAO info to update membership status
       await loadDAOInfo();
 
       console.log("Successfully joined DAO! Click 'Register for Voting' to set up voting credentials.");
@@ -449,41 +335,30 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
     }
   };
 
-  const handleCreateProposal = async () => {
-    if (!proposalDescription.trim()) {
-      setError("Proposal description is required");
-      return;
-    }
-
-    // Validate deadline
-    const seconds = parseFloat(deadlineSeconds);
-    if (isNaN(seconds) || seconds < 0) {
-      setError("Please enter a valid number of seconds (0 for no deadline)");
-      return;
-    }
-
+  const handleCreateProposal = async (data: {
+    description: string;
+    voteMode: "fixed" | "trailing";
+    deadlineSeconds: number;
+  }) => {
     try {
       setCreatingProposal(true);
       setError(null);
 
       const clients = initializeContractClients(publicKey);
 
-      // Calculate end time
       let endTime: bigint;
-      if (seconds === 0) {
-        // No deadline
+      if (data.deadlineSeconds === 0) {
         endTime = BigInt(0);
       } else {
-        // Add seconds to current time
-        endTime = BigInt(Math.floor(Date.now() / 1000) + Math.floor(seconds));
+        endTime = BigInt(Math.floor(Date.now() / 1000) + data.deadlineSeconds);
       }
 
       const tx = await clients.voting.create_proposal({
         dao_id: BigInt(daoId),
-        description: proposalDescription,
+        description: data.description,
         end_time: endTime,
         creator: publicKey,
-        vote_mode: { tag: voteMode === "fixed" ? "Fixed" : "Trailing", values: void 0 },
+        vote_mode: { tag: data.voteMode === "fixed" ? "Fixed" : "Trailing", values: void 0 },
       });
 
       if (!kit) {
@@ -492,9 +367,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
 
       await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
 
-      setProposalDescription("");
       setShowCreateProposal(false);
-      // Trigger proposal list reload by incrementing key
       setProposalKey(prev => prev + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create proposal");
@@ -507,20 +380,13 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <LoadingSpinner size="lg" color="blue" />
       </div>
     );
   }
 
-  if (error) {
-    return (
-      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-red-900 dark:text-red-100 mb-2">
-          Error
-        </h3>
-        <p className="text-red-800 dark:text-red-200">{error}</p>
-      </div>
-    );
+  if (error && !dao) {
+    return <Alert variant="error">{error}</Alert>;
   }
 
   if (!dao) {
@@ -533,7 +399,6 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
 
   return (
     <div className="space-y-6">
-      {/* DAO Header */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -541,17 +406,11 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
               {dao.name}
             </h2>
             {dao.isAdmin ? (
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200">
-                Admin
-              </span>
+              <Badge variant="blue">Admin</Badge>
             ) : dao.hasMembership ? (
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200">
-                Member
-              </span>
+              <Badge variant="green">Member</Badge>
             ) : (
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
-                Non-member
-              </span>
+              <Badge variant="gray">Non-member</Badge>
             )}
             {dao.membershipOpen ? (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200">
@@ -587,21 +446,13 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
                 disabled={joining}
                 className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-green-600 rounded-md hover:bg-green-700 disabled:bg-green-400 transition-colors flex items-center gap-2"
               >
-                {joining && (
-                  <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                )}
+                {joining && <LoadingSpinner size="sm" color="white" />}
                 {joining ? "Joining..." : "Join DAO"}
               </button>
             )}
             {(() => {
               const shouldShowRegisterButton = dao.hasMembership && !isRegistered && publicKey;
-
-              const buttonText = hasUnregisteredCredentials
-                ? "Complete Registration"
-                : "Register to Vote";
+              const buttonText = hasUnregisteredCredentials ? "Complete Registration" : "Register to Vote";
 
               return shouldShowRegisterButton && (
                 <button
@@ -609,12 +460,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
                   disabled={registering}
                   className="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-purple-600 rounded-md hover:bg-purple-700 disabled:bg-purple-400 transition-colors flex items-center gap-2"
                 >
-                  {registering && (
-                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                  )}
+                  {registering && <LoadingSpinner size="sm" color="white" />}
                   {registering ? (registrationStatus || "Registering...") : buttonText}
                 </button>
               );
@@ -629,182 +475,26 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
             )}
           </div>
         </div>
-
       </div>
 
-      {/* Create Proposal Form */}
+      {error && <Alert variant="error" className="mb-4">{error}</Alert>}
+
       {showCreateProposal && (
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
             New Proposal
           </h3>
-          <textarea
-            value={proposalDescription}
-            onChange={(e) => setProposalDescription(e.target.value)}
-            placeholder="Enter proposal description..."
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"
-            rows={4}
+          <CreateProposalForm
+            onSubmit={handleCreateProposal}
+            onCancel={() => {
+              setShowCreateProposal(false);
+              setError(null);
+            }}
+            isSubmitting={creatingProposal}
           />
-
-          {/* Vote Mode Selection */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Voting Set
-            </label>
-            <div className="space-y-2">
-              <label className="flex items-start cursor-pointer">
-                <input
-                  type="radio"
-                  name="voteMode"
-                  value="fixed"
-                  checked={voteMode === "fixed"}
-                  onChange={(e) => setVoteMode(e.target.value as "fixed" | "trailing")}
-                  className="mt-1 mr-3"
-                />
-                <div>
-                  <div className="font-medium text-gray-900 dark:text-gray-100">
-                    Fixed - Only current members
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    Only members at the time of proposal creation can vote
-                  </div>
-                </div>
-              </label>
-              <label className="flex items-start cursor-pointer">
-                <input
-                  type="radio"
-                  name="voteMode"
-                  value="trailing"
-                  checked={voteMode === "trailing"}
-                  onChange={(e) => setVoteMode(e.target.value as "fixed" | "trailing")}
-                  className="mt-1 mr-3"
-                />
-                <div>
-                  <div className="font-medium text-gray-900 dark:text-gray-100">
-                    Trailing - Allow future members
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    Members added after proposal creation can also vote
-                  </div>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          {/* Deadline Selection */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Voting Deadline (seconds)
-            </label>
-            <input
-              type="number"
-              value={deadlineSeconds}
-              onChange={(e) => setDeadlineSeconds(e.target.value)}
-              placeholder="Enter seconds (0 for no deadline)"
-              min="0"
-              step="1"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <div className="mt-2 grid grid-cols-4 gap-2">
-              <button
-                type="button"
-                onClick={() => setDeadlineSeconds(String(86400))}
-                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              >
-                1 Day
-              </button>
-              <button
-                type="button"
-                onClick={() => setDeadlineSeconds(String(3 * 86400))}
-                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              >
-                3 Days
-              </button>
-              <button
-                type="button"
-                onClick={() => setDeadlineSeconds(String(5 * 86400))}
-                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              >
-                5 Days
-              </button>
-              <button
-                type="button"
-                onClick={() => setDeadlineSeconds(String(7 * 86400))}
-                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              >
-                7 Days
-              </button>
-              <button
-                type="button"
-                onClick={() => setDeadlineSeconds(String(10 * 86400))}
-                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              >
-                10 Days
-              </button>
-              <button
-                type="button"
-                onClick={() => setDeadlineSeconds(String(30 * 86400))}
-                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              >
-                30 Days
-              </button>
-              <button
-                type="button"
-                onClick={() => setDeadlineSeconds(String(90 * 86400))}
-                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              >
-                90 Days
-              </button>
-              <button
-                type="button"
-                onClick={() => setDeadlineSeconds("0")}
-                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              >
-                No Deadline
-              </button>
-            </div>
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              {(() => {
-                const seconds = parseFloat(deadlineSeconds);
-                if (isNaN(seconds)) return "Enter a valid number";
-                if (seconds === 0) return "Voting will remain open indefinitely";
-                if (seconds < 60) return `${seconds} second${seconds !== 1 ? "s" : ""}`;
-                if (seconds < 3600) return `${Math.floor(seconds / 60)} minute${Math.floor(seconds / 60) !== 1 ? "s" : ""}`;
-                if (seconds < 86400) return `${Math.floor(seconds / 3600)} hour${Math.floor(seconds / 3600) !== 1 ? "s" : ""}`;
-                return `${Math.floor(seconds / 86400)} day${Math.floor(seconds / 86400) !== 1 ? "s" : ""}`;
-              })()}
-            </p>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={handleCreateProposal}
-              disabled={creatingProposal}
-              className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium px-4 py-2 rounded-md transition-colors flex items-center gap-2"
-            >
-              {creatingProposal && (
-                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              )}
-              {creatingProposal ? "Creating..." : "Create"}
-            </button>
-            <button
-              onClick={() => {
-                setShowCreateProposal(false);
-                setProposalDescription("");
-                setError(null);
-              }}
-              className="bg-gray-600 hover:bg-gray-700 text-white font-medium px-4 py-2 rounded-md transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
         </div>
       )}
 
-      {/* Proposals Section */}
       <div>
         <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">
           Proposals
@@ -822,4 +512,3 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
     </div>
   );
 }
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps */

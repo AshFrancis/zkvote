@@ -4,6 +4,7 @@ import request from 'supertest';
 
 const token = 'testtoken';
 const TEST_SECRET = 'SCVZXEUXJLRZKPCUXGXN53BJTD3RAZPRSSXHXDGSZQH5EOGEUTWINUXF';
+const GENERIC_ENV = { RELAYER_GENERIC_ERRORS: 'true' };
 
 const setupApp = async () => {
   process.env.RELAYER_SECRET_KEY = TEST_SECRET;
@@ -35,6 +36,23 @@ test('health shows details with auth', async () => {
   assert.ok(res.body.votingContract);
 });
 
+test('ready reports ready without details when unauthenticated', async () => {
+  const app = await setupApp();
+  const res = await request(app).get('/ready');
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.status, 'ready');
+  assert.equal(res.body.relayer, undefined);
+});
+
+test('ready shows details with auth', async () => {
+  const app = await setupApp();
+  const res = await request(app).get('/ready').set('Authorization', `Bearer ${token}`);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.status, 'ready');
+  assert.ok(res.body.relayer);
+  assert.ok(res.body.votingContract);
+});
+
 test('vote requires auth when token set', async () => {
   const app = await setupApp();
   const res = await request(app).post('/vote').send({});
@@ -55,4 +73,82 @@ test('config returns contract ids with auth', async () => {
   assert.equal(res.body.treeContract.startsWith('C'), true);
   assert.equal(typeof res.body.networkPassphrase, 'string');
   assert.equal(res.body.vkVersion, undefined);
+});
+
+test('vote rejects malformed proof hex', async () => {
+  const app = await setupApp();
+  const res = await request(app)
+    .post('/vote')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      daoId: 1,
+      proposalId: 1,
+      choice: true,
+      nullifier: '0x01',
+      root: '0x01',
+      commitment: '0x01',
+      proof: { a: '0xz', b: '0x1', c: '0x1' },
+    });
+  assert.equal(res.statusCode, 400);
+  assert.ok(res.body.error);
+});
+
+test('vote rejects U256 values above BN254 modulus', async () => {
+  const app = await setupApp();
+  // modulus + 1
+  const tooBig = '0x' + (BigInt('21888242871839275222246405745257275088548364400416034343698204186575808495617') + 1n).toString(16);
+  const res = await request(app)
+    .post('/vote')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      daoId: 1,
+      proposalId: 1,
+      choice: true,
+      nullifier: tooBig,
+      root: '0x01',
+      commitment: '0x01',
+      proof: { a: '0x' + '11'.repeat(64), b: '0x' + '22'.repeat(128), c: '0x' + '33'.repeat(64) },
+    });
+  assert.equal(res.statusCode, 400);
+  assert.ok(res.body.error.toLowerCase().includes('modulus'));
+});
+
+test('vote rejects all-zero proof components', async () => {
+  const app = await setupApp();
+  const zeroA = '0x' + '00'.repeat(64);
+  const zeroB = '0x' + '00'.repeat(128);
+  const res = await request(app)
+    .post('/vote')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      daoId: 1,
+      proposalId: 1,
+      choice: true,
+      nullifier: '0x01',
+      root: '0x01',
+      commitment: '0x01',
+      proof: { a: zeroA, b: zeroB, c: zeroA },
+    });
+  assert.equal(res.statusCode, 400);
+  assert.ok(res.body.error);
+});
+
+test('generic errors hide message when RELAYER_GENERIC_ERRORS=true', async () => {
+  const app = await setupApp();
+  Object.entries(GENERIC_ENV).forEach(([k, v]) => (process.env[k] = v));
+  const res = await request(app)
+    .post('/vote')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      daoId: 1,
+      proposalId: 1,
+      choice: true,
+      nullifier: '0xz', // malformed
+      root: '0x01',
+      commitment: '0x01',
+      proof: { a: '0x' + '11'.repeat(64), b: '0x' + '22'.repeat(128), c: '0x' + '33'.repeat(64) },
+    });
+  assert.equal(res.statusCode, 400);
+  assert.ok(res.body.error);
+  assert.equal(res.body.message, undefined);
 });

@@ -351,7 +351,7 @@ fn test_duplicate_commitment_rejected() {
     tree_client.register_with_caller(&dao_id, &commitment, &member2);
 }
 
-// Test: Maximum tree depth is enforced (MAX_TREE_DEPTH = 32)
+// Test: Maximum tree depth is enforced (MAX_TREE_DEPTH = 18)
 #[test]
 #[should_panic(expected = "HostError")]
 fn test_tree_depth_exceeds_max() {
@@ -366,8 +366,8 @@ fn test_tree_depth_exceeds_max() {
     // Create DAO
     let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
 
-    // Try to initialize tree with depth 33 (exceeds MAX_TREE_DEPTH of 32)
-    tree_client.init_tree(&dao_id, &33, &admin);
+    // Try to initialize tree with depth 19 (exceeds MAX_TREE_DEPTH of 18)
+    tree_client.init_tree(&dao_id, &19, &admin);
 }
 
 // Test: Zero tree depth is rejected

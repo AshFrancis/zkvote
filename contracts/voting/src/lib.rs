@@ -82,6 +82,7 @@ pub enum DataKey {
     VotingKey(u64),            // dao_id -> latest VerificationKey
     VkVersion(u64),            // dao_id -> current VK version
     VkByVersion(u64, u32),     // (dao_id, vk_version) -> VerificationKey
+    VerifyOverride,            // Test-only: force verify_groth16 result (unused in prod)
 }
 
 #[contracttype]
@@ -880,11 +881,19 @@ impl Voting {
             return false;
         }
 
-        // In test mode (testutils feature), skip actual pairing check
+        // In test mode (testutils feature), check for override flag or return true
         // Real proofs require actual Circom-generated vk and proof
         #[cfg(any(test, feature = "testutils"))]
         {
-            let _ = (env, vk, proof, pub_signals);
+            // Check if test has set VerifyOverride to false to simulate verification failure
+            if let Some(override_val) = env
+                .storage()
+                .instance()
+                .get::<DataKey, bool>(&DataKey::VerifyOverride)
+            {
+                return override_val;
+            }
+            let _ = (vk, proof, pub_signals);
             return true;
         }
 

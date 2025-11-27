@@ -11,10 +11,9 @@ export interface ProofInput {
   daoId: string;
   proposalId: string;
   voteChoice: string; // "0" for no, "1" for yes
-  commitment: string; // NEW: identity commitment for revocation checks
+  commitment: string; // Identity commitment for revocation checks
   pathElements: string[];
   pathIndices: number[];
-  vkVersion?: string;
 }
 
 export interface GeneratedProof {
@@ -36,24 +35,20 @@ export async function generateVoteProof(
 ): Promise<GeneratedProof> {
   try {
     // Format input for circuit - matches vote.circom signal names
-    const circuitInput: any = {
-      // Public signals
+    const circuitInput = {
+      // Public signals (verified on-chain)
       root: input.root,
       nullifier: input.nullifier,
       daoId: input.daoId,
       proposalId: input.proposalId,
       voteChoice: input.voteChoice,
       commitment: input.commitment,
-      // Private signals
+      // Private signals (hidden in ZK proof)
       secret: input.secret,
       salt: input.salt,
       pathElements: input.pathElements,
       pathIndices: input.pathIndices,
     };
-
-    if (input.vkVersion !== undefined) {
-      circuitInput.vkVersion = input.vkVersion;
-    }
 
     console.log("Circuit input:", circuitInput);
 

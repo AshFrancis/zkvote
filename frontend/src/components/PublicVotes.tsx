@@ -4,6 +4,8 @@ import { getReadOnlyDaoRegistry, getReadOnlyMembershipSbt, getReadOnlyMembership
 import { useWallet } from "../hooks/useWallet";
 import ProposalList from "./ProposalList";
 import { getZKCredentials, storeZKCredentials, generateDeterministicZKCredentials } from "../lib/zk";
+import { isUserRejection } from "../lib/utils";
+import { Alert, LoadingSpinner, CreateProposalForm } from "./ui";
 
 interface PublicVotesProps {
   publicKey: string | null;
@@ -30,7 +32,6 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
   const [registering, setRegistering] = useState(false);
   const [proposalKey, setProposalKey] = useState(0);
   const [showCreateProposal, setShowCreateProposal] = useState(false);
-  const [proposalDescription, setProposalDescription] = useState("");
   const [creatingProposal, setCreatingProposal] = useState(false);
 
   useEffect(() => {
@@ -45,7 +46,6 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
       setLoading(true);
       setError(null);
 
-      // Public DAO is always DAO #1 (created at deployment)
       const publicDaoId = 1;
 
       let result;
@@ -84,7 +84,6 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
         return;
       }
 
-      // Check if user has membership
       let hasMembership = false;
       let isRegistered = false;
 
@@ -120,10 +119,8 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
             hasMembership = membershipResult.result;
           }
 
-          // Check registration status
           const cached = publicKey ? getZKCredentials(publicDaoId, publicKey) : null;
           if (cached && publicKey) {
-            // Validate that the cached registration actually exists on-chain
             try {
               try {
                 const clients = initializeContractClients(publicKey);
@@ -157,7 +154,6 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
         }
       }
 
-      // Get member count
       let memberCount = 0;
       try {
         if (publicKey) {
@@ -226,18 +222,9 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
       });
 
       await joinTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
-
-      // Reload DAO info
       await loadPublicDAO();
     } catch (err: any) {
-      // Check if user rejected the request (don't show error for intentional cancellation)
-      const isUserRejection =
-        err?.code === -4 ||
-        err?.message?.includes("User rejected") ||
-        err?.message?.includes("user rejected") ||
-        err?.message?.includes("declined");
-
-      if (isUserRejection) {
+      if (isUserRejection(err)) {
         console.log("User cancelled joining DAO");
       } else {
         const errorMessage = err instanceof Error ? err.message : String(err);
@@ -261,7 +248,6 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
 
       let secret, salt, commitment;
 
-      // Step 1: Generate deterministic ZK credentials from wallet signature
       console.log("[Registration] Step 1: Generating deterministic credentials from wallet signature...");
       try {
         const credentials = await generateDeterministicZKCredentials(kit, dao.id);
@@ -274,11 +260,8 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
       }
 
       console.log("[Registration] Step 1 complete - Generated voting credentials");
-
-      // Small delay to ensure Step 1 UI updates before Step 2 popup
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Step 2: Register commitment in Merkle tree
       console.log("[Registration] Step 2: Registering commitment in Merkle tree...");
       const clients = initializeContractClients(publicKey);
 
@@ -294,36 +277,23 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
         console.log("[Registration] Step 2 complete - Transaction signed and sent:", result);
       } catch (err: any) {
         console.error("[Registration] Step 2 (signAndSend) failed:", err);
-        // Re-throw with more context
         const enhancedError = new Error(`Transaction signing failed: ${err?.message || 'Unknown error'}`);
         (enhancedError as any).originalError = err;
         throw enhancedError;
       }
 
-      // Step 3: Get the leaf index
       const leafIndexResult = await clients.membershipTree.get_leaf_index({
         dao_id: BigInt(dao.id),
         commitment: BigInt(commitment),
       });
 
       const leafIndex = Number(leafIndexResult.result);
-
-      // Step 4: Store credentials in localStorage (namespaced + TTL via helper)
       storeZKCredentials(dao.id, publicKey, { secret, salt, commitment }, leafIndex);
 
       console.log("[Registration] Registration successful! Leaf index:", leafIndex);
-
-      // Reload DAO info
       await loadPublicDAO();
     } catch (err: any) {
-      // Check if user rejected the request (don't show error for intentional cancellation)
-      const isUserRejection =
-        err?.code === -4 ||
-        err?.message?.includes("User rejected") ||
-        err?.message?.includes("user rejected") ||
-        err?.message?.includes("declined");
-
-      if (isUserRejection) {
+      if (isUserRejection(err)) {
         console.log("User cancelled registration");
       } else {
         const errorMessage = err instanceof Error ? err.message : String(err);
@@ -335,12 +305,11 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
     }
   };
 
-  const handleCreateProposal = async () => {
-    if (!proposalDescription.trim()) {
-      setError("Proposal description is required");
-      return;
-    }
-
+  const handleCreateProposal = async (data: {
+    description: string;
+    voteMode: "fixed" | "trailing";
+    deadlineSeconds: number;
+  }) => {
     if (!publicKey || !kit || !dao) {
       setError("Wallet not connected");
       return;
@@ -352,30 +321,27 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
 
       const clients = initializeContractClients(publicKey);
 
-      const endTime = BigInt(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60); // 7 days from now
+      let endTime: bigint;
+      if (data.deadlineSeconds === 0) {
+        endTime = BigInt(0);
+      } else {
+        endTime = BigInt(Math.floor(Date.now() / 1000) + data.deadlineSeconds);
+      }
 
       const createProposalTx = await clients.voting.create_proposal({
         dao_id: BigInt(dao.id),
-        description: proposalDescription,
+        description: data.description,
         end_time: endTime,
         creator: publicKey,
-        vote_mode: { tag: "Trailing", values: undefined },
+        vote_mode: { tag: data.voteMode === "fixed" ? "Fixed" : "Trailing", values: undefined },
       });
 
       await createProposalTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
 
-      setProposalDescription("");
       setShowCreateProposal(false);
-      setProposalKey(prev => prev + 1); // Force proposal list to reload
+      setProposalKey(prev => prev + 1);
     } catch (err: any) {
-      // Check if user rejected the request (don't show error for intentional cancellation)
-      const isUserRejection =
-        err?.code === -4 ||
-        err?.message?.includes("User rejected") ||
-        err?.message?.includes("user rejected") ||
-        err?.message?.includes("declined");
-
-      if (isUserRejection) {
+      if (isUserRejection(err)) {
         console.log("User cancelled proposal creation");
       } else {
         const errorMessage = err instanceof Error ? err.message : String(err);
@@ -390,7 +356,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
@@ -401,16 +367,13 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
           Public Votes
         </h2>
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-100 px-4 py-3 rounded-lg">
-          {error}
-        </div>
+        <Alert variant="error">{error}</Alert>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -431,14 +394,8 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
           )}
         </div>
 
-        {/* Error Message */}
-        {error && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-100 px-4 py-3 rounded-lg mb-4">
-            {error}
-          </div>
-        )}
+        {error && <Alert variant="error" className="mb-4">{error}</Alert>}
 
-        {/* Join DAO Button */}
         {isConnected && dao && !dao.hasMembership && (
           <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
             <h3 className="text-lg font-semibold text-purple-900 dark:text-purple-100 mb-2">
@@ -450,14 +407,14 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
             <button
               onClick={handleJoinDAO}
               disabled={joining}
-              className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 disabled:opacity-50 transition-colors flex items-center gap-2"
             >
+              {joining && <LoadingSpinner size="sm" color="white" />}
               {joining ? "Joining..." : "Join DAO"}
             </button>
           </div>
         )}
 
-        {/* Register to Vote Button */}
         {isConnected && dao && dao.hasMembership && !dao.isRegistered && (
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
             <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-2">
@@ -469,14 +426,14 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
             <button
               onClick={handleRegisterToVote}
               disabled={registering}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2"
             >
+              {registering && <LoadingSpinner size="sm" color="white" />}
               {registering ? "Registering..." : "Register to Vote"}
             </button>
           </div>
         )}
 
-        {/* Not Connected */}
         {!isConnected && (
           <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
             <p className="text-gray-600 dark:text-gray-400">
@@ -486,47 +443,22 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
         )}
       </div>
 
-      {/* Create Proposal Form */}
       {showCreateProposal && dao && (
-        <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Create New Proposal
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+            New Proposal
           </h3>
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Proposal Description
-            </label>
-            <textarea
-              value={proposalDescription}
-              onChange={(e) => setProposalDescription(e.target.value)}
-              placeholder="Describe your proposal..."
-              rows={4}
-              className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-purple-500 focus:border-purple-500"
-            />
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={handleCreateProposal}
-              disabled={creatingProposal}
-              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 disabled:opacity-50 transition-colors"
-            >
-              {creatingProposal ? "Creating..." : "Create Proposal"}
-            </button>
-            <button
-              onClick={() => {
-                setShowCreateProposal(false);
-                setProposalDescription("");
-                setError(null);
-              }}
-              className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
+          <CreateProposalForm
+            onSubmit={handleCreateProposal}
+            onCancel={() => {
+              setShowCreateProposal(false);
+              setError(null);
+            }}
+            isSubmitting={creatingProposal}
+          />
         </div>
       )}
 
-      {/* Proposals */}
       {dao && (
         <ProposalList
           key={proposalKey}
@@ -541,4 +473,3 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
     </div>
   );
 }
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps */

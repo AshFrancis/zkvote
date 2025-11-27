@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getAllDaos } from '../lib/readOnlyContracts';
 import { CONTRACTS } from '../config/contracts';
+import { Alert, LoadingSpinner } from './ui';
 
 interface DAO {
   id: number;
@@ -84,7 +85,7 @@ export default function DAOList({ onSelectDao, selectedDaoId, isConnected, userD
           {title}
         </h2>
         <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+          <LoadingSpinner size="md" />
           <span className="ml-3 text-gray-600 dark:text-gray-400">Loading DAOs...</span>
         </div>
       </div>
@@ -97,9 +98,7 @@ export default function DAOList({ onSelectDao, selectedDaoId, isConnected, userD
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           {title}
         </h2>
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-100 px-4 py-3 rounded-lg">
-          {error}
-        </div>
+        <Alert variant="error">{error}</Alert>
         <button
           onClick={loadDaos}
           className="mt-4 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"

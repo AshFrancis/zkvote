@@ -45,6 +45,10 @@ fi
 echo "  Network is ready."
 echo ""
 
+# Network configuration - use explicit parameters
+RPC_URL="http://localhost:8000/soroban/rpc"
+NETWORK_PASSPHRASE="Standalone Network ; February 2017"
+
 # Step 2: Create and fund test key
 echo "Step 2: Creating test account..."
 KEY_NAME="kat-test-$(date +%s)"
@@ -52,7 +56,7 @@ stellar keys generate "$KEY_NAME" --no-fund 2>/dev/null || true
 PUBKEY=$(stellar keys address "$KEY_NAME")
 echo "  Public key: $PUBKEY"
 
-stellar keys fund "$KEY_NAME" --network local
+stellar keys fund "$KEY_NAME" --rpc-url "$RPC_URL" --network-passphrase "$NETWORK_PASSPHRASE"
 echo "  Account funded."
 echo ""
 
@@ -68,18 +72,18 @@ echo "Step 4: Deploying contracts..."
 
 REGISTRY_ID=$(stellar contract deploy \
   --wasm target/wasm32v1-none/release/dao_registry.wasm \
-  --source "$KEY_NAME" --network local 2>&1 | tail -1)
+  --source "$KEY_NAME" --rpc-url "$RPC_URL" --network-passphrase "$NETWORK_PASSPHRASE" 2>&1 | tail -1)
 echo "  DAORegistry: $REGISTRY_ID"
 
 SBT_ID=$(stellar contract deploy \
   --wasm target/wasm32v1-none/release/membership_sbt.wasm \
-  --source "$KEY_NAME" --network local \
+  --source "$KEY_NAME" --rpc-url "$RPC_URL" --network-passphrase "$NETWORK_PASSPHRASE" \
   -- --registry "$REGISTRY_ID" 2>&1 | tail -1)
 echo "  MembershipSBT: $SBT_ID"
 
 TREE_ID=$(stellar contract deploy \
   --wasm target/wasm32v1-none/release/membership_tree.wasm \
-  --source "$KEY_NAME" --network local \
+  --source "$KEY_NAME" --rpc-url "$RPC_URL" --network-passphrase "$NETWORK_PASSPHRASE" \
   -- --sbt_contract "$SBT_ID" 2>&1 | tail -1)
 echo "  MembershipTree: $TREE_ID"
 echo ""
@@ -91,7 +95,8 @@ echo "Step 5: Creating test DAO..."
 DAO_ID=$(stellar contract invoke \
   --id "$REGISTRY_ID" \
   --source "$KEY_NAME" \
-  --network local \
+  --rpc-url "$RPC_URL" \
+  --network-passphrase "$NETWORK_PASSPHRASE" \
   -- create_dao \
   --name "KAT Test DAO" \
   --creator "$PUBKEY" 2>&1 | tail -1 | tr -d '"')
@@ -103,7 +108,8 @@ echo "Step 6: Initializing Merkle tree..."
 stellar contract invoke \
   --id "$TREE_ID" \
   --source "$KEY_NAME" \
-  --network local \
+  --rpc-url "$RPC_URL" \
+  --network-passphrase "$NETWORK_PASSPHRASE" \
   -- init_tree \
   --dao_id "$DAO_ID" \
   --depth 20 \
@@ -116,7 +122,8 @@ echo "Step 7: Minting SBT..."
 stellar contract invoke \
   --id "$SBT_ID" \
   --source "$KEY_NAME" \
-  --network local \
+  --rpc-url "$RPC_URL" \
+  --network-passphrase "$NETWORK_PASSPHRASE" \
   -- mint \
   --dao_id "$DAO_ID" \
   --to "$PUBKEY" \
@@ -133,7 +140,8 @@ COMMITMENT_JSON='{"hi_hi":1806915879155105685,"hi_lo":6191291063665763278,"lo_hi
 stellar contract invoke \
   --id "$TREE_ID" \
   --source "$KEY_NAME" \
-  --network local \
+  --rpc-url "$RPC_URL" \
+  --network-passphrase "$NETWORK_PASSPHRASE" \
   -- register_with_caller \
   --dao_id "$DAO_ID" \
   --commitment "$COMMITMENT_JSON" \
@@ -146,7 +154,8 @@ echo "Step 9: Getting current Merkle root..."
 ACTUAL_ROOT=$(stellar contract invoke \
   --id "$TREE_ID" \
   --source "$KEY_NAME" \
-  --network local \
+  --rpc-url "$RPC_URL" \
+  --network-passphrase "$NETWORK_PASSPHRASE" \
   -- current_root \
   --dao_id "$DAO_ID" 2>&1 | tail -1)
 echo "  Actual root (from P25): $ACTUAL_ROOT"

@@ -2,7 +2,7 @@ const { buildPoseidon } = require("circomlibjs");
 const crypto = require("crypto");
 const fs = require("fs");
 
-const TREE_DEPTH = 20;
+const TREE_DEPTH = 18;
 
 let poseidon;
 

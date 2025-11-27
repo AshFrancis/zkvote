@@ -26,6 +26,8 @@ circuits/pot*
 circuits/proof.json
 circuits/public.json
 circuits/verification_key.json
+circuits/generated/
+circuits/build/proof_soroban_be.json
 
 # Build artifacts
 *.wasm
@@ -47,6 +49,7 @@ logs/
 
 # Local deployment artifacts
 .contract-ids.local
+.contract-ids.*
 
 # Claude context
 claude.md

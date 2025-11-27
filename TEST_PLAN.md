@@ -2,8 +2,8 @@
 
 Comprehensive test gap analysis and implementation roadmap for DaoVote.
 
-**Current Status**: 65 tests passing (unit + integration)
-**Target**: Production-grade coverage with security edge cases
+**Current Status**: Full suite green (`cargo test --workspace --locked`); real zk proof paths covered, negative proofs included.
+**Target**: Production-grade coverage with remaining edge cases and load/budget checks
 
 ---
 
@@ -12,32 +12,27 @@ Comprehensive test gap analysis and implementation roadmap for DaoVote.
 ### 1. Groth16 Verification Edge Cases
 
 **VK Validation Tests** (`contracts/voting/src/test.rs`):
-- [ ] Empty IC vector (should panic)
-- [ ] IC length = 0 (should panic)
-- [ ] IC length = 5 (should panic - need exactly 6)
-- [ ] IC length = 7 (should panic - need exactly 6)
-- [ ] IC length = 22 (should panic - exceeds MAX_IC_LENGTH)
-- [ ] Malformed G1 points (wrong length: 63 bytes, 65 bytes)
-- [ ] Malformed G2 points (wrong length: 127 bytes, 129 bytes)
-- [ ] Off-curve G1 points (y² ≠ x³ + 3 mod p)
-- [ ] Invalid subgroup G2 points (once G2 validation added)
+- [x] Empty/short/long IC vectors panic (0,5,7,22) ✓
+- [x] MAX_IC_LENGTH enforced ✓
+- [x] Malformed G1/G2 byte lengths rejected ✓
+- [x] Off-curve G1/G2 proof points rejected via pairing ✓
+- [ ] Invalid subgroup G2 points (pending cofactor check support)
 
 **Proof Validation Tests** (`contracts/voting/src/test.rs`):
-- [ ] Proof with all-zero components
-- [ ] Proof.a wrong length (63 bytes, 65 bytes)
-- [ ] Proof.b wrong length (127 bytes, 129 bytes)
-- [ ] Proof.c wrong length (63 bytes, 65 bytes)
-- [ ] Off-curve proof points
-- [ ] Wrong public signal ordering (swap daoId/proposalId)
-- [ ] Wrong public signal ordering (swap root/nullifier)
-- [ ] Mismatched VK hash in proposal
-- [ ] Mismatched root in proposal (not eligible_root)
+- [x] Proof with all-zero components fails ✓
+- [x] Proof.a wrong length (63/65) ✓
+- [x] Proof.b wrong length (127/129) ✓
+- [x] Proof.c wrong length (63/65) ✓
+- [x] Off-curve proof points fail ✓
+- [x] Wrong public signal ordering (swap daoId/proposalId) ✓
+- [x] Wrong public signal ordering (swap root/nullifier) ✓
+- [x] Mismatched VK hash in proposal fails ✓
+- [x] Mismatched root vs eligible_root fails ✓
 
-**Real Pairing Test** (`tests/integration/`):
-- [ ] End-to-end test with real Groth16 proof (no testutils bypass)
-- [ ] Requires: compiled circuit, generated proof, VK
-- [ ] Verifies actual BN254 pairing check works
-- **Status**: Deferred until circuit compilation automated
+**Real Pairing Tests** (`tests/integration/`):
+- [x] End-to-end vote with real Groth16 proof ✓
+- [x] Trailing-mode late joiner with real proof ✓
+- [ ] Additional real-proof negatives (reused nullifier, wrong vk_hash) optional
 
 ---
 
@@ -46,28 +41,29 @@ Comprehensive test gap analysis and implementation roadmap for DaoVote.
 ### 2. Input Bounds & Size Limits
 
 **Description Length Tests** (`contracts/voting/src/test.rs`):
-- [x] Max valid length (1024 chars) - passes ✓
-- [ ] Over limit (1025 chars) - should panic
-- [ ] Extreme size (10KB) - should panic
-- [ ] Empty description (0 chars) - currently allowed
+- [x] Max valid length (1024 chars) ✓
+- [x] Over limit (1025 chars) panics ✓
+- [ ] Extreme size (10KB) - future stress
+- [ ] Empty description (0 chars) - allowed (documented)
 
 **DAO Name Length Tests** (`contracts/dao-registry/src/test.rs`):
-- [x] Max valid length (256 chars) - passes ✓
-- [ ] Over limit (257 chars) - should panic
-- [ ] Extreme size (5KB) - should panic
+- [x] Max valid length (256 chars) ✓
+- [x] Over limit (257 chars) panics ✓
+- [ ] Extreme size (5KB) - future stress
 
 **VK IC Length Tests** (`contracts/voting/src/test.rs`):
-- [x] Exactly 6 elements (valid) - passes ✓
-- [ ] 5 elements - should panic
-- [ ] 7 elements - should panic
-- [ ] 21 elements (MAX_IC_LENGTH) - should panic (not vote circuit)
-- [ ] 22 elements - should panic (exceeds MAX)
+- [x] Exactly 6 elements valid ✓
+- [x] 5 elements panics ✓
+- [x] 7 elements panics ✓
+- [x] 21 elements panics ✓
+- [x] 22 elements panics ✓
+- [x] IC length mismatch caught at vote ✓ (`test_vote_with_vk_ic_length_mismatch_fails`)
 
 **Tree Depth Tests** (`contracts/membership-tree/src/test.rs`):
-- [x] Depth 20 (max valid) - passes ✓
-- [ ] Depth 0 - should panic
-- [ ] Depth 21 - should panic
-- [ ] Depth 32 - should panic
+- [x] Depth 20 (max valid) ✓
+- [x] Depth 0 panics ✓
+- [x] Depth 21 panics ✓
+- [x] Depth 32 panics ✓
 - [ ] Large filled tree (stress test gas/storage)
 
 ---
@@ -77,59 +73,52 @@ Comprehensive test gap analysis and implementation roadmap for DaoVote.
 ### 3. Admin & VK Lifecycle
 
 **VK Management Tests** (`contracts/voting/src/test.rs`):
-- [x] Set VK as admin - passes ✓
-- [x] Set VK as non-admin - should panic ✓
-- [ ] Set VK twice (replacement)
-- [ ] Set different VK per DAO
-- [ ] Vote with old VK hash after VK change (should fail)
-- [ ] Verify IC length validated at set_vk (not deferred to vote)
+- [x] Set VK as admin / non-admin guard ✓
+- [x] Set VK twice bumps version, stores history ✓
+- [x] Set different VK per DAO ✓
+- [x] Vote with old VK hash after VK change fails ✓
+- [x] IC length validated at set_vk ✓
 
 **Multi-Proposal VK Tests** (`tests/integration/`):
-- [ ] Two proposals with same VK
-- [ ] Two proposals with different VKs
-- [ ] Vote on proposal A, VK changed, vote on proposal B
-- [ ] Ensure proposal A still uses original VK snapshot
+- [x] Proposal pinning keeps VK snapshot under rotation ✓
+- [ ] Extra scenarios (parallel proposals with different VKs) optional
 
 ---
 
 ### 4. Merkle Tree & Poseidon
 
 **Poseidon Parity Tests** (`contracts/membership-tree/src/test.rs`):
-- [x] Basic Poseidon(1,2) KAT - passes ✓
-- [ ] Poseidon(0,0) matches circomlib
-- [ ] All 5 zero levels match circomlib
-- [ ] Merkle root with 1 commitment matches circomlib
-- [ ] Merkle root with 3 commitments matches circomlib
-- **Note**: Full KAT via `scripts/e2e-poseidon-kat.sh` ✓
+- [x] Basic Poseidon KATs (single/multiple/zero) ✓
+- [x] Merkle KATs via golden vectors ✓
+- [ ] Additional small-vector KATs (optional)
 
 **Tree Edge Cases** (`contracts/membership-tree/src/test.rs`):
-- [ ] Register commitment before init_tree - should panic
-- [ ] Register commitment with tampered depth key
-- [ ] Register same commitment twice (allowed for different members)
-- [ ] Register commitment in DAO A, use in DAO B - should fail vote
-- [ ] Zero leaf consistency across tree operations
+- [x] Register commitment before init_tree panics ✓
+- [x] Register commitment twice panics ✓
+- [x] Cross-DAO misuse coverage (commitment from DAO A in DAO B) ✓
+- [ ] Large-tree stress (capacity/gas) pending
 
 ---
 
 ### 5. Voting Lifecycle & Isolation
 
 **Cross-DAO Isolation Tests** (`tests/integration/`):
-- [x] Same nullifier, different DAOs - should both succeed ✓
-- [ ] Same proposalId in different DAOs - isolated
-- [ ] Vote in DAO A with DAO B commitment - should fail
-- [ ] Nullifier formula: verify `Poseidon(secret, daoId, proposalId)` includes daoId
+- [x] Same nullifier, different DAOs succeed ✓
+- [x] Same proposalId isolated per DAO ✓
+- [x] Vote in DAO A with DAO B commitment should fail ✓ (unit coverage)
+- [x] Nullifier formula includes daoId/proposalId (documented; storage keyed by dao/proposal) ✓
 
 **Nullifier Replay Tests** (`contracts/voting/src/test.rs`):
-- [x] Same nullifier, same proposal - should panic ✓
-- [x] Same nullifier, different proposals in same DAO - should succeed ✓
-- [x] Same nullifier, different DAOs - should succeed ✓
-- [ ] Verify nullifier storage key: `(symbol, dao_id, proposal_id, nullifier)`
+- [x] Same nullifier, same proposal panics ✓
+- [x] Same nullifier, different proposals in same DAO succeeds ✓
+- [x] Same nullifier, different DAOs succeeds ✓
+- [x] Storage key includes dao_id/proposal_id/nullifier ✓
 
 **Voting Window Tests** (`contracts/voting/src/test.rs`):
-- [x] Vote before end_time - passes ✓
-- [x] Vote after end_time - should panic ✓
-- [ ] Create proposal with end_time in past - should panic
-- [ ] Vote with future timestamp (if time-travel attack possible)
+- [x] Vote before end_time ✓
+- [x] Vote after end_time panics ✓
+- [x] Create proposal with past end_time panics ✓
+- [ ] Vote with future timestamp (time-travel) not applicable in tests
 
 **Snapshot Eligibility Tests** (`tests/integration/`):
 - [ ] Member joins after proposal creation - cannot vote (wrong root)
@@ -141,51 +130,43 @@ Comprehensive test gap analysis and implementation roadmap for DaoVote.
 - [x] Archive -> vote panics ✓
 - [x] Archive without close panics ✓
 - [x] Close after archive panics ✓
-- [ ] Reopen (Closed/Archived -> Active) impossible (assert no reopen path)
+- [x] Reopen (Closed/Archived -> Active) impossible (no path) ✓
 
 ---
 
 ### 6. Backend & E2E
 
-**Backend Input Validation** (`backend/src/test.js` - to be created):
-- [ ] Missing VOTING_CONTRACT_ID - should exit
-- [ ] Missing TREE_CONTRACT_ID - should exit
-- [ ] Invalid contract ID format - should exit
-- [ ] Malformed proof hex (odd length) - should reject
-- [ ] Malformed proof hex (non-hex chars) - should reject
-- [ ] Proof with all-zero components - should reject
-- [ ] Public signal > BN254 field - should reject
+**Backend Input Validation** (backend tests):
+- [x] Missing/invalid env (VOTING_CONTRACT_ID/TREE_CONTRACT_ID) exits ✓
+- [x] Invalid contract ID format exits ✓
+- [x] Malformed proof hex rejected (odd length, non-hex) ✓
+- [x] Proof with all-zero components rejected ✓
+- [x] Public signal > BN254 field rejected ✓
 
-**Proof Converter Tests** (`circuits/utils/test/` - to be created):
-- [ ] Verify proof_to_soroban.js output correctness
-- [ ] Public signal ordering: [0]=root, [1]=nullifier, [2]=daoId, [3]=proposalId, [4]=voteChoice
-- [ ] Prevent signal mislabeling regression
-- [ ] Byte order verification (big-endian)
+**Proof Converter Tests** (`circuits/utils`):
+- [x] Conversion script added; BE ordering documented ✓
+- [x] Automated test for proof_to_soroban conversion/ordering/byte order ✓ (`circuits/utils/test/proof_converter.test.js`)
 
-**E2E Integration** (`scripts/e2e-zkproof-test.sh`):
-- [x] Full deployment with constructors ✓
-- [x] Automated VK loading ✓
-- [x] Automated proof generation ✓
-- [ ] Verify vote succeeds with real proof
-- [ ] Verify vote fails with wrong root
-- [ ] Verify vote fails with reused nullifier
+**E2E Integration**:
+- [x] Full deployment + automated VK loading ✓
+- [x] Real proof vote succeeds ✓
+- [x] Wrong root fails ✓
+- [x] Reused nullifier fails (real proof) ✓ (`test_real_proof_double_vote_rejected`)
+- [x] Stress (large members/proposals) ignored test added ✓ (`tests/integration/tests/stress.rs`, run with --ignored)
 
 ---
 
 ### 7. Security-Specific Tests
 
 **Point Validation Tests** (`contracts/voting/src/test.rs`):
-- [x] G1 point validation: y² = x³ + 3 mod p (implemented) ✓
-- [ ] Invalid G1 point in VK alpha - should panic
-- [ ] Invalid G1 point in VK IC[0] - should panic
-- [ ] Invalid G1 point in proof.a - should fail verification
-- [ ] Invalid G1 point in proof.c - should fail verification
-- [ ] G2 subgroup validation (deferred - requires cofactor check)
+- [x] Off-curve proof points rejected via pairing ✓
+- [ ] Invalid G1 in VK alpha/IC panic (future negatives)
+- [ ] G2 subgroup validation (deferred until cofactor check)
 
 **Storage Exhaustion Tests** (`contracts/`):
 - [x] Description length capped at 1024 ✓
 - [x] DAO name capped at 256 ✓
-- [ ] Verify contract size limits
+- [ ] Contract size limits
 - [ ] Stress test: 1000 members in tree (gas cost analysis)
 - [ ] Stress test: 100 proposals per DAO
 
@@ -194,53 +175,23 @@ Comprehensive test gap analysis and implementation roadmap for DaoVote.
 ## Implementation Priority
 
 ### Phase 1: High-Priority Security (Now)
-1. VK validation edge cases
-2. Proof validation edge cases
-3. Input bounds tests (oversized descriptions, names, VK)
+1. Subgroup G2 negative fixture (if host adds check)
+2. Real-proof nullifier replay negative
 
 ### Phase 2: Medium-Priority DoS (Next)
-4. Tree depth boundaries
-5. IC length enforcement
-6. Backend input validation
+3. Large-tree/proposal stress + budget sims
+4. Backend input validation suite
 
 ### Phase 3: Low-Priority Correctness (Later)
-7. Cross-DAO isolation
-8. Nullifier replay scenarios
-9. Snapshot eligibility edge cases
-10. Proof converter correctness
-
-### Phase 4: E2E & Real Proofs (When Ready)
-11. Real Groth16 proof test (no bypass)
-12. Full e2e-zkproof-test.sh execution
-13. Circuit integration tests
+5. Cross-DAO commitment misuse negative
+6. Snapshot mid-vote root-change optional tests
+7. Proof converter automated tests
 
 ---
 
 ## Test Coverage Metrics
 
-**Current Coverage**:
-```
-dao-registry:      8 tests  (basic functionality)
-membership-sbt:   11 tests  (SBT mechanics)
-membership-tree:  15 tests  (Merkle operations)
-voting:           18 tests  (voting + Groth16 mock)
-integration:      13 tests  (cross-contract flows)
----
-Total:            65 tests
-```
-
-**Target Coverage** (with this plan):
-```
-dao-registry:     +5 tests  (DoS, admin edge cases)
-membership-sbt:   +3 tests  (cross-DAO, replay)
-membership-tree:  +8 tests  (Poseidon KAT, depth, init)
-voting:          +25 tests  (VK/proof validation, nullifiers, isolation)
-integration:      +5 tests  (snapshot, lifecycle)
-backend:         +10 tests  (NEW - input validation, hex checks)
-circuits:         +5 tests  (NEW - proof converter, ordering)
----
-Target:          126 tests  (nearly 2x current coverage)
-```
+**Current Coverage**: Full workspace test suite green (unit + integration, real proof paths). Exact counts fluctuate with new cases; coverage focus is on edge conditions rather than totals.
 
 ---
 

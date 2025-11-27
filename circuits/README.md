@@ -97,6 +97,27 @@ node utils/generate_input.js
 node utils/proof_to_soroban.js
 ```
 
+### Generate Custom Test Proofs
+
+For integration tests you can generate Soroban-formatted proofs with custom inputs (secret/salt/index):
+
+```bash
+# Example: member at index 0, dao 1, proposal 1, yes vote
+node generate_proof_instance.js --label member2_index0 --secret 222222222 --salt 333333333 --dao 1 --proposal 1 --vote 1 --index 0 --depth 18
+
+# Convert to Soroban BE (handles G2 ordering)
+node convert_proof_to_soroban_be.js circuits/generated/proof_member2_index0_proof.json circuits/generated/public_member2_index0.json
+```
+
+This writes Soroban-ready proof hex in `circuits/generated/proof_<label>_proof_soroban_be.json` along with public signals. Integrate those constants directly in tests to avoid runtime parsing.
+
+### Converter Regression Test
+
+`utils/test/proof_converter.test.js` locks endianness and G2 limb ordering. Run:
+```bash
+cd utils && node --test
+```
+
 ## Input Format
 
 ```json

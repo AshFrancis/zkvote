@@ -119,3 +119,42 @@ fn budget_vote_path_within_limit() {
         max_allowed
     );
 }
+
+/// Smoke test for set_vk cost (covers admin check + storage writes).
+#[test]
+fn budget_set_vk_within_limit() {
+    let env = Env::default();
+    env.cost_estimate().budget().reset_unlimited();
+    env.mock_all_auths();
+
+    let registry_id = env.register(dao_registry::WASM, ());
+    let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
+    let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
+    let voting_id = env.register(voting::WASM, (tree_id.clone(),));
+
+    let registry = RegistryClient::new(&env, &registry_id);
+    let tree = TreeClient::new(&env, &tree_id);
+    let voting = VotingClient::new(&env, &voting_id);
+
+    let admin = Address::generate(&env);
+
+    // Minimal setup: create DAO and init tree so admin check resolves
+    let dao_id = registry.create_dao(&String::from_str(&env, "Budget DAO"), &admin, &false);
+    tree.init_tree(&dao_id, &18, &admin);
+
+    let vk = get_real_vk(&env);
+
+    let before = env.cost_estimate().budget().cpu_instruction_cost();
+    voting.set_vk(&dao_id, &vk, &admin);
+    let after = env.cost_estimate().budget().cpu_instruction_cost();
+    let delta = after.saturating_sub(before);
+
+    // Loose upper bound; tighten after measuring on P25 if needed.
+    let max_allowed: u64 = 8_000_000;
+    assert!(
+        delta <= max_allowed,
+        "budget exceeded for set_vk: used {} > allowed {}",
+        delta,
+        max_allowed
+    );
+}

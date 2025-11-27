@@ -20,6 +20,14 @@ fi
 
 source .contract-ids.local
 
+# Use explicit RPC URL and passphrase from config file, or defaults
+RPC_URL="${RPC_URL:-http://localhost:8000/soroban/rpc}"
+PASSPHRASE="${PASSPHRASE:-Standalone Network ; February 2017}"
+
+echo "Network:"
+echo "  RPC: $RPC_URL"
+echo "  Passphrase: $PASSPHRASE"
+echo ""
 echo "Using contracts:"
 echo "  Registry: $REGISTRY_ID"
 echo "  SBT: $SBT_ID"
@@ -43,7 +51,8 @@ echo "1. Creating DAO..."
 DAO_ID=$(stellar contract invoke \
     --id $REGISTRY_ID \
     --source $KEY_NAME \
-    --network local \
+    --rpc-url "$RPC_URL" \
+    --network-passphrase "$PASSPHRASE" \
     -- create_dao \
     --name "ZK Test DAO" \
     --creator $KEY_ADDRESS 2>/dev/null)
@@ -55,7 +64,8 @@ echo "2. Minting SBT for admin..."
 stellar contract invoke \
     --id $SBT_ID \
     --source $KEY_NAME \
-    --network local \
+    --rpc-url "$RPC_URL" \
+    --network-passphrase "$PASSPHRASE" \
     -- mint \
     --dao_id $DAO_ID \
     --to $KEY_ADDRESS \
@@ -68,7 +78,8 @@ echo "3. Initializing Merkle tree (depth=18)..."
 stellar contract invoke \
     --id $TREE_ID \
     --source $KEY_NAME \
-    --network local \
+    --rpc-url "$RPC_URL" \
+    --network-passphrase "$PASSPHRASE" \
     -- init_tree \
     --dao_id $DAO_ID \
     --depth 20 2>/dev/null
@@ -116,7 +127,8 @@ cd ..
 stellar contract invoke \
     --id $TREE_ID \
     --source $KEY_NAME \
-    --network local \
+    --rpc-url "$RPC_URL" \
+    --network-passphrase "$PASSPHRASE" \
     -- register_with_caller \
     --dao_id $DAO_ID \
     --commitment $COMMITMENT \
@@ -129,7 +141,8 @@ echo "5. Getting current Merkle root..."
 ROOT=$(stellar contract invoke \
     --id $TREE_ID \
     --source $KEY_NAME \
-    --network local \
+    --rpc-url "$RPC_URL" \
+    --network-passphrase "$PASSPHRASE" \
     -- current_root \
     --dao_id $DAO_ID 2>/dev/null)
 
@@ -163,7 +176,8 @@ VK_JSON=$(node circuits/utils/vkey_to_cli_json.js circuits/build/verification_ke
 stellar contract invoke \
     --id $VOTING_ID \
     --source $KEY_NAME \
-    --network local \
+    --rpc-url "$RPC_URL" \
+    --network-passphrase "$PASSPHRASE" \
     -- set_vk \
     --dao_id $DAO_ID \
     --vk "$VK_JSON" \
@@ -178,7 +192,8 @@ END_TIME=$(($(date +%s) + 3600))
 PROPOSAL_ID=$(stellar contract invoke \
     --id $VOTING_ID \
     --source $KEY_NAME \
-    --network local \
+    --rpc-url "$RPC_URL" \
+    --network-passphrase "$PASSPHRASE" \
     -- create_proposal \
     --dao_id $DAO_ID \
     --description "Test ZK Voting" \
@@ -232,7 +247,8 @@ echo "9. Submitting vote..."
 stellar contract invoke \
     --id $VOTING_ID \
     --source $KEY_NAME \
-    --network local \
+    --rpc-url "$RPC_URL" \
+    --network-passphrase "$PASSPHRASE" \
     -- vote \
     --dao_id $DAO_ID \
     --proposal_id $PROPOSAL_ID \

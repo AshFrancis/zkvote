@@ -14,6 +14,7 @@ import {
   getZKCredentials,
   storeZKCredentials,
 } from "../lib/zk";
+import { LoadingSpinner } from "./ui";
 
 interface VoteModalProps {
   proposalId: number;
@@ -142,7 +143,7 @@ export default function VoteModal({
         proposalId: proposalId.toString(),
         voteChoice: choice ? "1" : "0",
         commitment: commitment.toString(), // NEW: allows revocation checks
-        vkVersion: vkVersion?.toString() ?? undefined,
+        // Note: vkVersion is NOT a circuit signal - it's checked on-chain only
         // Private signals
         secret: secret.toString(),
         salt: salt.toString(),
@@ -319,7 +320,7 @@ export default function VoteModal({
               {step === "generating" ? "Generating Proof" : "Submitting Vote"}
             </h3>
             <div className="flex flex-col items-center py-8">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+              <LoadingSpinner size="lg" color="blue" className="mb-4" />
               <p className="text-gray-600 dark:text-gray-400 text-center">{progress}</p>
             </div>
             <Banner variant="primary">

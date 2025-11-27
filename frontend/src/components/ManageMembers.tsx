@@ -6,8 +6,8 @@ import {
   getOrDeriveEncryptionKey,
   encryptAlias,
   decryptAlias,
-  clearEncryptionKeyFromSession,
 } from '../lib/encryption';
+import { Alert, LoadingSpinner, Badge } from './ui';
 
 interface ManageMembersProps {
   publicKey: string | null;
@@ -262,8 +262,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
             dao_id: BigInt(daoId),
           });
 
-          const votingClient: any = clients.voting;
-          vkResult = await votingClient.vk_version({
+          vkResult = await clients.voting.vk_version({
             dao_id: BigInt(daoId),
           });
         } catch (err) {
@@ -273,7 +272,6 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
 
           const membershipTree = getReadOnlyMembershipTree();
           const daoRegistry = getReadOnlyDaoRegistry();
-          const voting: any = getReadOnlyVoting();
 
           result = await membershipTree.get_tree_info({
             dao_id: BigInt(daoId),
@@ -283,6 +281,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
             dao_id: BigInt(daoId),
           });
 
+          const voting = getReadOnlyVoting();
           vkResult = await voting.vk_version({
             dao_id: BigInt(daoId),
           });
@@ -291,7 +290,6 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
         // No wallet connected - use read-only
         const membershipTree = getReadOnlyMembershipTree();
         const daoRegistry = getReadOnlyDaoRegistry();
-        const voting: any = getReadOnlyVoting();
 
         result = await membershipTree.get_tree_info({
           dao_id: BigInt(daoId),
@@ -301,6 +299,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
           dao_id: BigInt(daoId),
         });
 
+        const voting = getReadOnlyVoting();
         vkResult = await voting.vk_version({
           dao_id: BigInt(daoId),
         });
@@ -618,7 +617,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
   if (loading && !treeInfo && members.length === 0) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
@@ -633,9 +632,11 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
         <p className="text-sm text-gray-600 dark:text-gray-400">
           {daoName} (DAO #{daoId})
         </p>
-        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-          Verifying key version: {treeInfo?.vkVersion ?? 'N/A'}
-        </p>
+        {treeInfo?.vkVersion !== null && treeInfo?.vkVersion !== undefined && (
+          <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+            Verifying key version: {treeInfo.vkVersion}
+          </p>
+        )}
       </div>
 
       {/* Statistics Dashboard */}
@@ -780,9 +781,7 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
                       </p>
                     </div>
                     {member.isAdmin && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200">
-                        Admin
-                      </span>
+                      <Badge variant="blue" size="sm">Admin</Badge>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
@@ -878,18 +877,10 @@ export default function ManageMembers({ publicKey, daoId, daoName, isAdmin, isIn
       )}
 
       {/* Success Message */}
-      {success && (
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-100 px-4 py-3 rounded-lg">
-          {success}
-        </div>
-      )}
+      {success && <Alert variant="success">{success}</Alert>}
 
       {/* Error Message */}
-      {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-100 px-4 py-3 rounded-lg">
-          {error}
-        </div>
-      )}
+      {error && <Alert variant="error">{error}</Alert>}
 
       {/* Mint SBT Form - Admin Only */}
       {isAdmin && (

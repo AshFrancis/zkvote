@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getUserDaos } from '../lib/readOnlyContracts';
 import { CONTRACTS } from '../config/contracts';
+import { Alert, LoadingSpinner, Badge } from './ui';
 
 interface UserDAO {
   id: number;
@@ -98,7 +99,7 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
           Your DAOs
         </h2>
         <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+          <LoadingSpinner size="md" />
           <span className="ml-3 text-gray-600 dark:text-gray-400">Loading your DAOs...</span>
         </div>
       </div>
@@ -111,9 +112,7 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Your DAOs
         </h2>
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-100 px-4 py-3 rounded-lg">
-          {error}
-        </div>
+        <Alert variant="error">{error}</Alert>
         <button
           onClick={loadUserDaos}
           className="mt-4 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"
@@ -182,15 +181,9 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   DAO #{dao.id}
                 </p>
-                <span
-                  className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                    dao.role === 'admin'
-                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                      : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                  }`}
-                >
+                <Badge variant={dao.role === 'admin' ? 'blue' : 'green'} size="sm">
                   {dao.role}
-                </span>
+                </Badge>
               </div>
             </div>
           </button>

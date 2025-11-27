@@ -6,7 +6,8 @@
 // 3. Nullifier reuse across DAOs (should succeed - different domains)
 
 use soroban_sdk::{
-    testutils::Address as _, Address, Bytes, BytesN, Env, String, Vec as SdkVec, U256,
+    contracttype, testutils::Address as _, Address, Bytes, BytesN, Env, String, Vec as SdkVec,
+    U256,
 };
 
 mod dao_registry {
@@ -29,6 +30,20 @@ use dao_registry::Client as RegistryClient;
 use membership_sbt::Client as SbtClient;
 use membership_tree::Client as TreeClient;
 use voting::Client as VotingClient;
+
+// Local mirror of the voting contract's DataKey for storage surgery in tests
+#[contracttype]
+#[derive(Clone)]
+enum VotingDataKey {
+    Proposal(u64, u64),
+    ProposalCount(u64),
+    Nullifier(u64, u64, U256),
+    VotingKey(u64),
+    VkVersion(u64),
+    VkByVersion(u64, u32),
+    // VerifyOverride is test-only in the contract; we keep the variant to preserve ordering
+    VerifyOverride,
+}
 
 fn hex_to_bytes<const N: usize>(env: &Env, hex: &str) -> BytesN<N> {
     let bytes = hex::decode(hex).expect("invalid hex");
@@ -242,10 +257,81 @@ fn test_wrong_vk_fails() {
     // Admin changes VK AFTER proposal creation
     voting_client.set_vk(&dao_id, &get_different_vk(&env), &admin);
 
+    // Tamper the stored VK for the proposal's pinned version to simulate storage drift
+    // This should trigger VkChanged when the vote checks the hash snapshot.
+    env.as_contract(&voting_id, || {
+        env.storage().persistent().set(
+            &VotingDataKey::VkByVersion(dao_id, 1),
+            &get_different_vk(&env),
+        );
+    });
+
     // Try to vote - should fail because VK hash doesn't match
     let nullifier = hex_str_to_u256(&env, REAL_NULLIFIER_HEX);
     let proof = get_real_proof(&env);
 
+    voting_client.vote(
+        &dao_id,
+        &proposal_id,
+        &true,
+        &nullifier,
+        &root,
+        &commitment,
+        &proof,
+    );
+}
+
+// Test: Nullifier reuse with a real proof should fail on second attempt
+#[test]
+#[should_panic(expected = "HostError")]
+fn test_real_proof_double_vote_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.cost_estimate().budget().reset_unlimited();
+
+    let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
+
+    let registry_client = RegistryClient::new(&env, &registry_id);
+    let sbt_client = SbtClient::new(&env, &sbt_id);
+    let tree_client = TreeClient::new(&env, &tree_id);
+    let voting_client = VotingClient::new(&env, &voting_id);
+
+    // Create DAO and init tree
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
+    tree_client.init_tree(&dao_id, &18, &admin);
+
+    // Set real VK and register member
+    voting_client.set_vk(&dao_id, &get_real_vk(&env), &admin);
+    let member = Address::generate(&env);
+    sbt_client.mint(&dao_id, &member, &admin, &None);
+    let commitment = hex_str_to_u256(&env, REAL_COMMITMENT_HEX);
+    tree_client.register_with_caller(&dao_id, &commitment, &member);
+    let root = tree_client.current_root(&dao_id);
+
+    // Create proposal
+    let proposal_id = voting_client.create_proposal(
+        &dao_id,
+        &String::from_str(&env, "Double vote"),
+        &(env.ledger().timestamp() + 86400),
+        &member,
+        &voting::VoteMode::Fixed,
+    );
+
+    let nullifier = hex_str_to_u256(&env, REAL_NULLIFIER_HEX);
+    let proof = get_real_proof(&env);
+
+    // First vote succeeds
+    voting_client.vote(
+        &dao_id,
+        &proposal_id,
+        &true,
+        &nullifier,
+        &root,
+        &commitment,
+        &proof,
+    );
+
+    // Second vote with same nullifier should panic
     voting_client.vote(
         &dao_id,
         &proposal_id,

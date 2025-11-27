@@ -5,7 +5,7 @@
 const { buildPoseidon } = require("circomlibjs");
 const fs = require("fs");
 
-const TREE_DEPTH = 20;
+const TREE_DEPTH = 18;
 
 if (process.argv.length < 9) {
   console.error("Usage: node generate_vote_input_single.js <secret> <salt> <commitment> <root> <daoId> <proposalId> <voteChoice>");
@@ -55,6 +55,7 @@ const [secret, salt, commitment, root, daoId, proposalId, voteChoice] = process.
     daoId: daoId,
     proposalId: proposalId,
     voteChoice: voteChoice,
+    commitment: commitment,
 
     // Private inputs
     secret: secret,

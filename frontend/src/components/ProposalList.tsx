@@ -5,6 +5,7 @@ import { getReadOnlyVoting } from "../lib/readOnlyContracts";
 import { calculateNullifier } from "../lib/zkproof";
 import ProposalCard from "./ProposalCard";
 import { getZKCredentials } from "../lib/zk";
+import { LoadingSpinner } from "./ui";
 
 interface ProposalListProps {
   publicKey: string | null;
@@ -167,7 +168,7 @@ export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkS
   if (loading && proposals.length === 0) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <LoadingSpinner size="md" color="blue" />
       </div>
     );
   }

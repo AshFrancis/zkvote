@@ -1,6 +1,8 @@
 import { useState } from "react";
 import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 import { getZKCredentials } from "../lib/zk";
+import { Badge } from "./ui";
+import VoteModal from "./VoteModal";
 
 interface ProposalCardProps {
   proposal: {
@@ -9,11 +11,11 @@ interface ProposalCardProps {
     yesVotes: number;
     noVotes: number;
     hasVoted: boolean;
-  eligibleRoot: bigint; // Snapshot of Merkle root when proposal was created
-  voteMode: "Fixed" | "Trailing"; // Vote mode: Fixed (snapshot) or Trailing (dynamic)
-  endTime: number; // Unix timestamp in seconds
-  vkVersion?: number | null;
-};
+    eligibleRoot: bigint;
+    voteMode: "Fixed" | "Trailing";
+    endTime: number;
+    vkVersion?: number | null;
+  };
   daoId: number;
   publicKey: string;
   kit: StellarWalletsKit | null;
@@ -35,18 +37,15 @@ export default function ProposalCard({
   const yesPercentage = totalVotes > 0 ? (proposal.yesVotes / totalVotes) * 100 : 0;
   const noPercentage = totalVotes > 0 ? (proposal.noVotes / totalVotes) * 100 : 0;
 
-  // Check if user is registered for voting
   const isRegistered = publicKey ? !!getZKCredentials(daoId, publicKey) : false;
 
-  // Deadline logic
-  const now = Math.floor(Date.now() / 1000); // Current time in seconds
+  const now = Math.floor(Date.now() / 1000);
   const hasDeadline = proposal.endTime > 0;
   const isPastDeadline = hasDeadline && now > proposal.endTime;
 
   const formatDeadline = (timestamp: number): string => {
     if (timestamp === 0) return "No deadline";
 
-    const date = new Date(timestamp * 1000);
     const timeLeft = timestamp - now;
 
     if (timeLeft < 0) {
@@ -68,7 +67,7 @@ export default function ProposalCard({
     if (isPastDeadline) return "text-red-600 dark:text-red-400";
 
     const timeLeft = proposal.endTime - now;
-    if (timeLeft < 86400) return "text-orange-600 dark:text-orange-400"; // Less than 1 day
+    if (timeLeft < 86400) return "text-orange-600 dark:text-orange-400";
     return "text-gray-600 dark:text-gray-400";
   };
 
@@ -82,20 +81,13 @@ export default function ProposalCard({
                 Proposal #{proposal.id}
               </span>
               {proposal.vkVersion !== undefined && proposal.vkVersion !== null && (
-                <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200">
-                  VK v{proposal.vkVersion}
-                </span>
+                <Badge variant="purple">VK v{proposal.vkVersion}</Badge>
               )}
-              {proposal.hasVoted && (
-                <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200">
-                  Voted
-                </span>
-              )}
-              {isPastDeadline && (
-                <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200">
-                  Closed
-                </span>
-              )}
+              <Badge variant={proposal.voteMode === "Fixed" ? "amber" : "teal"}>
+                {proposal.voteMode}
+              </Badge>
+              {proposal.hasVoted && <Badge variant="blue">Voted</Badge>}
+              {isPastDeadline && <Badge variant="red">Closed</Badge>}
             </div>
             {hasDeadline && (
               <div className={`text-sm font-medium mb-2 ${getDeadlineColor()}`}>
@@ -106,7 +98,6 @@ export default function ProposalCard({
               {proposal.description}
             </p>
 
-            {/* Vote Results */}
             <div>
               <div className="flex items-center justify-between text-sm mb-1">
                 <span className="font-medium text-green-600 dark:text-green-400">
@@ -130,32 +121,28 @@ export default function ProposalCard({
           </div>
         </div>
 
-        {/* Vote Button */}
         {hasMembership && !proposal.hasVoted && (
-          <>
-            <button
-              onClick={() => setShowVoteModal(true)}
-              disabled={!isRegistered || isPastDeadline}
-              className={`w-full mt-4 font-medium px-4 py-2 rounded-md transition-colors ${
-                isRegistered && !isPastDeadline
-                  ? "bg-blue-600 hover:bg-blue-700 text-white"
-                  : "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
-              }`}
-              title={
-                !isRegistered
-                  ? "Please register for voting first"
-                  : isPastDeadline
-                  ? "Voting period has ended"
-                  : ""
-              }
-            >
-              {isPastDeadline ? "Voting Closed" : "Vote (Anonymous)"}
-            </button>
-          </>
+          <button
+            onClick={() => setShowVoteModal(true)}
+            disabled={!isRegistered || isPastDeadline}
+            className={`w-full mt-4 font-medium px-4 py-2 rounded-md transition-colors ${
+              isRegistered && !isPastDeadline
+                ? "bg-blue-600 hover:bg-blue-700 text-white"
+                : "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+            }`}
+            title={
+              !isRegistered
+                ? "Please register for voting first"
+                : isPastDeadline
+                ? "Voting period has ended"
+                : ""
+            }
+          >
+            {isPastDeadline ? "Voting Closed" : "Vote (Anonymous)"}
+          </button>
         )}
       </div>
 
-      {/* Vote Modal */}
       {showVoteModal && (
         <VoteModal
           proposalId={proposal.id}
@@ -175,7 +162,3 @@ export default function ProposalCard({
     </>
   );
 }
-
-// Import VoteModal (will be created next)
-import VoteModal from "./VoteModal";
-/* eslint-disable react-hooks/purity, @typescript-eslint/no-unused-vars */

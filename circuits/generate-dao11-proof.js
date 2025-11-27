@@ -21,7 +21,7 @@ const fs = require('fs');
   console.log('Nullifier:', nullifier);
   
   // Compute zero hashes and root
-  const TREE_DEPTH = 20;
+  const TREE_DEPTH = 18;
   const zeros = ['0'];
   for (let i = 0; i < TREE_DEPTH; i++) {
     const prev = BigInt(zeros[i]);

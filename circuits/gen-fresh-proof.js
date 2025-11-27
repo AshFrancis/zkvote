@@ -25,7 +25,7 @@ const fs = require('fs');
   console.log('Nullifier:', nullifier);
   
   // For first leaf (index 0), all path elements are zeros
-  const TREE_DEPTH = 20;
+  const TREE_DEPTH = 18;
   const zeros = ['0'];
   for (let i = 0; i < TREE_DEPTH; i++) {
     const prev = BigInt(zeros[i]);

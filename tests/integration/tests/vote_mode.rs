@@ -108,6 +108,104 @@ fn get_real_proof(env: &Env) -> voting::Proof {
 const REAL_COMMITMENT_HEX: &str =
     "2536d01521137bf7b39e3fd26c1376f456ce46a45993a5d7c3c158a450fd7329";
 const REAL_NULLIFIER_HEX: &str = "0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a50";
+// Additional real proof (member, index 0, late join) generated via circuits/generate_proof_instance.js
+const REAL2_COMMITMENT_HEX: &str =
+    "012d2a4324506e9db0081457edb50a66a6a7c06cce0b6b6cd1b4345a8d8a21f0";
+const REAL2_NULLIFIER_HEX: &str =
+    "2ea01c1227e074745102e534fe4ae64a1c50d5a630ffa39c9e944d665858d10e";
+const REAL2_ROOT_HEX: &str = "18eb1b3ca83d4da5d314bdc471b7ea052ca61998257821d97572f50aa2f5a280";
+// Soroban-converted proof for member2_index0 (BE, G2 ordered as [imag_x, real_x, imag_y, real_y])
+const REAL2_PROOF_A: &str =
+    "231d8411466e24e4d514ceffc6ee7d0f90518573147c0290f6f9f628dc9b2e6f007372ea52eecd0e4db398f57dfb2111d9d75482dfc217690b30b0e81b59f6b9";
+const REAL2_PROOF_B: &str = "075ba375a79af805e7a946a31ac1b3a2b9630d603e4010006aeeb5606774830705de109bd687f4e63053fb56275d15ee3d45a5f7ef4591b87046d2134b87e6951197f315ecec439027dcf7b3826e35f2a84b2e787a90be72804732e33cb63f0204033c8c4b797b6580a6fc95a20db5e5563d5e4de38b0f23baf4de885fe4d2ff";
+const REAL2_PROOF_C: &str =
+    "0229d1f4afd6d36b064ab8048263b4b64d7b14efd4fe713f4b8e854e932d75bd2406f934e1b865c6d26ee8bf2239b3ce6ebeb2f59265089540392ca864600f0c";
+
+// Churn test: two trailing proposals, late joiner votes on both (testutils path, mock proof).
+#[test]
+#[should_panic(expected = "HostError")]
+fn test_trailing_mode_churn_across_parallel_proposals() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.cost_estimate().budget().reset_unlimited();
+
+    let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
+
+    let registry_client = RegistryClient::new(&env, &registry_id);
+    let sbt_client = SbtClient::new(&env, &sbt_id);
+    let tree_client = TreeClient::new(&env, &tree_id);
+    let voting_client = VotingClient::new(&env, &voting_id);
+
+    let member1 = Address::generate(&env);
+    let member2 = Address::generate(&env);
+
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Churn DAO"), &admin, &true);
+    tree_client.init_tree(&dao_id, &18, &admin);
+    // Use mock VK/proof; in testutils path verification is bypassed.
+    let vk = create_mock_vk(&env);
+    voting_client.set_vk(&dao_id, &vk, &admin);
+
+    // member1 joins before proposals
+    sbt_client.mint(&dao_id, &member1, &admin, &None);
+    let commitment1 = U256::from_u32(&env, 111);
+    tree_client.register_with_caller(&dao_id, &commitment1, &member1);
+
+    let root_at_creation = tree_client.current_root(&dao_id);
+
+    // Two trailing proposals
+    let proposal_a = voting_client.create_proposal(
+        &dao_id,
+        &String::from_str(&env, "A"),
+        &(env.ledger().timestamp() + 3600),
+        &member1,
+        &voting::VoteMode::Trailing,
+    );
+    let proposal_b = voting_client.create_proposal(
+        &dao_id,
+        &String::from_str(&env, "B"),
+        &(env.ledger().timestamp() + 3600),
+        &member1,
+        &voting::VoteMode::Trailing,
+    );
+
+    // member2 joins after proposals
+    sbt_client.mint(&dao_id, &member2, &admin, &None);
+    let commitment2 = U256::from_u32(&env, 222);
+    tree_client.register_with_caller(&dao_id, &commitment2, &member2);
+    let root_after_join = tree_client.current_root(&dao_id);
+    assert_ne!(root_at_creation, root_after_join);
+
+    let nullifier1 = U256::from_u32(&env, 9001);
+    let nullifier2 = U256::from_u32(&env, 9002);
+    let proof = create_mock_proof(&env);
+
+    // Vote on proposal A should succeed
+    voting_client.vote(
+        &dao_id,
+        &proposal_a,
+        &true,
+        &nullifier1,
+        &root_after_join,
+        &commitment2,
+        &proof,
+    );
+
+    // Second vote reuses a distinct nullifier on proposal B; should also succeed
+    voting_client.vote(
+        &dao_id,
+        &proposal_b,
+        &false,
+        &nullifier2,
+        &root_after_join,
+        &commitment2,
+        &proof,
+    );
+
+    let pa = voting_client.get_proposal(&dao_id, &proposal_a);
+    let pb = voting_client.get_proposal(&dao_id, &proposal_b);
+    assert_eq!(pa.yes_votes + pa.no_votes, 1);
+    assert_eq!(pb.yes_votes + pb.no_votes, 1);
+}
 
 // Helper function to create BN254 G1 generator point (1, 2) - for mock proofs in failure tests
 fn bn254_g1_generator(env: &Env) -> soroban_sdk::BytesN<64> {
@@ -312,6 +410,71 @@ fn test_trailing_mode_late_joiner_can_vote() {
     assert_eq!(proposal.yes_votes, 1);
 
     println!("✅ Trailing mode correctly allowed member to vote with historical root");
+}
+
+/// Trailing mode with a real proof for a late joiner (member at index 1).
+#[test]
+fn test_trailing_mode_late_joiner_can_vote_real_member2() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.cost_estimate().budget().reset_unlimited();
+
+    let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
+
+    let registry_client = RegistryClient::new(&env, &registry_id);
+    let sbt_client = SbtClient::new(&env, &sbt_id);
+    let tree_client = TreeClient::new(&env, &tree_id);
+    let voting_client = VotingClient::new(&env, &voting_id);
+
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
+    tree_client.init_tree(&dao_id, &18, &admin);
+
+    // Use real VK
+    let vk = get_real_vk(&env);
+    voting_client.set_vk(&dao_id, &vk, &admin);
+
+    // Creator needs SBT to create proposal (but doesn't need to be registered)
+    let creator = Address::generate(&env);
+    sbt_client.mint(&dao_id, &creator, &admin, &None);
+
+    // Create trailing proposal BEFORE the member is registered
+    let proposal_id = voting_client.create_proposal(
+        &dao_id,
+        &String::from_str(&env, "Trailing member2"),
+        &(env.ledger().timestamp() + 86400),
+        &creator,
+        &voting::VoteMode::Trailing,
+    );
+    assert_eq!(proposal_id, 1);
+
+    // Late joiner (member 2) registers commitment at index 0 (first leaf)
+    let member2 = Address::generate(&env);
+    sbt_client.mint(&dao_id, &member2, &admin, &None);
+    let commitment2 = hex_str_to_u256(&env, REAL2_COMMITMENT_HEX);
+    tree_client.register_with_caller(&dao_id, &commitment2, &member2);
+    let root_after_join = tree_client.current_root(&dao_id);
+    assert_eq!(root_after_join, hex_str_to_u256(&env, REAL2_ROOT_HEX));
+
+    let nullifier2 = hex_str_to_u256(&env, REAL2_NULLIFIER_HEX);
+    let proof = voting::Proof {
+        a: hex_to_bytes(&env, REAL2_PROOF_A),
+        b: hex_to_bytes(&env, REAL2_PROOF_B),
+        c: hex_to_bytes(&env, REAL2_PROOF_C),
+    };
+
+    // Vote should succeed with the newer root in trailing mode
+    voting_client.vote(
+        &dao_id,
+        &proposal_id,
+        &true,
+        &nullifier2,
+        &root_after_join,
+        &commitment2,
+        &proof,
+    );
+
+    let updated = voting_client.get_proposal(&dao_id, &proposal_id);
+    assert_eq!(updated.yes_votes, 1);
 }
 
 // Test: Trailing mode - removed member cannot vote on NEW proposal (commitment revoked)

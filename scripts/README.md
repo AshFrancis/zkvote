@@ -6,7 +6,7 @@ Automated deployment scripts for DaoVote anonymous voting system on Stellar Soro
 
 1. **Stellar CLI** installed:
    ```bash
-   cargo install stellar-cli
+   cargo install stellar-cli  # ensure version matches soroban host (see rust-toolchain.toml)
    ```
 
 2. **Stellar network running** (choose one):
@@ -69,6 +69,25 @@ npm run dev
 ```
 
 ## Scripts
+
+### `run_budget_sim.sh`
+Simulate `set_vk`, `create_proposal`, and `vote` against WASM using `soroban contract invoke --simulate` to capture CPU/mem for budget baselines.
+
+**Usage:**
+```bash
+./scripts/run_budget_sim.sh \
+  target/wasm32v1-none/release/voting.wasm \
+  target/wasm32v1-none/release/dao_registry.wasm \
+  target/wasm32v1-none/release/membership_sbt.wasm \
+  target/wasm32v1-none/release/membership_tree.wasm
+```
+If omitted, defaults to the release WASMs above.
+
+**Note:** Requires `soroban` CLI configured for your target network (local/futurenet) and a funded key. Outputs CPU/mem metrics you can apply to `tests/integration/tests/budget_smoke.rs`.
+**Env checklist before running:**
+- `STELLAR_NETWORK_PASSPHRASE` (e.g., futurenet passphrase)
+- `STELLAR_RPC_URL` (e.g., http://localhost:8000/soroban/rpc)
+- `SOURCE` (funded key name from `stellar keys list`)
 
 ### `deploy-local.sh`
 
