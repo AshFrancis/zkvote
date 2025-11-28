@@ -84,6 +84,7 @@ export default function Comment({
         daoId,
         proposalId,
         commentId: comment.id,
+        author: publicKey,
       });
 
       if (!result.success) {
@@ -112,6 +113,7 @@ export default function Comment({
         proposalId,
         commentId: comment.id,
         newContentCid: cid,
+        author: publicKey,
       });
 
       if (!result.success) {

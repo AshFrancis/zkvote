@@ -184,15 +184,13 @@ export async function submitAnonymousComment(params: {
   return { success: true, commentId: data.commentId };
 }
 
-// Edit a comment
+// Edit a public comment
 export async function editComment(params: {
   daoId: number;
   proposalId: number;
   commentId: number;
   newContentCid: string;
-  // For anonymous comments, include proof
-  proof?: { a: string; b: string; c: string };
-  publicSignals?: [string, string];
+  author: string;
 }): Promise<{ success: boolean; error?: string }> {
   const response = await fetch(`${RELAYER_URL}/comment/edit`, {
     method: "POST",
@@ -207,14 +205,12 @@ export async function editComment(params: {
   return { success: true };
 }
 
-// Delete a comment
+// Delete a public comment
 export async function deleteComment(params: {
   daoId: number;
   proposalId: number;
   commentId: number;
-  // For anonymous comments, include proof
-  proof?: { a: string; b: string; c: string };
-  publicSignals?: [string, string];
+  author: string;
 }): Promise<{ success: boolean; error?: string }> {
   const response = await fetch(`${RELAYER_URL}/comment/delete`, {
     method: "POST",

@@ -5,6 +5,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import crypto from 'crypto';
+import multer from 'multer';
 import {
   startIndexer,
   stopIndexer,
@@ -13,6 +14,15 @@ import {
   getIndexerStatus,
   addManualEvent,
 } from './indexer.js';
+import {
+  initPinata,
+  pinJSON,
+  pinFile,
+  fetchContent,
+  fetchRawContent,
+  isValidCid,
+  isHealthy as isPinataHealthy,
+} from './ipfs.js';
 
 dotenv.config();
 
@@ -58,6 +68,15 @@ const queryLimiter = rateLimit({
   keyGenerator: limiterKeyGen,
 });
 
+const ipfsUploadLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // 10 uploads per minute per IP
+  message: { error: 'Too many upload requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: limiterKeyGen,
+});
+
 // Minimal structured logger with proof redaction
 const log = (level, event, meta = {}) => {
   const safe = { ...meta };
@@ -91,6 +110,31 @@ const MEMBERSHIP_SBT_CONTRACT_ID = process.env.MEMBERSHIP_SBT_CONTRACT_ID;
 // Event Indexer Configuration
 const INDEXER_ENABLED = process.env.INDEXER_ENABLED !== 'false';
 const INDEXER_POLL_INTERVAL_MS = Number(process.env.INDEXER_POLL_INTERVAL_MS || 5000);
+
+// IPFS/Pinata Configuration
+const PINATA_JWT = process.env.PINATA_JWT;
+const PINATA_GATEWAY = process.env.PINATA_GATEWAY;
+const IPFS_ENABLED = !!PINATA_JWT;
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_METADATA_SIZE = 100 * 1024; // 100KB
+
+// Multer configuration for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: MAX_IMAGE_SIZE,
+    files: 1,
+  },
+  fileFilter: (_req, file, cb) => {
+    // Only allow images
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.'));
+    }
+  },
+});
 
 function validateEnv() {
   const missing = [];
@@ -616,6 +660,701 @@ app.post('/events', authGuard, (req, res) => {
   }
 });
 
+// ============================================
+// IPFS/PINATA ENDPOINTS
+// ============================================
+
+// In-memory cache for IPFS content (15 min TTL)
+const ipfsCache = new Map();
+const IPFS_CACHE_TTL = 15 * 60 * 1000;
+
+function getCachedContent(cid) {
+  const cached = ipfsCache.get(cid);
+  if (cached && Date.now() - cached.timestamp < IPFS_CACHE_TTL) {
+    return cached.data;
+  }
+  ipfsCache.delete(cid);
+  return null;
+}
+
+function setCachedContent(cid, data) {
+  ipfsCache.set(cid, { data, timestamp: Date.now() });
+  // Clean up old entries periodically
+  if (ipfsCache.size > 1000) {
+    const now = Date.now();
+    for (const [key, value] of ipfsCache) {
+      if (now - value.timestamp > IPFS_CACHE_TTL) {
+        ipfsCache.delete(key);
+      }
+    }
+  }
+}
+
+// Upload image to IPFS
+app.post('/ipfs/image', ipfsUploadLimiter, upload.single('image'), async (req, res) => {
+  if (!IPFS_ENABLED) {
+    return res.status(503).json({ error: 'IPFS service not configured' });
+  }
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'No image file provided' });
+  }
+
+  try {
+    log('info', 'ipfs_upload_image', {
+      filename: req.file.originalname,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+    });
+
+    const result = await pinFile(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype
+    );
+
+    log('info', 'ipfs_upload_success', { cid: result.cid, type: 'image' });
+
+    res.json({
+      cid: result.cid,
+      size: result.size,
+      filename: req.file.originalname,
+      mimeType: req.file.mimetype,
+    });
+  } catch (err) {
+    log('error', 'ipfs_upload_failed', { error: err.message, type: 'image' });
+    res.status(500).json({ error: 'Failed to upload image to IPFS' });
+  }
+});
+
+// Upload JSON metadata to IPFS
+app.post('/ipfs/metadata', ipfsUploadLimiter, async (req, res) => {
+  if (!IPFS_ENABLED) {
+    return res.status(503).json({ error: 'IPFS service not configured' });
+  }
+
+  const metadata = req.body;
+
+  // Validate metadata size
+  const metadataSize = JSON.stringify(metadata).length;
+  if (metadataSize > MAX_METADATA_SIZE) {
+    return res.status(400).json({
+      error: `Metadata too large: ${metadataSize} bytes (max ${MAX_METADATA_SIZE})`,
+    });
+  }
+
+  // Validate required fields
+  if (!metadata.version || typeof metadata.version !== 'number') {
+    return res.status(400).json({ error: 'metadata.version is required and must be a number' });
+  }
+
+  // Validate video URL if present
+  if (metadata.videoUrl) {
+    const videoPattern = /^https?:\/\/(www\.)?(youtube\.com|youtu\.be|vimeo\.com)\/.+$/i;
+    if (!videoPattern.test(metadata.videoUrl)) {
+      return res.status(400).json({
+        error: 'Invalid video URL. Only YouTube and Vimeo URLs are allowed.',
+      });
+    }
+  }
+
+  try {
+    log('info', 'ipfs_upload_metadata', { size: metadataSize });
+
+    const result = await pinJSON(metadata, 'daovote-proposal-metadata');
+
+    log('info', 'ipfs_upload_success', { cid: result.cid, type: 'metadata' });
+
+    res.json({
+      cid: result.cid,
+      size: result.size,
+    });
+  } catch (err) {
+    log('error', 'ipfs_upload_failed', { error: err.message, type: 'metadata' });
+    res.status(500).json({ error: 'Failed to upload metadata to IPFS' });
+  }
+});
+
+// IPFS health check (must be before :cid route to avoid matching "health" as CID)
+app.get('/ipfs/health', queryLimiter, async (_req, res) => {
+  if (!IPFS_ENABLED) {
+    return res.json({ enabled: false, status: 'not_configured' });
+  }
+
+  try {
+    const healthy = await isPinataHealthy();
+    res.json({
+      enabled: true,
+      status: healthy ? 'healthy' : 'degraded',
+    });
+  } catch (err) {
+    res.json({
+      enabled: true,
+      status: 'error',
+      error: err.message,
+    });
+  }
+});
+
+// Fetch content from IPFS (with caching)
+app.get('/ipfs/:cid', queryLimiter, async (req, res) => {
+  if (!IPFS_ENABLED) {
+    return res.status(503).json({ error: 'IPFS service not configured' });
+  }
+
+  const { cid } = req.params;
+
+  if (!isValidCid(cid)) {
+    return res.status(400).json({ error: 'Invalid CID format' });
+  }
+
+  // Check cache first
+  const cached = getCachedContent(cid);
+  if (cached) {
+    log('info', 'ipfs_cache_hit', { cid });
+    return res.json(cached);
+  }
+
+  try {
+    log('info', 'ipfs_fetch', { cid });
+
+    const result = await fetchContent(cid);
+
+    // Cache the result
+    setCachedContent(cid, result.data);
+
+    log('info', 'ipfs_fetch_success', { cid });
+
+    // Return JSON data directly or as a wrapper
+    if (typeof result.data === 'object') {
+      res.json(result.data);
+    } else {
+      res.json({ content: result.data, contentType: result.contentType });
+    }
+  } catch (err) {
+    log('error', 'ipfs_fetch_failed', { cid, error: err.message });
+    res.status(500).json({ error: 'Failed to fetch content from IPFS' });
+  }
+});
+
+// GET /ipfs/image/:cid - Fetch raw image from IPFS (for img src tags)
+app.get('/ipfs/image/:cid', queryLimiter, async (req, res) => {
+  if (!IPFS_ENABLED) {
+    return res.status(503).json({ error: 'IPFS service not configured' });
+  }
+
+  const { cid } = req.params;
+
+  if (!isValidCid(cid)) {
+    return res.status(400).json({ error: 'Invalid CID format' });
+  }
+
+  try {
+    log('info', 'ipfs_fetch_image', { cid });
+
+    const result = await fetchRawContent(cid);
+
+    log('info', 'ipfs_fetch_image_success', { cid, contentType: result.contentType });
+
+    // Set content type, cache headers, and CORS headers for cross-origin image loading
+    res.set('Content-Type', result.contentType);
+    res.set('Cache-Control', 'public, max-age=31536000, immutable'); // 1 year cache (content-addressed)
+    res.set('Cross-Origin-Resource-Policy', 'cross-origin'); // Allow cross-origin image loading
+    res.send(result.buffer);
+  } catch (err) {
+    log('error', 'ipfs_fetch_image_failed', { cid, error: err.message });
+    res.status(500).json({ error: 'Failed to fetch image from IPFS' });
+  }
+});
+
+// ============================================
+// COMMENT ENDPOINTS
+// ============================================
+
+// Rate limiter for comment operations
+const commentLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 20, // 20 comment operations per minute per IP
+  message: { error: 'Too many comment requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: limiterKeyGen,
+});
+
+// POST /comment/public - Submit public comment (author identified)
+app.post('/comment/public', authGuard, commentLimiter, async (req, res) => {
+  const { daoId, proposalId, contentCid, parentId, author } = req.body;
+
+  // Validate required fields
+  if (daoId === undefined || proposalId === undefined || !contentCid || !author) {
+    return res.status(400).json({ error: 'Missing required fields: daoId, proposalId, contentCid, author' });
+  }
+
+  if (!Number.isInteger(daoId) || daoId < 0) {
+    return res.status(400).json({ error: 'daoId must be a non-negative integer' });
+  }
+  if (!Number.isInteger(proposalId) || proposalId < 0) {
+    return res.status(400).json({ error: 'proposalId must be a non-negative integer' });
+  }
+  if (typeof contentCid !== 'string' || contentCid.length > 100) {
+    return res.status(400).json({ error: 'Invalid contentCid' });
+  }
+  if (parentId !== undefined && parentId !== null && (!Number.isInteger(parentId) || parentId < 0)) {
+    return res.status(400).json({ error: 'parentId must be a non-negative integer or null' });
+  }
+
+  try {
+    log('info', 'comment_public_request', { daoId, proposalId });
+
+    const contract = new StellarSdk.Contract(VOTING_CONTRACT_ID);
+
+    // Build args for add_comment
+    const authorAddress = StellarSdk.Address.fromString(author);
+    const args = [
+      StellarSdk.nativeToScVal(daoId, { type: 'u64' }),
+      StellarSdk.nativeToScVal(proposalId, { type: 'u64' }),
+      StellarSdk.xdr.ScVal.scvAddress(authorAddress.toScAddress()),
+      StellarSdk.nativeToScVal(contentCid, { type: 'string' }),
+      parentId !== undefined && parentId !== null
+        ? StellarSdk.xdr.ScVal.scvVec([StellarSdk.nativeToScVal(parentId, { type: 'u64' })])
+        : StellarSdk.xdr.ScVal.scvVec([]),
+    ];
+
+    const operation = contract.call('add_comment', ...args);
+
+    const account = await server.getAccount(relayerKeypair.publicKey());
+    const tx = new StellarSdk.TransactionBuilder(account, {
+      fee: '100000',
+      networkPassphrase: NETWORK_PASSPHRASE
+    })
+      .addOperation(operation)
+      .setTimeout(30)
+      .build();
+
+    // Simulate
+    const simResult = await callWithTimeout(
+      () => simulateWithBackoff(() => server.simulateTransaction(tx)),
+      'simulate_add_comment'
+    );
+
+    if (!StellarSdk.rpc.Api.isSimulationSuccess(simResult)) {
+      log('warn', 'comment_simulation_failed', { daoId, proposalId, error: simResult.error });
+      return res.status(400).json({ error: 'Failed to add comment' });
+    }
+
+    // Get comment ID from simulation result
+    const commentId = simResult.result?.retval
+      ? Number(StellarSdk.scValToNative(simResult.result.retval))
+      : null;
+
+    // Prepare and sign
+    const preparedTx = StellarSdk.rpc.assembleTransaction(tx, simResult).build();
+    preparedTx.sign(relayerKeypair);
+
+    // Submit
+    const sendResult = await callWithTimeout(
+      () => server.sendTransaction(preparedTx),
+      'send_add_comment'
+    );
+
+    if (sendResult.status === 'ERROR') {
+      log('error', 'comment_submit_failed', { daoId, proposalId });
+      return res.status(500).json({ error: 'Transaction submission failed' });
+    }
+
+    // Wait for confirmation
+    const result = await callWithTimeout(
+      () => waitForTransaction(sendResult.hash),
+      'wait_for_comment'
+    );
+
+    if (result.status === 'SUCCESS') {
+      log('info', 'comment_public_success', { daoId, proposalId, commentId });
+      res.json({ success: true, commentId, txHash: sendResult.hash });
+    } else {
+      res.status(500).json({ error: 'Transaction failed', txHash: sendResult.hash });
+    }
+  } catch (err) {
+    log('error', 'comment_public_exception', { message: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /comment/anonymous - Submit anonymous comment with ZK proof
+app.post('/comment/anonymous', authGuard, commentLimiter, async (req, res) => {
+  const { daoId, proposalId, contentCid, parentId, nullifier, root, commitment, nonce, proof } = req.body;
+
+  // Validate required fields
+  if (daoId === undefined || proposalId === undefined || !contentCid ||
+      !nullifier || !root || !commitment || nonce === undefined || !proof) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  if (!Number.isInteger(daoId) || daoId < 0) {
+    return res.status(400).json({ error: 'daoId must be a non-negative integer' });
+  }
+  if (!Number.isInteger(proposalId) || proposalId < 0) {
+    return res.status(400).json({ error: 'proposalId must be a non-negative integer' });
+  }
+  if (!Number.isInteger(nonce) || nonce < 0) {
+    return res.status(400).json({ error: 'nonce must be a non-negative integer' });
+  }
+  if (!isValidU256Hex(nullifier) || !isWithinField(nullifier)) {
+    return res.status(400).json({ error: 'nullifier must be a valid hex string < BN254 modulus' });
+  }
+  if (!isValidU256Hex(root) || !isWithinField(root)) {
+    return res.status(400).json({ error: 'root must be a valid hex string < BN254 modulus' });
+  }
+  if (!isValidU256Hex(commitment) || !isWithinField(commitment)) {
+    return res.status(400).json({ error: 'commitment must be a valid hex string < BN254 modulus' });
+  }
+
+  // Validate proof structure
+  if (!proof.a || !proof.b || !proof.c) {
+    return res.status(400).json({ error: 'proof must contain a, b, and c fields' });
+  }
+
+  try {
+    log('info', 'comment_anonymous_request', { daoId, proposalId });
+
+    // Convert to Soroban types
+    const scNullifier = u256ToScVal(nullifier);
+    const scRoot = u256ToScVal(root);
+    const scCommitment = u256ToScVal(commitment);
+    const scProof = proofToScVal(proof);
+
+    const contract = new StellarSdk.Contract(VOTING_CONTRACT_ID);
+
+    const args = [
+      StellarSdk.nativeToScVal(daoId, { type: 'u64' }),
+      StellarSdk.nativeToScVal(proposalId, { type: 'u64' }),
+      StellarSdk.nativeToScVal(contentCid, { type: 'string' }),
+      parentId !== undefined && parentId !== null
+        ? StellarSdk.xdr.ScVal.scvVec([StellarSdk.nativeToScVal(parentId, { type: 'u64' })])
+        : StellarSdk.xdr.ScVal.scvVec([]),
+      scNullifier,
+      scRoot,
+      scCommitment,
+      scProof,
+    ];
+
+    const operation = contract.call('add_anonymous_comment', ...args);
+
+    const account = await server.getAccount(relayerKeypair.publicKey());
+    const tx = new StellarSdk.TransactionBuilder(account, {
+      fee: '100000',
+      networkPassphrase: NETWORK_PASSPHRASE
+    })
+      .addOperation(operation)
+      .setTimeout(30)
+      .build();
+
+    const simResult = await callWithTimeout(
+      () => simulateWithBackoff(() => server.simulateTransaction(tx)),
+      'simulate_add_anonymous_comment'
+    );
+
+    if (!StellarSdk.rpc.Api.isSimulationSuccess(simResult)) {
+      log('warn', 'comment_anon_simulation_failed', { daoId, proposalId, error: simResult.error });
+      return res.status(400).json({ error: 'Failed to add anonymous comment (proof verification failed or invalid membership)' });
+    }
+
+    const commentId = simResult.result?.retval
+      ? Number(StellarSdk.scValToNative(simResult.result.retval))
+      : null;
+
+    const preparedTx = StellarSdk.rpc.assembleTransaction(tx, simResult).build();
+    preparedTx.sign(relayerKeypair);
+
+    const sendResult = await callWithTimeout(
+      () => server.sendTransaction(preparedTx),
+      'send_add_anonymous_comment'
+    );
+
+    if (sendResult.status === 'ERROR') {
+      return res.status(500).json({ error: 'Transaction submission failed' });
+    }
+
+    const result = await callWithTimeout(
+      () => waitForTransaction(sendResult.hash),
+      'wait_for_anonymous_comment'
+    );
+
+    if (result.status === 'SUCCESS') {
+      log('info', 'comment_anonymous_success', { daoId, proposalId, commentId });
+      res.json({ success: true, commentId, txHash: sendResult.hash });
+    } else {
+      res.status(500).json({ error: 'Transaction failed', txHash: sendResult.hash });
+    }
+  } catch (err) {
+    log('error', 'comment_anonymous_exception', { message: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /comments/:daoId/:proposalId - Fetch comments for a proposal
+app.get('/comments/:daoId/:proposalId', queryLimiter, async (req, res) => {
+  const { daoId, proposalId } = req.params;
+  const { limit = 50, offset = 0 } = req.query;
+
+  try {
+    const contract = new StellarSdk.Contract(VOTING_CONTRACT_ID);
+
+    const args = [
+      StellarSdk.nativeToScVal(parseInt(daoId), { type: 'u64' }),
+      StellarSdk.nativeToScVal(parseInt(proposalId), { type: 'u64' }),
+      StellarSdk.nativeToScVal(parseInt(offset), { type: 'u64' }),
+      StellarSdk.nativeToScVal(Math.min(parseInt(limit), 100), { type: 'u64' }),
+    ];
+
+    const operation = contract.call('get_comments', ...args);
+
+    const account = await server.getAccount(relayerKeypair.publicKey());
+    const tx = new StellarSdk.TransactionBuilder(account, {
+      fee: '100',
+      networkPassphrase: NETWORK_PASSPHRASE
+    })
+      .addOperation(operation)
+      .setTimeout(30)
+      .build();
+
+    const simResult = await callWithTimeout(
+      () => simulateWithBackoff(() => server.simulateTransaction(tx)),
+      'simulate_get_comments'
+    );
+
+    if (StellarSdk.rpc.Api.isSimulationSuccess(simResult)) {
+      const result = simResult.result?.retval;
+      if (result) {
+        const comments = StellarSdk.scValToNative(result);
+        // Transform comments to frontend-friendly format
+        const transformed = comments.map(c => ({
+          id: Number(c.id),
+          daoId: Number(c.dao_id),
+          proposalId: Number(c.proposal_id),
+          author: c.author || null,
+          contentCid: c.content_cid,
+          parentId: c.parent_id !== undefined ? Number(c.parent_id) : null,
+          createdAt: Number(c.created_at),
+          updatedAt: Number(c.updated_at),
+          revisionCids: c.revision_cids || [],
+          deleted: c.deleted,
+          deletedBy: c.deleted_by, // 0=none, 1=user, 2=admin
+          isAnonymous: !c.author,
+        }));
+        res.json({ comments: transformed, total: transformed.length });
+      } else {
+        res.json({ comments: [], total: 0 });
+      }
+    } else {
+      res.status(400).json({ error: 'Failed to get comments' });
+    }
+  } catch (err) {
+    log('error', 'get_comments_failed', { daoId, proposalId, error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /comment/:daoId/:proposalId/:commentId - Fetch single comment
+app.get('/comment/:daoId/:proposalId/:commentId', queryLimiter, async (req, res) => {
+  const { daoId, proposalId, commentId } = req.params;
+
+  try {
+    const contract = new StellarSdk.Contract(VOTING_CONTRACT_ID);
+
+    const args = [
+      StellarSdk.nativeToScVal(parseInt(daoId), { type: 'u64' }),
+      StellarSdk.nativeToScVal(parseInt(proposalId), { type: 'u64' }),
+      StellarSdk.nativeToScVal(parseInt(commentId), { type: 'u64' }),
+    ];
+
+    const operation = contract.call('get_comment', ...args);
+
+    const account = await server.getAccount(relayerKeypair.publicKey());
+    const tx = new StellarSdk.TransactionBuilder(account, {
+      fee: '100',
+      networkPassphrase: NETWORK_PASSPHRASE
+    })
+      .addOperation(operation)
+      .setTimeout(30)
+      .build();
+
+    const simResult = await callWithTimeout(
+      () => simulateWithBackoff(() => server.simulateTransaction(tx)),
+      'simulate_get_comment'
+    );
+
+    if (StellarSdk.rpc.Api.isSimulationSuccess(simResult)) {
+      const result = simResult.result?.retval;
+      if (result) {
+        const c = StellarSdk.scValToNative(result);
+        res.json({
+          id: Number(c.id),
+          daoId: Number(c.dao_id),
+          proposalId: Number(c.proposal_id),
+          author: c.author || null,
+          contentCid: c.content_cid,
+          parentId: c.parent_id !== undefined ? Number(c.parent_id) : null,
+          createdAt: Number(c.created_at),
+          updatedAt: Number(c.updated_at),
+          revisionCids: c.revision_cids || [],
+          deleted: c.deleted,
+          deletedBy: c.deleted_by,
+          isAnonymous: !c.author,
+        });
+      } else {
+        res.status(404).json({ error: 'Comment not found' });
+      }
+    } else {
+      res.status(404).json({ error: 'Comment not found' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /comment/edit - Edit public comment
+app.post('/comment/edit', authGuard, commentLimiter, async (req, res) => {
+  const { daoId, proposalId, commentId, newContentCid, author } = req.body;
+
+  if (daoId === undefined || proposalId === undefined || commentId === undefined ||
+      !newContentCid || !author) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    log('info', 'comment_edit_request', { daoId, proposalId, commentId });
+
+    const contract = new StellarSdk.Contract(VOTING_CONTRACT_ID);
+    const authorAddress = StellarSdk.Address.fromString(author);
+
+    const args = [
+      StellarSdk.nativeToScVal(daoId, { type: 'u64' }),
+      StellarSdk.nativeToScVal(proposalId, { type: 'u64' }),
+      StellarSdk.nativeToScVal(commentId, { type: 'u64' }),
+      StellarSdk.xdr.ScVal.scvAddress(authorAddress.toScAddress()),
+      StellarSdk.nativeToScVal(newContentCid, { type: 'string' }),
+    ];
+
+    const operation = contract.call('edit_comment', ...args);
+
+    const account = await server.getAccount(relayerKeypair.publicKey());
+    const tx = new StellarSdk.TransactionBuilder(account, {
+      fee: '100000',
+      networkPassphrase: NETWORK_PASSPHRASE
+    })
+      .addOperation(operation)
+      .setTimeout(30)
+      .build();
+
+    const simResult = await callWithTimeout(
+      () => simulateWithBackoff(() => server.simulateTransaction(tx)),
+      'simulate_edit_comment'
+    );
+
+    if (!StellarSdk.rpc.Api.isSimulationSuccess(simResult)) {
+      return res.status(400).json({ error: 'Failed to edit comment' });
+    }
+
+    const preparedTx = StellarSdk.rpc.assembleTransaction(tx, simResult).build();
+    preparedTx.sign(relayerKeypair);
+
+    const sendResult = await callWithTimeout(
+      () => server.sendTransaction(preparedTx),
+      'send_edit_comment'
+    );
+
+    if (sendResult.status === 'ERROR') {
+      return res.status(500).json({ error: 'Transaction submission failed' });
+    }
+
+    const result = await callWithTimeout(
+      () => waitForTransaction(sendResult.hash),
+      'wait_for_edit_comment'
+    );
+
+    if (result.status === 'SUCCESS') {
+      log('info', 'comment_edit_success', { daoId, proposalId, commentId });
+      res.json({ success: true, txHash: sendResult.hash });
+    } else {
+      res.status(500).json({ error: 'Transaction failed' });
+    }
+  } catch (err) {
+    log('error', 'comment_edit_exception', { message: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /comment/delete - Delete public comment
+app.post('/comment/delete', authGuard, commentLimiter, async (req, res) => {
+  const { daoId, proposalId, commentId, author } = req.body;
+
+  if (daoId === undefined || proposalId === undefined || commentId === undefined || !author) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    log('info', 'comment_delete_request', { daoId, proposalId, commentId });
+
+    const contract = new StellarSdk.Contract(VOTING_CONTRACT_ID);
+    const authorAddress = StellarSdk.Address.fromString(author);
+
+    const args = [
+      StellarSdk.nativeToScVal(daoId, { type: 'u64' }),
+      StellarSdk.nativeToScVal(proposalId, { type: 'u64' }),
+      StellarSdk.nativeToScVal(commentId, { type: 'u64' }),
+      StellarSdk.xdr.ScVal.scvAddress(authorAddress.toScAddress()),
+    ];
+
+    const operation = contract.call('delete_comment', ...args);
+
+    const account = await server.getAccount(relayerKeypair.publicKey());
+    const tx = new StellarSdk.TransactionBuilder(account, {
+      fee: '100000',
+      networkPassphrase: NETWORK_PASSPHRASE
+    })
+      .addOperation(operation)
+      .setTimeout(30)
+      .build();
+
+    const simResult = await callWithTimeout(
+      () => simulateWithBackoff(() => server.simulateTransaction(tx)),
+      'simulate_delete_comment'
+    );
+
+    if (!StellarSdk.rpc.Api.isSimulationSuccess(simResult)) {
+      return res.status(400).json({ error: 'Failed to delete comment' });
+    }
+
+    const preparedTx = StellarSdk.rpc.assembleTransaction(tx, simResult).build();
+    preparedTx.sign(relayerKeypair);
+
+    const sendResult = await callWithTimeout(
+      () => server.sendTransaction(preparedTx),
+      'send_delete_comment'
+    );
+
+    if (sendResult.status === 'ERROR') {
+      return res.status(500).json({ error: 'Transaction submission failed' });
+    }
+
+    const result = await callWithTimeout(
+      () => waitForTransaction(sendResult.hash),
+      'wait_for_delete_comment'
+    );
+
+    if (result.status === 'SUCCESS') {
+      log('info', 'comment_delete_success', { daoId, proposalId, commentId });
+      res.json({ success: true, txHash: sendResult.hash });
+    } else {
+      res.status(500).json({ error: 'Transaction failed' });
+    }
+  } catch (err) {
+    log('error', 'comment_delete_exception', { message: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Global error handler (last middleware)
 app.use((err, req, res, _next) => {
   log('error', 'unhandled_error', { path: req.path, message: err.message });
@@ -830,7 +1569,8 @@ if (process.env.RELAYER_TEST_MODE !== 'true') {
       port: PORT,
       rpc: RPC_URL,
       votingContract: VOTING_CONTRACT_ID,
-      treeContract: TREE_CONTRACT_ID
+      treeContract: TREE_CONTRACT_ID,
+      ipfsEnabled: IPFS_ENABLED
     });
     console.log('\nEndpoints:');
     console.log('  GET  /health              - Health check');
@@ -839,6 +1579,31 @@ if (process.env.RELAYER_TEST_MODE !== 'true') {
     console.log('  GET  /root/:dao           - Get current Merkle root');
     console.log('  GET  /events/:daoId       - Get events for a DAO');
     console.log('  GET  /indexer/status      - Get indexer status');
+    console.log('\nComment Endpoints:');
+    console.log('  POST /comment/public      - Submit public comment');
+    console.log('  POST /comment/anonymous   - Submit anonymous comment (ZK)');
+    console.log('  GET  /comments/:dao/:prop - Get comments for proposal');
+    console.log('  GET  /comment/:dao/:prop/:id - Get single comment');
+    console.log('  POST /comment/edit        - Edit public comment');
+    console.log('  POST /comment/delete      - Delete public comment');
+    if (IPFS_ENABLED) {
+      console.log('\nIPFS Endpoints:');
+      console.log('  POST /ipfs/image          - Upload image to IPFS');
+      console.log('  POST /ipfs/metadata       - Upload metadata to IPFS');
+      console.log('  GET  /ipfs/:cid           - Fetch content from IPFS (JSON)');
+      console.log('  GET  /ipfs/image/:cid     - Fetch raw image from IPFS');
+      console.log('  GET  /ipfs/health         - IPFS health check');
+    }
+
+    // Initialize Pinata if configured
+    if (IPFS_ENABLED) {
+      try {
+        initPinata(PINATA_JWT, PINATA_GATEWAY);
+        log('info', 'pinata_initialized');
+      } catch (err) {
+        log('error', 'pinata_init_failed', { error: err.message });
+      }
+    }
 
     // Start event indexer if enabled
     if (INDEXER_ENABLED) {
