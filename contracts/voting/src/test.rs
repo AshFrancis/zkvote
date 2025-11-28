@@ -301,6 +301,7 @@ fn test_create_proposal() {
     let proposal_id = voting_client.create_proposal(
         &1u64,
         &String::from_str(&env, "Test Proposal"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -332,10 +333,7 @@ fn test_create_proposal_without_sbt_fails() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    voting_client.create_proposal(
-        &1u64,
-        &String::from_str(&env, "Test"),
-        &(now + 3600),
+    voting_client.create_proposal(&1u64, &String::from_str(&env, "Test"), &String::from_str(&env, ""), &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
@@ -360,17 +358,11 @@ fn test_multiple_proposals() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    let p1 = voting_client.create_proposal(
-        &1u64,
-        &String::from_str(&env, "Proposal 1"),
-        &(now + 3600),
+    let p1 = voting_client.create_proposal(&1u64, &String::from_str(&env, "Proposal 1"), &String::from_str(&env, ""), &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
-    let p2 = voting_client.create_proposal(
-        &1u64,
-        &String::from_str(&env, "Proposal 2"),
-        &(now + 7200),
+    let p2 = voting_client.create_proposal(&1u64, &String::from_str(&env, "Proposal 2"), &String::from_str(&env, ""), &(now + 7200),
         &member,
         &VoteMode::Fixed,
     );
@@ -399,10 +391,7 @@ fn test_vote_success() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    let proposal_id = voting_client.create_proposal(
-        &1u64,
-        &String::from_str(&env, "Test"),
-        &(now + 3600),
+    let proposal_id = voting_client.create_proposal(&1u64, &String::from_str(&env, "Test"), &String::from_str(&env, ""), &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
@@ -447,10 +436,7 @@ fn test_double_vote_fails() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    let proposal_id = voting_client.create_proposal(
-        &1u64,
-        &String::from_str(&env, "Test"),
-        &(now + 3600),
+    let proposal_id = voting_client.create_proposal(&1u64, &String::from_str(&env, "Test"), &String::from_str(&env, ""), &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
@@ -513,10 +499,7 @@ fn test_nullifier_zero_rejected() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    let proposal_id = voting_client.create_proposal(
-        &1u64,
-        &String::from_str(&env, "Nullifier zero"),
-        &(now + 3600),
+    let proposal_id = voting_client.create_proposal(&1u64, &String::from_str(&env, "Nullifier zero"), &String::from_str(&env, ""), &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
@@ -554,10 +537,7 @@ fn test_vote_after_close_fails() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    let proposal_id = voting_client.create_proposal(
-        &1u64,
-        &String::from_str(&env, "Close me"),
-        &(now + 3600),
+    let proposal_id = voting_client.create_proposal(&1u64, &String::from_str(&env, "Close me"), &String::from_str(&env, ""), &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
@@ -596,10 +576,7 @@ fn test_close_proposal_emits_event_once() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    let proposal_id = voting_client.create_proposal(
-        &1u64,
-        &String::from_str(&env, "Close event"),
-        &(now + 3600),
+    let proposal_id = voting_client.create_proposal(&1u64, &String::from_str(&env, "Close event"), &String::from_str(&env, ""), &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
@@ -632,10 +609,7 @@ fn test_vote_after_archive_fails() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    let proposal_id = voting_client.create_proposal(
-        &1u64,
-        &String::from_str(&env, "Archive me"),
-        &(now + 3600),
+    let proposal_id = voting_client.create_proposal(&1u64, &String::from_str(&env, "Archive me"), &String::from_str(&env, ""), &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
@@ -679,7 +653,7 @@ fn test_archive_without_close_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Archive without close"),
+        &String::from_str(&env, "Archive without close"), &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -709,7 +683,7 @@ fn test_close_after_archive_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Archive then close"),
+        &String::from_str(&env, "Archive then close"), &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -741,7 +715,7 @@ fn test_nullifier_duplicate_panics_in_stream() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Duplicate nullifier stream"),
+        &String::from_str(&env, "Duplicate nullifier stream"), &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -788,7 +762,7 @@ fn test_reopen_not_allowed() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "No reopen"),
+        &String::from_str(&env, "No reopen"), &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -831,7 +805,7 @@ fn test_randomized_nullifier_sequence_no_duplicates() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Randomized nullifiers"),
+        &String::from_str(&env, "Randomized nullifiers"), &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -879,7 +853,7 @@ fn test_tampered_vk_hash_rejected() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "VK hash tamper"),
+        &String::from_str(&env, "VK hash tamper"), &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -933,7 +907,7 @@ fn test_close_proposal_non_admin_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Non-admin close"),
+        &String::from_str(&env, "Non-admin close"), &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -961,10 +935,7 @@ fn test_vote_with_invalid_root_fails() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    let proposal_id = voting_client.create_proposal(
-        &1u64,
-        &String::from_str(&env, "Test"),
-        &(now + 3600),
+    let proposal_id = voting_client.create_proposal(&1u64, &String::from_str(&env, "Test"), &String::from_str(&env, ""), &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
@@ -1010,14 +981,14 @@ fn test_different_daos_isolated() {
     let now = env.ledger().timestamp();
     let p1 = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "DAO 1 Proposal"),
+        &String::from_str(&env, "DAO 1 Proposal"), &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
     let p2 = voting_client.create_proposal(
         &2u64,
-        &String::from_str(&env, "DAO 2 Proposal"),
+        &String::from_str(&env, "DAO 2 Proposal"), &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1065,10 +1036,7 @@ fn test_get_results() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    let proposal_id = voting_client.create_proposal(
-        &1u64,
-        &String::from_str(&env, "Test"),
-        &(now + 3600),
+    let proposal_id = voting_client.create_proposal(&1u64, &String::from_str(&env, "Test"), &String::from_str(&env, ""), &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
@@ -1121,10 +1089,7 @@ fn test_create_proposal_with_past_end_time_fails() {
 
     let now = env.ledger().timestamp();
     // Create proposal with end time in the past
-    voting_client.create_proposal(
-        &1u64,
-        &String::from_str(&env, "Test"),
-        &(now - 1), // end time in the past
+    voting_client.create_proposal(&1u64, &String::from_str(&env, "Test"), &String::from_str(&env, ""), &(now - 1), // end time in the past
         &member,
         &VoteMode::Fixed,
     );
@@ -1149,7 +1114,7 @@ fn test_vote_with_malformed_proof_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Malformed proof"),
+        &String::from_str(&env, "Malformed proof"), &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1196,7 +1161,7 @@ fn test_vote_with_swapped_pub_signals_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Swap pub signals"),
+        &String::from_str(&env, "Swap pub signals"), &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1244,7 +1209,7 @@ fn test_vote_with_swapped_dao_proposal_ids_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Swap dao/proposal"),
+        &String::from_str(&env, "Swap dao/proposal"), &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1290,7 +1255,7 @@ fn test_vote_with_all_zero_proof_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Zero proof"),
+        &String::from_str(&env, "Zero proof"), &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1336,7 +1301,7 @@ fn test_vote_with_off_curve_proof_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Off-curve proof"),
+        &String::from_str(&env, "Off-curve proof"), &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1380,10 +1345,7 @@ fn test_vote_after_expiry_fails() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    let proposal_id = voting_client.create_proposal(
-        &1u64,
-        &String::from_str(&env, "Test"),
-        &(now + 3600), // 1 hour
+    let proposal_id = voting_client.create_proposal(&1u64, &String::from_str(&env, "Test"), &String::from_str(&env, ""), &(now + 3600), // 1 hour
         &member,
         &VoteMode::Fixed,
     );
@@ -1433,7 +1395,7 @@ fn test_vote_with_commitment_from_other_dao_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &2u64,
-        &String::from_str(&env, "Cross-DAO vote"),
+        &String::from_str(&env, "Cross-DAO vote"), &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1475,7 +1437,7 @@ fn test_vote_with_mismatched_vk_hash_in_proposal_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "VK hash mismatch"),
+        &String::from_str(&env, "VK hash mismatch"), &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1541,7 +1503,7 @@ fn test_vote_with_vk_ic_length_mismatch_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Bad VK"),
+        &String::from_str(&env, "Bad VK"), &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1587,6 +1549,7 @@ fn test_randomized_mixed_actions_preserve_invariants() {
         let pid = voting_client.create_proposal(
             &1u64,
             &String::from_str(&env, "P"),
+            &String::from_str(&env, ""),
             &(env.ledger().timestamp() + 10_000),
             &member,
             &VoteMode::Fixed,
@@ -1655,17 +1618,11 @@ fn test_nullifier_reusable_across_proposals() {
 
     // Create two proposals
     let now = env.ledger().timestamp();
-    let proposal1 = voting_client.create_proposal(
-        &1u64,
-        &String::from_str(&env, "Proposal 1"),
-        &(now + 3600),
+    let proposal1 = voting_client.create_proposal(&1u64, &String::from_str(&env, "Proposal 1"), &String::from_str(&env, ""), &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
-    let proposal2 = voting_client.create_proposal(
-        &1u64,
-        &String::from_str(&env, "Proposal 2"),
-        &(now + 7200),
+    let proposal2 = voting_client.create_proposal(&1u64, &String::from_str(&env, "Proposal 2"), &String::from_str(&env, ""), &(now + 7200),
         &member,
         &VoteMode::Fixed,
     );
@@ -1724,7 +1681,7 @@ fn test_multiple_unique_nullifiers_succeed() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Batch votes"),
+        &String::from_str(&env, "Batch votes"), &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1806,10 +1763,7 @@ fn test_vk_change_after_proposal_creation_resists_vk_change() {
 
     // Create proposal (snapshots VK hash)
     let now = env.ledger().timestamp();
-    let proposal_id = voting_client.create_proposal(
-        &1u64,
-        &String::from_str(&env, "Test"),
-        &(now + 3600),
+    let proposal_id = voting_client.create_proposal(&1u64, &String::from_str(&env, "Test"), &String::from_str(&env, ""), &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
@@ -1873,7 +1827,7 @@ fn test_vk_version_mismatch_rejected() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "VK version snapshot"),
+        &String::from_str(&env, "VK version snapshot"), &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1959,6 +1913,7 @@ fn test_create_proposal_with_specific_vk_version() {
     let proposal_id = voting_client.create_proposal_with_vk_version(
         &1u64,
         &String::from_str(&env, "Old VK proposal"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -2005,6 +1960,7 @@ fn test_create_proposal_with_future_vk_version_rejected() {
     voting_client.create_proposal_with_vk_version(
         &1u64,
         &String::from_str(&env, "Future version"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -2229,7 +2185,7 @@ fn test_set_vk_ic_length_7_fails() {
 
 #[test]
 #[should_panic(expected = "HostError")]
-fn test_create_proposal_description_too_long_fails() {
+fn test_create_proposal_title_too_long_fails() {
     let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
     let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
@@ -2242,13 +2198,14 @@ fn test_create_proposal_description_too_long_fails() {
     registry_client.set_admin(&1u64, &admin);
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
-    // Create description > 1024 chars (MAX_DESCRIPTION_LEN)
-    let long_description = "a".repeat(1025);
+    // Create title > 100 bytes (MAX_TITLE_LEN)
+    let long_title = "a".repeat(101);
 
     let now = env.ledger().timestamp();
     voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, &long_description),
+        &String::from_str(&env, &long_title),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -2256,7 +2213,7 @@ fn test_create_proposal_description_too_long_fails() {
 }
 
 #[test]
-fn test_create_proposal_max_description_length_succeeds() {
+fn test_create_proposal_max_title_length_succeeds() {
     let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
     let voting_client = VotingClient::new(&env, &voting_id);
     let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
@@ -2269,19 +2226,49 @@ fn test_create_proposal_max_description_length_succeeds() {
     registry_client.set_admin(&1u64, &admin);
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
-    // Create description exactly 1024 chars (MAX_DESCRIPTION_LEN)
-    let max_description = "a".repeat(1024);
+    // Create title exactly 100 bytes (MAX_TITLE_LEN)
+    let max_title = "a".repeat(100);
 
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, &max_description),
+        &String::from_str(&env, &max_title),
+        &String::from_str(&env, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi"),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
 
     assert_eq!(proposal_id, 1);
+}
+
+#[test]
+#[should_panic(expected = "HostError")]
+fn test_create_proposal_content_cid_too_long_fails() {
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+    let admin = Address::generate(&env);
+
+    sbt_client.set_member(&1u64, &member, &true);
+    tree_client.set_root(&1u64, &U256::from_u32(&env, 12345));
+    registry_client.set_admin(&1u64, &admin);
+    voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
+
+    // Create content_cid > 64 bytes (MAX_CID_LEN)
+    let long_cid = "a".repeat(65);
+
+    let now = env.ledger().timestamp();
+    voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Test"),
+        &String::from_str(&env, &long_cid),
+        &(now + 3600),
+        &member,
+        &VoteMode::Fixed,
+    );
 }
 
 // Test helper: manual G1 negation (same logic as production code)
@@ -2500,4 +2487,355 @@ fn add_big_endian_256(a: &[u8], b: &[u8]) -> [u8; 32] {
         carry = sum >> 8;
     }
     result
+}
+
+// ============================================
+// COMMENT TESTS
+// ============================================
+
+/// Helper to set up a DAO with proposal for comment tests
+fn setup_comment_test_env() -> (Env, Address, Address, Address, u64, u64) {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    // Set ledger timestamp
+    env.ledger().with_mut(|l| {
+        l.timestamp = 1_000_000;
+    });
+
+    let admin = Address::generate(&env);
+    let member = Address::generate(&env);
+
+    // Deploy mocks
+    let registry = env.register(mock_registry::MockRegistry, ());
+    let sbt = env.register(mock_sbt::MockSbt, ());
+    let tree = env.register(mock_tree::MockTree, ());
+
+    // Setup DAO
+    let dao_id: u64 = 1;
+    mock_registry::MockRegistryClient::new(&env, &registry).set_admin(&dao_id, &admin);
+    mock_sbt::MockSbtClient::new(&env, &sbt).set_registry(&registry);
+    mock_sbt::MockSbtClient::new(&env, &sbt).set_member(&dao_id, &member, &true);
+    mock_tree::MockTreeClient::new(&env, &tree).set_sbt_contract(&sbt);
+
+    // Deploy voting contract
+    let voting = env.register(Voting, (tree.clone(),));
+
+    // Set VK and create proposal
+    let vk = create_dummy_vk(&env);
+    let voting_client = VotingClient::new(&env, &voting);
+    voting_client.set_vk(&dao_id, &vk, &admin);
+
+    let end_time = 2_000_000u64;
+    let root = U256::from_u32(&env, 12345);
+    mock_tree::MockTreeClient::new(&env, &tree).set_root(&dao_id, &root);
+
+    let proposal_id = voting_client.create_proposal(
+        &dao_id,
+        &String::from_str(&env, "Test Proposal"),
+        &String::from_str(&env, "ipfs://test"),
+        &end_time,
+        &member,
+        &VoteMode::Fixed,
+    );
+
+    (env, voting, admin, member, dao_id, proposal_id)
+}
+
+#[test]
+fn test_add_comment() {
+    let (env, voting, _admin, member, dao_id, proposal_id) = setup_comment_test_env();
+    let client = VotingClient::new(&env, &voting);
+
+    let content_cid = String::from_str(&env, "ipfs://comment1");
+
+    let comment_id = client.add_comment(
+        &dao_id,
+        &proposal_id,
+        &content_cid,
+        &None::<u64>,
+        &member,
+    );
+
+    assert_eq!(comment_id, 1);
+
+    // Verify comment was stored
+    let comment = client.get_comment(&dao_id, &proposal_id, &comment_id);
+    assert_eq!(comment.id, 1);
+    assert_eq!(comment.author, Some(member.clone()));
+    assert_eq!(comment.content_cid, content_cid);
+    assert_eq!(comment.parent_id, None);
+    assert!(!comment.deleted);
+    assert_eq!(comment.deleted_by, DELETED_BY_NONE);
+}
+
+#[test]
+fn test_add_comment_with_reply() {
+    let (env, voting, _admin, member, dao_id, proposal_id) = setup_comment_test_env();
+    let client = VotingClient::new(&env, &voting);
+
+    // Add parent comment
+    let parent_id = client.add_comment(
+        &dao_id,
+        &proposal_id,
+        &String::from_str(&env, "parent comment"),
+        &None::<u64>,
+        &member,
+    );
+
+    // Add reply
+    let reply_id = client.add_comment(
+        &dao_id,
+        &proposal_id,
+        &String::from_str(&env, "reply comment"),
+        &Some(parent_id),
+        &member,
+    );
+
+    let reply = client.get_comment(&dao_id, &proposal_id, &reply_id);
+    assert_eq!(reply.parent_id, Some(parent_id));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #25)")]
+fn test_add_comment_invalid_parent_fails() {
+    let (env, voting, _admin, member, dao_id, proposal_id) = setup_comment_test_env();
+    let client = VotingClient::new(&env, &voting);
+
+    // Try to reply to non-existent comment
+    client.add_comment(
+        &dao_id,
+        &proposal_id,
+        &String::from_str(&env, "reply"),
+        &Some(999u64), // Non-existent parent
+        &member,
+    );
+}
+
+#[test]
+fn test_edit_comment() {
+    let (env, voting, _admin, member, dao_id, proposal_id) = setup_comment_test_env();
+    let client = VotingClient::new(&env, &voting);
+
+    let original_cid = String::from_str(&env, "ipfs://original");
+    let comment_id = client.add_comment(
+        &dao_id,
+        &proposal_id,
+        &original_cid,
+        &None::<u64>,
+        &member,
+    );
+
+    // Edit comment
+    let new_cid = String::from_str(&env, "ipfs://edited");
+    client.edit_comment(&dao_id, &proposal_id, &comment_id, &new_cid, &member);
+
+    let comment = client.get_comment(&dao_id, &proposal_id, &comment_id);
+    assert_eq!(comment.content_cid, new_cid);
+    assert_eq!(comment.revision_cids.len(), 1);
+    assert_eq!(comment.revision_cids.get(0).unwrap(), original_cid);
+}
+
+#[test]
+fn test_edit_comment_preserves_revision_history() {
+    let (env, voting, _admin, member, dao_id, proposal_id) = setup_comment_test_env();
+    let client = VotingClient::new(&env, &voting);
+
+    let cid1 = String::from_str(&env, "ipfs://v1");
+    let comment_id = client.add_comment(&dao_id, &proposal_id, &cid1, &None::<u64>, &member);
+
+    // Make multiple edits
+    let cid2 = String::from_str(&env, "ipfs://v2");
+    client.edit_comment(&dao_id, &proposal_id, &comment_id, &cid2, &member);
+
+    let cid3 = String::from_str(&env, "ipfs://v3");
+    client.edit_comment(&dao_id, &proposal_id, &comment_id, &cid3, &member);
+
+    let comment = client.get_comment(&dao_id, &proposal_id, &comment_id);
+    assert_eq!(comment.content_cid, cid3);
+    assert_eq!(comment.revision_cids.len(), 2);
+    assert_eq!(comment.revision_cids.get(0).unwrap(), cid1);
+    assert_eq!(comment.revision_cids.get(1).unwrap(), cid2);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #24)")]
+fn test_edit_comment_wrong_author_fails() {
+    let (env, voting, admin, member, dao_id, proposal_id) = setup_comment_test_env();
+    let client = VotingClient::new(&env, &voting);
+
+    let comment_id = client.add_comment(
+        &dao_id,
+        &proposal_id,
+        &String::from_str(&env, "original"),
+        &None::<u64>,
+        &member,
+    );
+
+    // Try to edit as different user (admin, not the author)
+    client.edit_comment(
+        &dao_id,
+        &proposal_id,
+        &comment_id,
+        &String::from_str(&env, "hacked"),
+        &admin, // Wrong author
+    );
+}
+
+#[test]
+fn test_delete_comment() {
+    let (env, voting, _admin, member, dao_id, proposal_id) = setup_comment_test_env();
+    let client = VotingClient::new(&env, &voting);
+
+    let comment_id = client.add_comment(
+        &dao_id,
+        &proposal_id,
+        &String::from_str(&env, "to delete"),
+        &None::<u64>,
+        &member,
+    );
+
+    // Delete comment
+    client.delete_comment(&dao_id, &proposal_id, &comment_id, &member);
+
+    let comment = client.get_comment(&dao_id, &proposal_id, &comment_id);
+    assert!(comment.deleted);
+    assert_eq!(comment.deleted_by, DELETED_BY_USER);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #24)")]
+fn test_delete_comment_wrong_author_fails() {
+    let (env, voting, admin, member, dao_id, proposal_id) = setup_comment_test_env();
+    let client = VotingClient::new(&env, &voting);
+
+    let comment_id = client.add_comment(
+        &dao_id,
+        &proposal_id,
+        &String::from_str(&env, "protected"),
+        &None::<u64>,
+        &member,
+    );
+
+    // Try to delete as different user
+    client.delete_comment(&dao_id, &proposal_id, &comment_id, &admin);
+}
+
+#[test]
+fn test_admin_delete_comment() {
+    let (env, voting, admin, member, dao_id, proposal_id) = setup_comment_test_env();
+    let client = VotingClient::new(&env, &voting);
+
+    let comment_id = client.add_comment(
+        &dao_id,
+        &proposal_id,
+        &String::from_str(&env, "admin can delete this"),
+        &None::<u64>,
+        &member,
+    );
+
+    // Admin deletes comment
+    client.admin_delete_comment(&dao_id, &proposal_id, &comment_id, &admin);
+
+    let comment = client.get_comment(&dao_id, &proposal_id, &comment_id);
+    assert!(comment.deleted);
+    assert_eq!(comment.deleted_by, DELETED_BY_ADMIN);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #23)")]
+fn test_edit_deleted_comment_fails() {
+    let (env, voting, _admin, member, dao_id, proposal_id) = setup_comment_test_env();
+    let client = VotingClient::new(&env, &voting);
+
+    let comment_id = client.add_comment(
+        &dao_id,
+        &proposal_id,
+        &String::from_str(&env, "will be deleted"),
+        &None::<u64>,
+        &member,
+    );
+
+    client.delete_comment(&dao_id, &proposal_id, &comment_id, &member);
+
+    // Try to edit deleted comment
+    client.edit_comment(
+        &dao_id,
+        &proposal_id,
+        &comment_id,
+        &String::from_str(&env, "cant edit"),
+        &member,
+    );
+}
+
+#[test]
+fn test_comment_count() {
+    let (env, voting, _admin, member, dao_id, proposal_id) = setup_comment_test_env();
+    let client = VotingClient::new(&env, &voting);
+
+    assert_eq!(client.comment_count(&dao_id, &proposal_id), 0);
+
+    client.add_comment(&dao_id, &proposal_id, &String::from_str(&env, "c1"), &None::<u64>, &member);
+    assert_eq!(client.comment_count(&dao_id, &proposal_id), 1);
+
+    client.add_comment(&dao_id, &proposal_id, &String::from_str(&env, "c2"), &None::<u64>, &member);
+    assert_eq!(client.comment_count(&dao_id, &proposal_id), 2);
+
+    client.add_comment(&dao_id, &proposal_id, &String::from_str(&env, "c3"), &None::<u64>, &member);
+    assert_eq!(client.comment_count(&dao_id, &proposal_id), 3);
+}
+
+#[test]
+fn test_get_comments_pagination() {
+    let (env, voting, _admin, member, dao_id, proposal_id) = setup_comment_test_env();
+    let client = VotingClient::new(&env, &voting);
+
+    // Add 5 comments
+    client.add_comment(&dao_id, &proposal_id, &String::from_str(&env, "comment 0"), &None::<u64>, &member);
+    client.add_comment(&dao_id, &proposal_id, &String::from_str(&env, "comment 1"), &None::<u64>, &member);
+    client.add_comment(&dao_id, &proposal_id, &String::from_str(&env, "comment 2"), &None::<u64>, &member);
+    client.add_comment(&dao_id, &proposal_id, &String::from_str(&env, "comment 3"), &None::<u64>, &member);
+    client.add_comment(&dao_id, &proposal_id, &String::from_str(&env, "comment 4"), &None::<u64>, &member);
+
+    // Get first 3 (IDs are 1-indexed)
+    let page1 = client.get_comments(&dao_id, &proposal_id, &0, &3);
+    assert_eq!(page1.len(), 3);
+    assert_eq!(page1.get(0).unwrap().id, 1);
+    assert_eq!(page1.get(2).unwrap().id, 3);
+
+    // Get next 3 (only 2 remaining)
+    let page2 = client.get_comments(&dao_id, &proposal_id, &3, &3);
+    assert_eq!(page2.len(), 2);
+    assert_eq!(page2.get(0).unwrap().id, 4);
+    assert_eq!(page2.get(1).unwrap().id, 5);
+}
+
+#[test]
+fn test_delete_idempotent() {
+    let (env, voting, _admin, member, dao_id, proposal_id) = setup_comment_test_env();
+    let client = VotingClient::new(&env, &voting);
+
+    let comment_id = client.add_comment(
+        &dao_id,
+        &proposal_id,
+        &String::from_str(&env, "delete me"),
+        &None::<u64>,
+        &member,
+    );
+
+    // Delete twice - should not panic
+    client.delete_comment(&dao_id, &proposal_id, &comment_id, &member);
+    client.delete_comment(&dao_id, &proposal_id, &comment_id, &member);
+
+    let comment = client.get_comment(&dao_id, &proposal_id, &comment_id);
+    assert!(comment.deleted);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #22)")]
+fn test_get_nonexistent_comment_fails() {
+    let (env, voting, _admin, _member, dao_id, proposal_id) = setup_comment_test_env();
+    let client = VotingClient::new(&env, &voting);
+
+    client.get_comment(&dao_id, &proposal_id, &999);
 }
