@@ -118,6 +118,9 @@
                   "string": "Archive then close"
                 },
                 {
+                  "string": ""
+                },
+                {
                   "u64": "3600"
                 },
                 {
@@ -529,6 +532,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "content_cid"
+                      },
+                      "val": {
+                        "string": ""
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "created_at"
                       },
                       "val": {
@@ -549,14 +560,6 @@
                       },
                       "val": {
                         "u64": "1"
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "description"
-                      },
-                      "val": {
-                        "string": "Archive then close"
                       }
                     },
                     {
@@ -609,6 +612,14 @@
                             "symbol": "Archived"
                           }
                         ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "title"
+                      },
+                      "val": {
+                        "string": "Archive then close"
                       }
                     },
                     {

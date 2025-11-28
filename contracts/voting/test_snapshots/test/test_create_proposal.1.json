@@ -118,6 +118,9 @@
                   "string": "Test Proposal"
                 },
                 {
+                  "string": ""
+                },
+                {
                   "u64": "3600"
                 },
                 {
@@ -480,6 +483,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "content_cid"
+                      },
+                      "val": {
+                        "string": ""
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "created_at"
                       },
                       "val": {
@@ -500,14 +511,6 @@
                       },
                       "val": {
                         "u64": "1"
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "description"
-                      },
-                      "val": {
-                        "string": "Test Proposal"
                       }
                     },
                     {
@@ -560,6 +563,14 @@
                             "symbol": "Active"
                           }
                         ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "title"
+                      },
+                      "val": {
+                        "string": "Test Proposal"
                       }
                     },
                     {

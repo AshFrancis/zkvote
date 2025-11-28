@@ -118,6 +118,9 @@
                   "string": "Non-admin close"
                 },
                 {
+                  "string": ""
+                },
+                {
                   "u64": "3600"
                 },
                 {
@@ -479,6 +482,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "content_cid"
+                      },
+                      "val": {
+                        "string": ""
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "created_at"
                       },
                       "val": {
@@ -499,14 +510,6 @@
                       },
                       "val": {
                         "u64": "1"
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "description"
-                      },
-                      "val": {
-                        "string": "Non-admin close"
                       }
                     },
                     {
@@ -559,6 +562,14 @@
                             "symbol": "Active"
                           }
                         ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "title"
+                      },
+                      "val": {
+                        "string": "Non-admin close"
                       }
                     },
                     {

@@ -118,39 +118,7 @@
                   "string": "P"
                 },
                 {
-                  "u64": "10000"
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-                },
-                {
-                  "vec": [
-                    {
-                      "symbol": "Fixed"
-                    }
-                  ]
-                }
-              ]
-            }
-          },
-          "sub_invocations": []
-        }
-      ]
-    ],
-    [
-      [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-        {
-          "function": {
-            "contract_fn": {
-              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
-              "function_name": "create_proposal",
-              "args": [
-                {
-                  "u64": "1"
-                },
-                {
-                  "string": "P"
+                  "string": ""
                 },
                 {
                   "u64": "10000"
@@ -186,6 +154,47 @@
                 },
                 {
                   "string": "P"
+                },
+                {
+                  "string": ""
+                },
+                {
+                  "u64": "10000"
+                },
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                },
+                {
+                  "vec": [
+                    {
+                      "symbol": "Fixed"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "function_name": "create_proposal",
+              "args": [
+                {
+                  "u64": "1"
+                },
+                {
+                  "string": "P"
+                },
+                {
+                  "string": ""
                 },
                 {
                   "u64": "10000"
@@ -1189,6 +1198,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "content_cid"
+                      },
+                      "val": {
+                        "string": ""
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "created_at"
                       },
                       "val": {
@@ -1209,14 +1226,6 @@
                       },
                       "val": {
                         "u64": "1"
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "description"
-                      },
-                      "val": {
-                        "string": "P"
                       }
                     },
                     {
@@ -1269,6 +1278,14 @@
                             "symbol": "Archived"
                           }
                         ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "title"
+                      },
+                      "val": {
+                        "string": "P"
                       }
                     },
                     {
@@ -1361,6 +1378,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "content_cid"
+                      },
+                      "val": {
+                        "string": ""
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "created_at"
                       },
                       "val": {
@@ -1381,14 +1406,6 @@
                       },
                       "val": {
                         "u64": "1"
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "description"
-                      },
-                      "val": {
-                        "string": "P"
                       }
                     },
                     {
@@ -1441,6 +1458,14 @@
                             "symbol": "Active"
                           }
                         ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "title"
+                      },
+                      "val": {
+                        "string": "P"
                       }
                     },
                     {
@@ -1533,6 +1558,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "content_cid"
+                      },
+                      "val": {
+                        "string": ""
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "created_at"
                       },
                       "val": {
@@ -1553,14 +1586,6 @@
                       },
                       "val": {
                         "u64": "1"
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "description"
-                      },
-                      "val": {
-                        "string": "P"
                       }
                     },
                     {
@@ -1613,6 +1638,14 @@
                             "symbol": "Active"
                           }
                         ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "title"
+                      },
+                      "val": {
+                        "string": "P"
                       }
                     },
                     {

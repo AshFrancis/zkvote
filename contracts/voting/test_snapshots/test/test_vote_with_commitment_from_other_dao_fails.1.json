@@ -120,6 +120,9 @@
                   "string": "Cross-DAO vote"
                 },
                 {
+                  "string": ""
+                },
+                {
                   "u64": "3600"
                 },
                 {
@@ -577,6 +580,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "content_cid"
+                      },
+                      "val": {
+                        "string": ""
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "created_at"
                       },
                       "val": {
@@ -597,14 +608,6 @@
                       },
                       "val": {
                         "u64": "2"
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "description"
-                      },
-                      "val": {
-                        "string": "Cross-DAO vote"
                       }
                     },
                     {
@@ -657,6 +660,14 @@
                             "symbol": "Active"
                           }
                         ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "title"
+                      },
+                      "val": {
+                        "string": "Cross-DAO vote"
                       }
                     },
                     {

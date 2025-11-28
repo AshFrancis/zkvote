@@ -118,6 +118,9 @@
                   "string": "Proposal 1"
                 },
                 {
+                  "string": ""
+                },
+                {
                   "u64": "3600"
                 },
                 {
@@ -151,6 +154,9 @@
                 },
                 {
                   "string": "Proposal 2"
+                },
+                {
+                  "string": ""
                 },
                 {
                   "u64": "7200"
@@ -514,6 +520,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "content_cid"
+                      },
+                      "val": {
+                        "string": ""
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "created_at"
                       },
                       "val": {
@@ -534,14 +548,6 @@
                       },
                       "val": {
                         "u64": "1"
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "description"
-                      },
-                      "val": {
-                        "string": "Proposal 1"
                       }
                     },
                     {
@@ -594,6 +600,14 @@
                             "symbol": "Active"
                           }
                         ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "title"
+                      },
+                      "val": {
+                        "string": "Proposal 1"
                       }
                     },
                     {
@@ -686,6 +700,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "content_cid"
+                      },
+                      "val": {
+                        "string": ""
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "created_at"
                       },
                       "val": {
@@ -706,14 +728,6 @@
                       },
                       "val": {
                         "u64": "1"
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "description"
-                      },
-                      "val": {
-                        "string": "Proposal 2"
                       }
                     },
                     {
@@ -766,6 +780,14 @@
                             "symbol": "Active"
                           }
                         ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "title"
+                      },
+                      "val": {
+                        "string": "Proposal 2"
                       }
                     },
                     {
