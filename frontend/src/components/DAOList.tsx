@@ -13,7 +13,7 @@ interface DAO {
 }
 
 interface DAOListProps {
-  onSelectDao: (daoId: number) => void;
+  onSelectDao: (daoId: number, daoName?: string) => void;
   selectedDaoId?: number | null;
   isConnected?: boolean;
   userDaoIds?: number[];
@@ -143,7 +143,7 @@ export default function DAOList({ onSelectDao, selectedDaoId, isConnected, userD
           {filteredDaos.map((dao) => (
             <button
               key={dao.id}
-              onClick={() => onSelectDao(dao.id)}
+              onClick={() => onSelectDao(dao.id, dao.name)}
               className={`text-left p-4 rounded-lg border transition-all hover:shadow-sm ${selectedDaoId === dao.id
                   ? 'bg-primary/5 border-primary ring-1 ring-primary'
                   : 'bg-card border-border hover:bg-accent hover:text-accent-foreground'

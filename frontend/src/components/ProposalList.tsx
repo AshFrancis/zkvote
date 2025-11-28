@@ -10,6 +10,7 @@ import { LoadingSpinner } from "./ui";
 interface ProposalListProps {
   publicKey: string | null;
   daoId: number;
+  daoName?: string;
   kit: StellarWalletsKit | null;
   hasMembership: boolean;
   vkSet: boolean;
@@ -18,7 +19,8 @@ interface ProposalListProps {
 
 interface Proposal {
   id: number;
-  description: string;
+  title: string;
+  contentCid: string;
   yesVotes: number;
   noVotes: number;
   hasVoted: boolean;
@@ -28,7 +30,7 @@ interface Proposal {
   vkVersion?: number | null;
 }
 
-export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkSet, isInitializing = false }: ProposalListProps) {
+export default function ProposalList({ publicKey, daoId, daoName, kit, hasMembership, vkSet, isInitializing = false }: ProposalListProps) {
   const [proposals, setProposals] = useState<Proposal[]>(() => {
     // Initialize with cached data if available
     const cacheKey = `proposals_${daoId}`;
@@ -159,7 +161,8 @@ export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkS
 
       return {
         id: proposalId,
-        description: proposal.description,
+        title: proposal.title,
+        contentCid: proposal.content_cid,
         yesVotes: Number(proposal.yes_votes),
         noVotes: Number(proposal.no_votes),
         hasVoted,
@@ -195,6 +198,7 @@ export default function ProposalList({ publicKey, daoId, kit, hasMembership, vkS
               key={proposal.id}
               proposal={proposal}
               daoId={daoId}
+              daoName={daoName}
               publicKey={publicKey}
               kit={kit}
               hasMembership={hasMembership}

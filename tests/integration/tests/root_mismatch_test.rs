@@ -132,6 +132,7 @@ fn test_vote_with_wrong_root_fails() {
     let proposal_1_id = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "Proposal 1"),
+        &String::from_str(&env, ""),
         &1000u64,
         &admin,
         &voting::VoteMode::Fixed,
@@ -188,6 +189,7 @@ fn test_vote_with_wrong_root_fails() {
     let proposal_2_id = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "Proposal 2"),
+        &String::from_str(&env, ""),
         &2000u64,
         &admin,
         &voting::VoteMode::Fixed,
@@ -271,6 +273,7 @@ fn test_vote_with_correct_root_succeeds() {
     let proposal_id = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "Test Proposal"),
+        &String::from_str(&env, ""),
         &1000u64,
         &admin,
         &voting::VoteMode::Fixed,

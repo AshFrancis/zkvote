@@ -10,13 +10,14 @@ import { getZKCredentials, storeZKCredentials, generateDeterministicZKCredential
 import { isUserRejection } from "../lib/utils";
 import { Alert, LoadingSpinner, CreateProposalForm } from "./ui";
 import { Button } from "./ui/Button";
-import { FileText, Users, PlusCircle, X, Home } from "lucide-react";
+import { FileText, Users, PlusCircle, Home } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/Card";
 
 interface PublicVotesProps {
   publicKey: string | null;
   isConnected: boolean;
   isInitializing?: boolean;
+  tab?: 'info' | 'proposals' | 'members' | 'create-proposal';
 }
 
 interface DAOInfo {
@@ -32,7 +33,7 @@ interface DAOInfo {
 const PUBLIC_DAO_ID = 1;
 const PUBLIC_DAO_CACHE_KEY = `public_dao_info_${PUBLIC_DAO_ID}`;
 
-export default function PublicVotes({ publicKey, isConnected, isInitializing = false }: PublicVotesProps) {
+export default function PublicVotes({ publicKey, isConnected, isInitializing = false, tab = 'proposals' }: PublicVotesProps) {
   const { kit } = useWallet();
   const navigate = useNavigate();
   const [dao, setDao] = useState<DAOInfo | null>(() => {
@@ -49,9 +50,9 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
   const [joining, setJoining] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [proposalKey, setProposalKey] = useState(0);
-  const [showCreateProposal, setShowCreateProposal] = useState(false);
   const [creatingProposal, setCreatingProposal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'info' | 'proposals' | 'members'>('proposals');
+  // Use tab prop from URL route - activeTab is now derived from the route
+  const activeTab = tab;
 
   useEffect(() => {
     if (isInitializing) {
@@ -303,15 +304,28 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
         member: publicKey,
       });
 
+      // Helper to check if error is CommitmentExists (error #5 from tree contract)
+      const isCommitmentExistsError = (err: any): boolean => {
+        const errStr = err?.message || err?.toString() || '';
+        return errStr.includes('#5') || errStr.includes('Error(Contract, #5)');
+      };
+
+      let alreadyRegistered = false;
       try {
         console.log("[Registration] Calling signAndSend...");
         const result = await registerTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
         console.log("[Registration] Step 2 complete - Transaction signed and sent:", result);
       } catch (err: any) {
-        console.error("[Registration] Step 2 (signAndSend) failed:", err);
-        const enhancedError = new Error(`Transaction signing failed: ${err?.message || 'Unknown error'}`);
-        (enhancedError as any).originalError = err;
-        throw enhancedError;
+        // Check if this is a CommitmentExists error - means we're already registered
+        if (isCommitmentExistsError(err)) {
+          console.log("[Registration] Commitment already exists on-chain - recovering credentials");
+          alreadyRegistered = true;
+        } else {
+          console.error("[Registration] Step 2 (signAndSend) failed:", err);
+          const enhancedError = new Error(`Transaction signing failed: ${err?.message || 'Unknown error'}`);
+          (enhancedError as any).originalError = err;
+          throw enhancedError;
+        }
       }
 
       const leafIndexResult = await clients.membershipTree.get_leaf_index({
@@ -322,7 +336,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
       const leafIndex = Number(leafIndexResult.result);
       storeZKCredentials(dao.id, publicKey, { secret, salt, commitment }, leafIndex);
 
-      console.log("[Registration] Registration successful! Leaf index:", leafIndex);
+      console.log(alreadyRegistered ? "[Registration] Credentials recovered! Leaf index:" : "[Registration] Registration successful! Leaf index:", leafIndex);
       await loadPublicDAO();
     } catch (err: any) {
       if (isUserRejection(err)) {
@@ -338,7 +352,8 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
   };
 
   const handleCreateProposal = async (data: {
-    description: string;
+    title: string;
+    contentCid: string;
     voteMode: "fixed" | "trailing";
     deadlineSeconds: number;
   }) => {
@@ -362,7 +377,8 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
 
       const createProposalTx = await clients.voting.create_proposal({
         dao_id: BigInt(dao.id),
-        description: data.description,
+        title: data.title,
+        content_cid: data.contentCid,
         end_time: endTime,
         creator: publicKey,
         vote_mode: { tag: data.voteMode === "fixed" ? "Fixed" : "Trailing", values: undefined },
@@ -370,7 +386,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
 
       await createProposalTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
 
-      setShowCreateProposal(false);
+      navigate('/public-votes/');
       setProposalKey(prev => prev + 1);
     } catch (err: any) {
       if (isUserRejection(err)) {
@@ -422,7 +438,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
           <Button
             variant={activeTab === 'proposals' ? 'secondary' : 'outline'}
             size="sm"
-            onClick={() => setActiveTab('proposals')}
+            onClick={() => navigate('/public-votes/')}
             className="gap-2"
           >
             <Home className="w-4 h-4" />
@@ -431,7 +447,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
           <Button
             variant={activeTab === 'info' ? 'secondary' : 'outline'}
             size="sm"
-            onClick={() => setActiveTab('info')}
+            onClick={() => navigate('/public-votes/info')}
             className="gap-2"
           >
             <FileText className="w-4 h-4" /> Info
@@ -439,7 +455,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
           <Button
             variant={activeTab === 'members' ? 'secondary' : 'outline'}
             size="sm"
-            onClick={() => setActiveTab('members')}
+            onClick={() => navigate('/public-votes/members')}
             className="gap-2"
           >
             <Users className="w-4 h-4" />
@@ -447,8 +463,8 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
           </Button>
           {isConnected && dao && dao.isRegistered && (
             <Button
-              variant="outline"
-              onClick={() => setShowCreateProposal(true)}
+              variant={activeTab === 'create-proposal' ? 'secondary' : 'outline'}
+              onClick={() => navigate('/public-votes/create-proposal')}
               size="sm"
               className="gap-2"
             >
@@ -521,42 +537,26 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
           isAdmin={false}
         />
       )}
-    </div>
 
-    {/* Create Proposal Modal */}
-    {showCreateProposal && (
-      <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-fade-in"
-        onClick={() => setShowCreateProposal(false)}
-      >
-        <div className="relative w-full max-w-xl" onClick={(e) => e.stopPropagation()}>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowCreateProposal(false)}
-            className="absolute -top-10 right-0 h-8 w-8 rounded-full text-white hover:bg-white/20"
-          >
-            <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
-          </Button>
-          <Card className="w-full shadow-xl border-none">
-            <CardHeader>
-              <CardTitle>Create Proposal</CardTitle>
-              <CardDescription>
-                Create a new proposal for members to vote on.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <CreateProposalForm
-                onSubmit={handleCreateProposal}
-                onCancel={() => setShowCreateProposal(false)}
-                isSubmitting={creatingProposal}
-              />
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )}
+      {activeTab === 'create-proposal' && dao && (
+        <Card>
+          <CardHeader>
+            <CardTitle>New Proposal</CardTitle>
+            <CardDescription>Create a new proposal for the community to vote on.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CreateProposalForm
+              onSubmit={handleCreateProposal}
+              onCancel={() => {
+                navigate('/public-votes/');
+                setError(null);
+              }}
+              isSubmitting={creatingProposal}
+            />
+          </CardContent>
+        </Card>
+      )}
+    </div>
     </>
   );
 }

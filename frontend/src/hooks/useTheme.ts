@@ -1,38 +1,58 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 
 type Theme = 'light' | 'dark';
 
-export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(() => {
-    // Check localStorage first
-    const stored = localStorage.getItem('theme') as Theme | null;
-    if (stored) {
-      return stored;
-    }
+// Get theme from DOM
+function getThemeFromDOM(): Theme {
+  return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+}
 
-    // Fall back to system preference
-    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      return 'dark';
+// Subscribe to DOM class changes
+function subscribeToTheme(callback: () => void) {
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      if (mutation.attributeName === 'class') {
+        callback();
+      }
     }
-
-    return 'light';
   });
 
+  observer.observe(document.documentElement, { attributes: true });
+
+  return () => observer.disconnect();
+}
+
+export function useTheme() {
+  // Use useSyncExternalStore to sync with DOM class
+  const theme = useSyncExternalStore(
+    subscribeToTheme,
+    getThemeFromDOM,
+    () => 'light' as Theme // Server fallback
+  );
+
+  // Initialize theme on first load
   useEffect(() => {
-    // Apply theme to document
+    const stored = localStorage.getItem('theme') as Theme | null;
     const root = document.documentElement;
-    if (theme === 'dark') {
+
+    if (stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const root = document.documentElement;
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+
+    if (newTheme === 'dark') {
       root.classList.add('dark');
     } else {
       root.classList.remove('dark');
     }
 
-    // Save to localStorage
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+    localStorage.setItem('theme', newTheme);
   };
 
   return { theme, toggleTheme };

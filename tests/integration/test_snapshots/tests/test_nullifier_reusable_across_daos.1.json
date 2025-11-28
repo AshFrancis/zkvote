@@ -215,6 +215,9 @@
                   "string": "P1"
                 },
                 {
+                  "string": ""
+                },
+                {
                   "u64": "0"
                 },
                 {
@@ -438,6 +441,9 @@
                 },
                 {
                   "string": "P2"
+                },
+                {
+                  "string": ""
                 },
                 {
                   "u64": "0"
@@ -2316,6 +2322,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "content_cid"
+                      },
+                      "val": {
+                        "string": ""
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "created_at"
                       },
                       "val": {
@@ -2336,14 +2350,6 @@
                       },
                       "val": {
                         "u64": "1"
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "description"
-                      },
-                      "val": {
-                        "string": "P1"
                       }
                     },
                     {
@@ -2396,6 +2402,14 @@
                             "symbol": "Active"
                           }
                         ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "title"
+                      },
+                      "val": {
+                        "string": "P1"
                       }
                     },
                     {
@@ -2488,6 +2502,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "content_cid"
+                      },
+                      "val": {
+                        "string": ""
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "created_at"
                       },
                       "val": {
@@ -2508,14 +2530,6 @@
                       },
                       "val": {
                         "u64": "2"
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "description"
-                      },
-                      "val": {
-                        "string": "P2"
                       }
                     },
                     {
@@ -2568,6 +2582,14 @@
                             "symbol": "Active"
                           }
                         ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "title"
+                      },
+                      "val": {
+                        "string": "P2"
                       }
                     },
                     {

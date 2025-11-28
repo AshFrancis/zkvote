@@ -156,6 +156,7 @@ fn test_trailing_mode_churn_across_parallel_proposals() {
     let proposal_a = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "A"),
+        &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 3600),
         &member1,
         &voting::VoteMode::Trailing,
@@ -163,6 +164,7 @@ fn test_trailing_mode_churn_across_parallel_proposals() {
     let proposal_b = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "B"),
+        &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 3600),
         &member1,
         &voting::VoteMode::Trailing,
@@ -305,6 +307,7 @@ fn test_fixed_mode_late_joiner_cannot_vote() {
     let proposal_id = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "Test proposal"),
+        &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &member1,
         &voting::VoteMode::Fixed, // Fixed mode
@@ -374,6 +377,7 @@ fn test_trailing_mode_late_joiner_can_vote() {
     let proposal_id = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "Test proposal"),
+        &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &member1,
         &voting::VoteMode::Trailing, // Trailing mode
@@ -441,6 +445,7 @@ fn test_trailing_mode_late_joiner_can_vote_real_member2() {
     let proposal_id = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "Trailing member2"),
+        &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &creator,
         &voting::VoteMode::Trailing,
@@ -523,6 +528,7 @@ fn test_trailing_mode_removed_member_cannot_vote_on_new_proposal() {
     let proposal_id = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "New proposal"),
+        &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &member2,
         &voting::VoteMode::Trailing, // Trailing mode
@@ -581,6 +587,7 @@ fn test_trailing_mode_removed_member_cannot_vote_on_old_proposal() {
     let proposal_id = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "Old proposal"),
+        &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &member1,
         &voting::VoteMode::Trailing, // Trailing mode

@@ -8,7 +8,6 @@ import { MessageSquare, Eye, EyeOff, Loader2, AlertTriangle } from "lucide-react
 import {
   uploadCommentContent,
   saveAnonymousComment,
-  getNextNonce,
 } from "../lib/comments";
 import {
   generateDeterministicZKCredentials,
@@ -18,11 +17,11 @@ import {
 import {
   generateVoteProof,
   formatProofForSoroban,
-  type ProofInput,
+  calculateNullifier,
+  type VoteProofInput,
 } from "../lib/zkproof";
 import { getMerklePath } from "../lib/merkletree";
 import { initializeContractClients } from "../lib/contracts";
-import { buildPoseidon } from "circomlibjs";
 
 const RELAYER_URL = import.meta.env.VITE_RELAYER_URL || "http://localhost:3001";
 
@@ -38,24 +37,6 @@ interface CommentFormProps {
   onSubmit: () => void;
   onCancel?: () => void;
   placeholder?: string;
-}
-
-/**
- * Calculate comment nullifier using Poseidon hash
- * commentNullifier = Poseidon(secret, daoId, proposalId, nonce)
- * The nonce allows multiple anonymous comments per user per proposal
- */
-async function calculateCommentNullifier(
-  secret: string,
-  daoId: number,
-  proposalId: number,
-  nonce: number
-): Promise<string> {
-  const poseidon = await buildPoseidon();
-  const hash = poseidon.F.toString(
-    poseidon([BigInt(secret), BigInt(daoId), BigInt(proposalId), BigInt(nonce)])
-  );
-  return hash;
 }
 
 export default function CommentForm({
@@ -77,7 +58,8 @@ export default function CommentForm({
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState("");
 
-  const canComment = hasMembership && (isAnonymous ? isRegistered : true);
+  // Public comments require wallet (direct signing), anonymous requires registration
+  const canComment = hasMembership && (isAnonymous ? isRegistered : !!kit);
 
   const handleSubmit = async () => {
     if (!body.trim()) {
@@ -128,17 +110,11 @@ export default function CommentForm({
           leafIndex = cached.leafIndex;
         }
 
-        // Get next nonce for this user's anonymous comments
-        const nonce = getNextNonce(daoId, proposalId);
-
-        // Calculate comment-specific nullifier (includes nonce for multiple comments)
-        setProgress("Computing nullifier...");
-        const nullifier = await calculateCommentNullifier(
-          secret,
-          daoId,
-          proposalId,
-          nonce
-        );
+        // Helper to convert to big-endian hex
+        const toHexBE = (value: string | bigint): string => {
+          const bigInt = typeof value === "string" ? BigInt(value) : value;
+          return bigInt.toString(16).padStart(64, "0");
+        };
 
         // Get Merkle path
         setProgress("Fetching Merkle path...");
@@ -151,18 +127,24 @@ export default function CommentForm({
         // Use eligible_root from proposal (snapshot of when proposal was created)
         const root = eligibleRoot;
 
-        // Generate ZK proof using same vote circuit
-        // We use voteChoice=0 as a placeholder since it's not used for comments
+        // Calculate nullifier using vote circuit formula (same for all comments)
+        // nullifier = Poseidon(secret, daoId, proposalId)
+        // NOTE: We use the vote circuit for comments now - no nonce needed!
+        setProgress("Computing nullifier...");
+        const nullifier = await calculateNullifier(secret, daoId.toString(), proposalId.toString());
+
+        // Generate ZK proof using vote circuit (same circuit for voting and comments)
+        // For comments, we just use voteChoice=false (0) - the contract ignores it
         setProgress("Generating ZK proof...");
         const wasmPath = "/circuits/vote.wasm";
         const zkeyPath = "/circuits/vote_final.zkey";
 
-        const proofInput: ProofInput = {
+        const proofInput: VoteProofInput = {
           root: root.toString(),
           nullifier: nullifier.toString(),
           daoId: daoId.toString(),
           proposalId: proposalId.toString(),
-          voteChoice: "0", // Not used for comments
+          voteChoice: "0", // Arbitrary - contract ignores this for comments
           commitment: commitment.toString(),
           secret: secret.toString(),
           salt: salt.toString(),
@@ -170,16 +152,20 @@ export default function CommentForm({
           pathIndices,
         };
 
+        console.log("=== Comment PROOF INPUT DEBUG ===");
+        console.log("Root (eligible_root):", root.toString());
+        console.log("Commitment:", commitment);
+        console.log("Secret:", secret);
+        console.log("Salt:", salt);
+        console.log("LeafIndex:", leafIndex);
+        console.log("Path elements:", pathElements);
+        console.log("Full proof input:", proofInput);
+        console.log("========================");
+
         const { proof } = await generateVoteProof(proofInput, wasmPath, zkeyPath);
 
         // Format proof for Soroban
         const { proof_a, proof_b, proof_c } = formatProofForSoroban(proof);
-
-        // Convert to hex strings
-        const toHexBE = (value: string | bigint): string => {
-          const bigInt = typeof value === "string" ? BigInt(value) : value;
-          return bigInt.toString(16).padStart(64, "0");
-        };
 
         // Submit anonymous comment via relayer
         setProgress("Submitting comment...");
@@ -191,10 +177,10 @@ export default function CommentForm({
             proposalId,
             contentCid: cid,
             parentId: parentId ?? null,
+            voteChoice: false, // Arbitrary - contract ignores this for comments
             nullifier: toHexBE(nullifier),
             root: toHexBE(root),
             commitment: toHexBE(commitment),
-            nonce,
             proof: {
               a: proof_a,
               b: proof_b,
@@ -214,27 +200,29 @@ export default function CommentForm({
           proposalId,
           daoId,
           nullifier,
-          nonce,
         });
       } else {
-        // Submit public comment via relayer (simpler, no ZK proof needed)
-        setProgress("Submitting comment...");
-        const response = await fetch(`${RELAYER_URL}/comment/public`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            daoId,
-            proposalId,
-            contentCid: cid,
-            parentId: parentId ?? null,
-            author: publicKey,
-          }),
+        // Submit public comment via direct wallet signing
+        // The contract requires author.require_auth() so we must sign directly
+        if (!kit) {
+          throw new Error("Wallet required for public comments. Please connect your wallet.");
+        }
+
+        setProgress("Preparing transaction...");
+        const clients = initializeContractClients(publicKey);
+
+        // Build the transaction using the comments contract
+        const tx = await clients.comments.add_comment({
+          dao_id: BigInt(daoId),
+          proposal_id: BigInt(proposalId),
+          content_cid: cid,
+          parent_id: parentId !== undefined ? BigInt(parentId) : undefined,
+          author: publicKey,
         });
 
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || "Failed to submit comment");
-        }
+        // Sign and send with wallet
+        setProgress("Sign in your wallet...");
+        await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
       }
 
       // Success - clear form and notify parent

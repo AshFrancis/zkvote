@@ -162,12 +162,14 @@ fn test_pairing_security_boundary() {
     voting_client.set_vk(&dao_id, &valid_vk, &admin);
     println!("✅ Valid VK set\n");
 
-    let description = String::from_str(&env, "Control Test Proposal");
+    let title = String::from_str(&env, "Control Test Proposal");
+    let content_cid = String::from_str(&env, "");
     let current_time = env.ledger().timestamp();
     let end_time = current_time + 3600;
     let proposal_id1 = voting_client.create_proposal(
         &dao_id,
-        &description,
+        &title,
+        &content_cid,
         &end_time,
         &admin,
         &voting::VoteMode::Fixed,
@@ -199,10 +201,12 @@ fn test_pairing_security_boundary() {
     voting_client.set_vk(&dao_id, &invalid_vk, &admin);
     println!("✅ Invalid VK set (expected - no validation at set_vk)\n");
 
-    let description2 = String::from_str(&env, "Security Test Proposal");
+    let title2 = String::from_str(&env, "Security Test Proposal");
+    let content_cid2 = String::from_str(&env, "");
     let proposal_id2 = voting_client.create_proposal(
         &dao_id,
-        &description2,
+        &title2,
+        &content_cid2,
         &end_time,
         &admin,
         &voting::VoteMode::Fixed,

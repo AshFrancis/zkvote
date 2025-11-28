@@ -214,6 +214,9 @@
                   "string": "Proposal A"
                 },
                 {
+                  "string": ""
+                },
+                {
                   "u64": "0"
                 },
                 {
@@ -1297,6 +1300,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "content_cid"
+                      },
+                      "val": {
+                        "string": ""
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "created_at"
                       },
                       "val": {
@@ -1317,14 +1328,6 @@
                       },
                       "val": {
                         "u64": "1"
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "description"
-                      },
-                      "val": {
-                        "string": "Proposal A"
                       }
                     },
                     {
@@ -1377,6 +1380,14 @@
                             "symbol": "Active"
                           }
                         ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "title"
+                      },
+                      "val": {
+                        "string": "Proposal A"
                       }
                     },
                     {

@@ -81,7 +81,8 @@ fn stress_many_members_and_proposals() {
 
     // Create many proposals
     for i in 0..200u32 {
-        let desc = String::from_str(&env, &format!("Prop {}", i));
-        let _ = voting.create_proposal(&dao_id, &desc, &0u64, &admin, &voting::VoteMode::Fixed);
+        let title = String::from_str(&env, &format!("Prop {}", i));
+        let content_cid = String::from_str(&env, "");
+        let _ = voting.create_proposal(&dao_id, &title, &content_cid, &0u64, &admin, &voting::VoteMode::Fixed);
     }
 }

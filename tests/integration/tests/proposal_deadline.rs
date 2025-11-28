@@ -104,6 +104,7 @@ fn test_create_proposal_with_future_deadline() {
     let proposal_id = voting.create_proposal(
         &dao_id,
         &String::from_str(&env, "Test proposal with deadline"),
+        &String::from_str(&env, ""),
         &future_time,
         &admin,
         &VoteMode::Fixed,
@@ -177,6 +178,7 @@ fn test_create_proposal_with_past_deadline_fails() {
     voting.create_proposal(
         &dao_id,
         &String::from_str(&env, "Test proposal with past deadline"),
+        &String::from_str(&env, ""),
         &past_time,
         &admin,
         &VoteMode::Fixed,
@@ -238,6 +240,7 @@ fn test_create_proposal_with_no_deadline() {
     let proposal_id = voting.create_proposal(
         &dao_id,
         &String::from_str(&env, "Test proposal with no deadline"),
+        &String::from_str(&env, ""),
         &0, // 0 = no deadline
         &admin,
         &VoteMode::Fixed,

@@ -12,7 +12,7 @@ interface UserDAO {
 
 interface UserDAOListProps {
   userAddress: string;
-  onSelectDao: (daoId: number) => void;
+  onSelectDao: (daoId: number, daoName?: string) => void;
   selectedDaoId?: number | null;
   onDaosLoaded?: (daoIds: number[]) => void;
   isInitializing?: boolean;
@@ -151,7 +151,7 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
         {filteredDaos.map((dao) => (
           <button
             key={dao.id}
-            onClick={() => onSelectDao(dao.id)}
+            onClick={() => onSelectDao(dao.id, dao.name)}
             className={`text-left p-4 rounded-lg border transition-colors ${
               selectedDaoId === dao.id
                 ? 'bg-primary/10 border-primary/50'
@@ -181,7 +181,7 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
                 <p className="text-xs text-muted-foreground">
                   DAO #{dao.id}
                 </p>
-                <Badge variant={dao.role === 'admin' ? 'blue' : 'success'} size="sm">
+                <Badge variant={dao.role === 'admin' ? 'blue' : 'success'}>
                   {dao.role}
                 </Badge>
               </div>

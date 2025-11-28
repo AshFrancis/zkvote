@@ -83,3 +83,36 @@ export function isAccountNotFoundError(err: unknown): boolean {
     errorMessage.includes("account not found")
   );
 }
+
+/**
+ * Convert a string to a URL-safe slug
+ * @param text Text to convert to slug
+ */
+export function toSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '') // Remove non-word chars (except spaces and hyphens)
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/-+/g, '-') // Replace multiple hyphens with single
+    .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
+}
+
+/**
+ * Create a URL path with ID and slug (e.g., "2-test-dao")
+ * @param id Numeric ID
+ * @param name Name to slugify
+ */
+export function toIdSlug(id: number, name: string): string {
+  const slug = toSlug(name);
+  return slug ? `${id}-${slug}` : `${id}`;
+}
+
+/**
+ * Parse an ID from an ID-slug string (e.g., "2-test-dao" -> 2)
+ * @param idSlug String containing ID and optional slug
+ */
+export function parseIdFromSlug(idSlug: string): number | null {
+  const match = idSlug.match(/^(\d+)/);
+  return match ? parseInt(match[1], 10) : null;
+}

@@ -184,8 +184,25 @@ export default function DAOInfoPanel({ daoId, publicKey }: DAOInfoPanelProps) {
       // Fetch member count
       const memberCountResult = await membershipSbt.get_member_count({ dao_id: BigInt(daoId) });
 
-      // Fetch tree info (depth, leaf count, root)
-      const treeInfoResult = await membershipTree.get_tree_info({ dao_id: BigInt(daoId) });
+      // Fetch tree info (depth, leaf count, root) - may not exist if tree not initialized
+      let treeInfo: { depth: number; leafCount: number; merkleRoot: string } = {
+        depth: 0,
+        leafCount: 0,
+        merkleRoot: "0",
+      };
+      try {
+        const treeInfoResult = await membershipTree.get_tree_info({ dao_id: BigInt(daoId) });
+        if (treeInfoResult.result) {
+          treeInfo = {
+            depth: Number(treeInfoResult.result[0]),
+            leafCount: Number(treeInfoResult.result[1]),
+            merkleRoot: treeInfoResult.result[2]?.toString() || "0",
+          };
+        }
+      } catch (err) {
+        // Tree not initialized yet - use defaults
+        console.log("Tree not initialized for DAO:", daoId);
+      }
 
       // Fetch VK version
       const vkVersionResult = await voting.vk_version({ dao_id: BigInt(daoId) });
@@ -226,9 +243,9 @@ export default function DAOInfoPanel({ daoId, publicKey }: DAOInfoPanelProps) {
         admin: daoResult.result.admin,
         membershipOpen: daoResult.result.membership_open,
         memberCount: Number(memberCountResult.result),
-        merkleRoot: treeInfoResult.result[2].toString(),
-        treeDepth: Number(treeInfoResult.result[0]),
-        leafCount: Number(treeInfoResult.result[1]),
+        merkleRoot: treeInfo.merkleRoot,
+        treeDepth: treeInfo.depth,
+        leafCount: treeInfo.leafCount,
         vkVersion,
         vk,
       });

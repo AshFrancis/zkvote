@@ -541,7 +541,6 @@ function PrivacyModel() {
             <h4 className="font-medium mb-2">Relayer Trust</h4>
             <p className="text-sm text-muted-foreground leading-relaxed">
               The relayer sees your proof before submitting it, but cannot extract your vote choice or identity from it.
-              However, it does see your IP address. For maximum privacy, use the relayer over Tor.
             </p>
           </div>
           <div>
@@ -603,7 +602,7 @@ function TechnicalDeepDive() {
             <h4 className="font-medium mb-2">BN254 Elliptic Curve</h4>
             <p className="text-sm text-muted-foreground leading-relaxed">
               BN254 (also known as alt_bn128) is a pairing-friendly elliptic curve used for Groth16 verification.
-              It enables efficient bilinear pairings required for proof verification. Soroban Protocol 25 added
+              It enables efficient bilinear pairings required for proof verification. Stellar Protocol 25 adds
               native support for BN254 operations.
             </p>
           </div>
@@ -723,7 +722,7 @@ function TechnicalDeepDive() {
       </div>
 
       <div>
-        <h3 className="text-lg font-semibold mb-4">Gas Costs</h3>
+        <h3 className="text-lg font-semibold mb-4">Costs</h3>
         <p className="text-sm text-muted-foreground leading-relaxed mb-4">
           Groth16 verification on Soroban requires 4 pairing operations and 6 scalar multiplications.
           Typical costs:

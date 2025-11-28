@@ -190,6 +190,7 @@ fn test_corrupted_proof_fails() {
     let proposal_id = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "Test"),
+        &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &member,
         &voting::VoteMode::Fixed,
@@ -249,6 +250,7 @@ fn test_wrong_vk_fails() {
     let proposal_id = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "Test"),
+        &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &member,
         &voting::VoteMode::Fixed,
@@ -312,6 +314,7 @@ fn test_real_proof_double_vote_rejected() {
     let proposal_id = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "Double vote"),
+        &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &member,
         &voting::VoteMode::Fixed,
@@ -396,6 +399,7 @@ fn test_nullifier_reusable_across_daos() {
     let prop_id_1 = voting_client.create_proposal(
         &dao_id_1,
         &String::from_str(&env, "DAO 1 Proposal"),
+        &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &member,
         &voting::VoteMode::Fixed,
@@ -403,6 +407,7 @@ fn test_nullifier_reusable_across_daos() {
     let prop_id_2 = voting_client.create_proposal(
         &dao_id_2,
         &String::from_str(&env, "DAO 2 Proposal"),
+        &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &member,
         &voting::VoteMode::Fixed,
@@ -468,6 +473,7 @@ fn test_proof_for_wrong_dao_fails() {
     let proposal_id = voting_client.create_proposal(
         &dao_id_2,
         &String::from_str(&env, "DAO 2 Proposal"),
+        &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &member,
         &voting::VoteMode::Fixed,
@@ -526,6 +532,7 @@ fn test_proof_for_wrong_proposal_fails() {
     let _proposal_1 = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "Proposal 1"),
+        &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &member,
         &voting::VoteMode::Fixed,
@@ -533,6 +540,7 @@ fn test_proof_for_wrong_proposal_fails() {
     let proposal_2 = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "Proposal 2"),
+        &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &member,
         &voting::VoteMode::Fixed,

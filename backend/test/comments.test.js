@@ -24,12 +24,20 @@ const TEST_SECRET = 'SCVZXEUXJLRZKPCUXGXN53BJTD3RAZPRSSXHXDGSZQH5EOGEUTWINUXF';
 const TEST_AUTHOR = 'GCKFBEIYY5YPP5LNKMYJ3KBGQ3HYYZCMN5QBQHGXIPH7TVHLG2D2S3N6';
 
 // Skip IPFS tests if no JWT configured
+// Note: PINATA_JWT must be set BEFORE running tests for IPFS features to work
+// The relayer module evaluates IPFS_ENABLED = !!PINATA_JWT at load time
 const PINATA_JWT = process.env.PINATA_JWT;
 const skipIfNoIpfs = !PINATA_JWT ? { skip: 'PINATA_JWT not configured' } : {};
 
 let app;
+let appLoaded = false;
 
 const setupApp = async () => {
+  // Only load the app once to avoid module caching issues
+  if (appLoaded && app) {
+    return app;
+  }
+
   process.env.RELAYER_SECRET_KEY = TEST_SECRET;
   process.env.VOTING_CONTRACT_ID = 'C'.padEnd(56, 'A');
   process.env.TREE_CONTRACT_ID = 'C'.padEnd(56, 'B');
@@ -38,12 +46,10 @@ const setupApp = async () => {
   process.env.RELAYER_AUTH_TOKEN = token;
   process.env.RELAYER_TEST_MODE = 'true';
 
-  if (PINATA_JWT) {
-    process.env.PINATA_JWT = PINATA_JWT;
-  }
-
   const relayer = await import('../src/relayer.js');
-  return relayer.app || relayer.default || relayer;
+  app = relayer.app || relayer.default || relayer;
+  appLoaded = true;
+  return app;
 };
 
 // ============================================

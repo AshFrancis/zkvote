@@ -251,6 +251,7 @@ fn test_non_member_creates_proposal_in_public_dao() {
     let proposal_id = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "Public Proposal"),
+        &String::from_str(&env, ""),
         &end_time,
         &user,
         &voting::VoteMode::Trailing,
@@ -290,6 +291,7 @@ fn test_non_member_cannot_create_proposal_in_private_dao() {
     voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "Private Proposal"),
+        &String::from_str(&env, ""),
         &end_time,
         &user,
         &voting::VoteMode::Fixed,
@@ -338,6 +340,7 @@ fn test_full_public_dao_flow() {
     let proposal_id = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "Public Proposal"),
+        &String::from_str(&env, ""),
         &end_time,
         &user3,
         &voting::VoteMode::Trailing,

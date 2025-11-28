@@ -320,6 +320,7 @@ fn test_revoked_member_cannot_vote_mid_proposal() {
     let proposal_id = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "Revocation vote"),
+        &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 3600),
         &member,
         &voting::VoteMode::Fixed,
@@ -374,6 +375,7 @@ fn test_revoked_then_reinstated_only_new_proposals_accept_vote() {
     let proposal_a = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "Before revoke"),
+        &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 3600),
         &member,
         &voting::VoteMode::Fixed,
@@ -388,6 +390,7 @@ fn test_revoked_then_reinstated_only_new_proposals_accept_vote() {
     let proposal_b = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "After reinstate"),
+        &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 3600),
         &member,
         &voting::VoteMode::Fixed,

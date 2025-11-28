@@ -33,7 +33,6 @@ export interface AnonymousCommentRecord {
   proposalId: number;
   daoId: number;
   nullifier: string;
-  nonce: number;
 }
 
 const ANON_COMMENTS_KEY = "daovote_anonymous_comments";
@@ -80,12 +79,6 @@ export function canEditAnonymousComment(
       r.nullifier === nullifier
   );
   return !!record;
-}
-
-export function getNextNonce(daoId: number, proposalId: number): number {
-  const comments = getAnonymousComments(daoId, proposalId);
-  if (comments.length === 0) return 0;
-  return Math.max(...comments.map((c) => c.nonce)) + 1;
 }
 
 // Upload comment content to IPFS
@@ -141,25 +134,23 @@ export async function fetchComments(
   return data.comments || [];
 }
 
-// Submit a public comment (direct contract call via relayer)
-export async function submitPublicComment(params: {
+/**
+ * @deprecated Public comments should be submitted via direct wallet signing (see CommentForm.tsx).
+ * The contract requires author.require_auth() which cannot be satisfied by the relayer.
+ * This function is kept for reference but should not be used.
+ */
+export async function submitPublicComment(_params: {
   daoId: number;
   proposalId: number;
   contentCid: string;
   parentId: number | null;
   author: string;
 }): Promise<{ success: boolean; commentId?: number; error?: string }> {
-  const response = await fetch(`${RELAYER_URL}/comment/public`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
-
-  const data = await response.json();
-  if (!response.ok) {
-    return { success: false, error: data.error || "Failed to submit comment" };
-  }
-  return { success: true, commentId: data.commentId };
+  return {
+    success: false,
+    error:
+      "Public comments must be submitted via direct wallet signing. Use the voting contract client directly.",
+  };
 }
 
 // Submit an anonymous comment (with ZK proof via relayer)
@@ -248,7 +239,8 @@ export function buildCommentTree(
 
   comments.forEach((c) => {
     const comment = commentMap.get(c.id)!;
-    if (c.parentId === null) {
+    // parentId is null or 0 for root comments (contract uses 0, API may return either)
+    if (c.parentId === null || c.parentId === 0) {
       rootComments.push(comment);
     } else {
       const parent = commentMap.get(c.parentId);

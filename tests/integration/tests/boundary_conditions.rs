@@ -165,6 +165,7 @@ fn test_root_history_eviction_behavior() {
     let proposal_id = voting_client.create_proposal(
         &dao_id,
         &String::from_str(&env, "Test Proposal"),
+        &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &proposer,
         &voting::VoteMode::Trailing,

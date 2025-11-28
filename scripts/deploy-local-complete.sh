@@ -10,8 +10,9 @@ echo "4. Update frontend and backend configuration"
 echo ""
 
 # Configuration
+# NOTE: We deploy to HOSTED FUTURENET, not local futurenet
 KEY_NAME="${KEY_NAME:-mykey}"
-RPC_URL="${RPC_URL:-http://localhost:8000/soroban/rpc}"
+RPC_URL="${RPC_URL:-https://rpc-futurenet.stellar.org}"
 NETWORK_PASSPHRASE="${NETWORK_PASSPHRASE:-Test SDF Future Network ; October 2022}"
 
 # Colors for output
@@ -82,8 +83,20 @@ VOTING_ID=$(stellar contract deploy \
   --tree_contract "$TREE_ID" 2>&1 | grep -E '^C[A-Z0-9]{55}$' | tail -1)
 success "Voting deployed: $VOTING_ID"
 
+# Deploy Comments
+echo "Deploying Comments..."
+COMMENTS_ID=$(stellar contract deploy \
+  --wasm target/wasm32v1-none/release/comments.wasm \
+  --source $KEY_NAME \
+  --rpc-url "$RPC_URL" \
+  --network-passphrase "$NETWORK_PASSPHRASE" \
+  -- \
+  --voting_contract "$VOTING_ID" \
+  --tree_contract "$TREE_ID" 2>&1 | grep -E '^C[A-Z0-9]{55}$' | tail -1)
+success "Comments deployed: $COMMENTS_ID"
+
 # Verify all contracts deployed
-if [ -z "$TREE_ID" ] || [ -z "$VOTING_ID" ]; then
+if [ -z "$TREE_ID" ] || [ -z "$VOTING_ID" ] || [ -z "$COMMENTS_ID" ]; then
   warn "Failed to deploy all contracts. Retrying problematic deployments..."
 
   if [ -z "$TREE_ID" ]; then
@@ -105,6 +118,18 @@ if [ -z "$TREE_ID" ] || [ -z "$VOTING_ID" ]; then
       --rpc-url "$RPC_URL" \
       --network-passphrase "$NETWORK_PASSPHRASE" \
       -- \
+      --tree_contract "$TREE_ID" 2>&1 | grep '^C' | grep -v 'ℹ️' | tail -1)
+  fi
+
+  if [ -z "$COMMENTS_ID" ]; then
+    echo "Retrying Comments deployment..."
+    COMMENTS_ID=$(stellar contract deploy \
+      --wasm target/wasm32v1-none/release/comments.wasm \
+      --source $KEY_NAME \
+      --rpc-url "$RPC_URL" \
+      --network-passphrase "$NETWORK_PASSPHRASE" \
+      -- \
+      --voting_contract "$VOTING_ID" \
       --tree_contract "$TREE_ID" 2>&1 | grep '^C' | grep -v 'ℹ️' | tail -1)
   fi
 fi
@@ -150,6 +175,15 @@ stellar contract bindings typescript \
   --overwrite
 success "Voting bindings generated"
 
+echo "Generating Comments bindings..."
+stellar contract bindings typescript \
+  --contract-id "$COMMENTS_ID" \
+  --rpc-url "$RPC_URL" \
+  --network-passphrase "$NETWORK_PASSPHRASE" \
+  --output-dir frontend/src/contracts/comments \
+  --overwrite
+success "Comments bindings generated"
+
 # Step 3.5: Build bindings
 step "Building TypeScript bindings..."
 echo "Building DAO Registry bindings..."
@@ -168,13 +202,17 @@ echo "Building Voting bindings..."
 (cd frontend/src/contracts/voting && npm install --silent && npm run build) > /dev/null 2>&1
 success "Voting bindings built"
 
+echo "Building Comments bindings..."
+(cd frontend/src/contracts/comments && npm install --silent && npm run build) > /dev/null 2>&1
+success "Comments bindings built"
+
 # Step 3.6: Create Public DAO (always DAO #1)
 step "Creating Public DAO..."
 ADMIN_ADDRESS=$(stellar keys address "$KEY_NAME")
 
 # Create DAO with open membership
 echo "Creating Public Votes DAO..."
-DAO_ID=$(stellar contract invoke \
+CREATE_OUTPUT=$(stellar contract invoke \
   --id "$REGISTRY_ID" \
   --rpc-url "$RPC_URL" \
   --network-passphrase "$NETWORK_PASSPHRASE" \
@@ -182,7 +220,17 @@ DAO_ID=$(stellar contract invoke \
   -- create_dao \
   --name "Public Votes" \
   --creator "$ADMIN_ADDRESS" \
-  --membership_open true 2>&1 | grep -v 'ℹ️' | tr -d '"')
+  --membership_open true 2>&1)
+echo "$CREATE_OUTPUT"
+# Extract DAO ID - look for the number in the output
+DAO_ID=$(echo "$CREATE_OUTPUT" | grep -oE '^[0-9]+$' | head -1)
+if [ -z "$DAO_ID" ]; then
+  # Try parsing JSON-style output
+  DAO_ID=$(echo "$CREATE_OUTPUT" | grep -oE '"[0-9]+"' | tr -d '"' | head -1)
+fi
+if [ -z "$DAO_ID" ]; then
+  DAO_ID="1"  # Assume 1 for fresh deployment
+fi
 
 if [ "$DAO_ID" != "1" ]; then
   warn "Expected DAO ID 1, got $DAO_ID. This may cause issues."
@@ -191,22 +239,27 @@ success "Public DAO created (ID: $DAO_ID)"
 
 # Initialize tree for public DAO
 echo "Initializing merkle tree..."
-stellar contract invoke \
+TREE_OUTPUT=$(stellar contract invoke \
   --id "$TREE_ID" \
   --rpc-url "$RPC_URL" \
   --network-passphrase "$NETWORK_PASSPHRASE" \
   --source "$KEY_NAME" \
   -- init_tree_from_registry \
   --dao_id "$DAO_ID" \
-  --depth 18 > /dev/null 2>&1
-success "Merkle tree initialized (depth 18, capacity 262,144)"
+  --depth 18 2>&1)
+if echo "$TREE_OUTPUT" | grep -q "Success"; then
+  success "Merkle tree initialized (depth 18, capacity 262,144)"
+else
+  echo "$TREE_OUTPUT"
+  warn "Merkle tree initialization may have failed - check output above"
+fi
 
 # Set verification key for Public DAO
 echo "Setting verification key..."
 VK_FILE="frontend/src/lib/verification_key_soroban.json"
 if [ -f "$VK_FILE" ]; then
   VK_JSON=$(cat "$VK_FILE")
-  stellar contract invoke \
+  VK_OUTPUT=$(stellar contract invoke \
     --id "$VOTING_ID" \
     --rpc-url "$RPC_URL" \
     --network-passphrase "$NETWORK_PASSPHRASE" \
@@ -214,8 +267,13 @@ if [ -f "$VK_FILE" ]; then
     -- set_vk \
     --dao_id "$DAO_ID" \
     --vk "$VK_JSON" \
-    --admin "$ADMIN_ADDRESS" > /dev/null 2>&1
-  success "Verification key set for Public DAO"
+    --admin "$ADMIN_ADDRESS" 2>&1)
+  if echo "$VK_OUTPUT" | grep -q "Success"; then
+    success "Verification key set for Public DAO"
+  else
+    echo "$VK_OUTPUT"
+    warn "Verification key setting may have failed - check output above"
+  fi
 else
   warn "Verification key file not found at $VK_FILE"
   warn "You'll need to set it manually through the frontend UI"
@@ -232,6 +290,7 @@ export const CONTRACTS = {
   SBT_ID: "$SBT_ID",
   TREE_ID: "$TREE_ID",
   VOTING_ID: "$VOTING_ID",
+  COMMENTS_ID: "$COMMENTS_ID",
 } as const;
 
 export const NETWORK_CONFIG = {
@@ -271,6 +330,19 @@ success "Frontend configuration updated"
 
 # Step 5: Update backend .env file
 step "Updating backend configuration..."
+
+# Preserve existing values from backend/.env if they exist
+if [ -f "backend/.env" ]; then
+  EXISTING_RELAYER_SECRET=$(grep '^RELAYER_SECRET_KEY=' backend/.env | cut -d'=' -f2-)
+  EXISTING_PINATA_JWT=$(grep '^PINATA_JWT=' backend/.env | cut -d'=' -f2-)
+  EXISTING_PINATA_GATEWAY=$(grep '^PINATA_GATEWAY=' backend/.env | cut -d'=' -f2-)
+  EXISTING_CORS=$(grep '^CORS_ORIGIN=' backend/.env | cut -d'=' -f2-)
+fi
+
+# Use existing values or defaults
+RELAYER_SECRET="${EXISTING_RELAYER_SECRET:-${RELAYER_SECRET_KEY:-REPLACE_ME_RELAYER_SECRET}}"
+CORS_ORIGINS="${EXISTING_CORS:-http://localhost:5173,http://localhost:5174}"
+
 cat > backend/.env << EOF
 # DaoVote Relayer Configuration
 # Auto-generated by scripts/deploy-local-complete.sh on $(date)
@@ -280,18 +352,35 @@ SOROBAN_RPC_URL=$RPC_URL
 NETWORK_PASSPHRASE=$NETWORK_PASSPHRASE
 
 # Relayer Account
-RELAYER_SECRET_KEY=${RELAYER_SECRET_KEY:-REPLACE_ME_RELAYER_SECRET}
+RELAYER_SECRET_KEY=$RELAYER_SECRET
 
 # Contract Addresses
 VOTING_CONTRACT_ID=$VOTING_ID
 TREE_CONTRACT_ID=$TREE_ID
+COMMENTS_CONTRACT_ID=$COMMENTS_ID
 
 # Server Configuration
 PORT=3001
 
 # CORS Configuration
-CORS_ORIGIN=http://localhost:5173
+CORS_ORIGIN=$CORS_ORIGINS
 EOF
+
+# Append Pinata config if it existed
+if [ -n "$EXISTING_PINATA_JWT" ]; then
+  cat >> backend/.env << EOF
+
+# Pinata IPFS Configuration
+PINATA_JWT=$EXISTING_PINATA_JWT
+EOF
+fi
+
+if [ -n "$EXISTING_PINATA_GATEWAY" ]; then
+  cat >> backend/.env << EOF
+PINATA_GATEWAY=$EXISTING_PINATA_GATEWAY
+EOF
+fi
+
 success "Backend configuration updated"
 
 # Step 6: Restart relayer if running
@@ -316,6 +405,7 @@ echo "  DAO Registry:    $REGISTRY_ID"
 echo "  Membership SBT:  $SBT_ID"
 echo "  Membership Tree: $TREE_ID"
 echo "  Voting:          $VOTING_ID"
+echo "  Comments:        $COMMENTS_ID"
 echo ""
 echo "Next steps:"
 echo "  1. Start the relayer: cd backend && npm run relayer"

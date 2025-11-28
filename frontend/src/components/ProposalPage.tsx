@@ -6,15 +6,19 @@ import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 import { initializeContractClients } from "../lib/contracts";
 import { getReadOnlyVoting, getReadOnlyDaoRegistry, getReadOnlyMembershipSbt } from "../lib/readOnlyContracts";
 import { calculateNullifier } from "../lib/zkproof";
-import { getZKCredentials } from "../lib/zk";
-import { parseIdFromSlug, toIdSlug } from "../lib/utils";
+import {
+  generateDeterministicZKCredentials,
+  getZKCredentials,
+  storeZKCredentials,
+} from "../lib/zk";
+import { parseIdFromSlug, toIdSlug, isUserRejection } from "../lib/utils";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
 import { Card, CardContent } from "./ui/Card";
 import { LoadingSpinner, MediaSlider } from "./ui";
 import VoteModal from "./VoteModal";
 import CommentSection from "./CommentSection";
-import { Clock, CheckCircle, XCircle, AlertCircle, ExternalLink, ArrowLeft, Shield, Users, Lock, Unlock, Home, FileText, Vote } from "lucide-react";
+import { Clock, CheckCircle, XCircle, AlertCircle, ExternalLink, ArrowLeft, Shield, Users, Lock, Unlock, Home, FileText, Vote, UserPlus, KeyRound } from "lucide-react";
 
 const RELAYER_URL = import.meta.env.VITE_RELAYER_URL || "http://localhost:3001";
 
@@ -90,8 +94,23 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
     const cached = numericDaoId ? getCachedDaoInfo(numericDaoId) : null;
     return cached?.hasMembership || false;
   });
+  const [joining, setJoining] = useState(false);
+  const [registering, setRegistering] = useState(false);
+  const [registrationStatus, setRegistrationStatus] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const isRegistered = publicKey && numericDaoId !== null ? !!getZKCredentials(numericDaoId, publicKey) : false;
+  const [isRegistered, setIsRegistered] = useState(() => {
+    return publicKey && numericDaoId !== null ? !!getZKCredentials(numericDaoId, publicKey) : false;
+  });
+
+  // Update isRegistered when publicKey or daoId changes
+  useEffect(() => {
+    if (publicKey && numericDaoId !== null) {
+      setIsRegistered(!!getZKCredentials(numericDaoId, publicKey));
+    } else {
+      setIsRegistered(false);
+    }
+  }, [publicKey, numericDaoId]);
 
   // Generate slug for navigation - use DAO name if available, otherwise fallback to original slug
   const daoSlugForNav = numericDaoId && dao?.name ? toIdSlug(numericDaoId, dao.name) : daoSlug || '';
@@ -338,6 +357,105 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
     loadProposal(); // Reload to get updated vote counts
   };
 
+  const handleJoinDao = async () => {
+    if (!publicKey || !kit || numericDaoId === null) return;
+
+    try {
+      setJoining(true);
+      setActionError(null);
+
+      const clients = initializeContractClients(publicKey);
+
+      const tx = await clients.membershipSbt.self_join({
+        dao_id: BigInt(numericDaoId),
+        member: publicKey,
+        encrypted_alias: undefined,
+      });
+
+      await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+
+      // Refresh DAO info to update membership status
+      setHasMembership(true);
+      if (dao) {
+        const updatedDao = { ...dao, hasMembership: true };
+        setDao(updatedDao);
+        localStorage.setItem(`dao_info_${numericDaoId}`, JSON.stringify(updatedDao));
+      }
+    } catch (err) {
+      if (!isUserRejection(err)) {
+        setActionError(err instanceof Error ? err.message : "Failed to join DAO");
+        console.error("Join DAO failed:", err);
+      }
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  const handleRegisterForVoting = async () => {
+    if (!publicKey || !kit || numericDaoId === null || registering) return;
+
+    try {
+      setRegistering(true);
+      setActionError(null);
+      setRegistrationStatus("Step 1/2: Generating secret (sign message)...");
+
+      // Generate deterministic credentials
+      const credentials = await generateDeterministicZKCredentials(kit, numericDaoId);
+
+      setRegistrationStatus("Step 2/2: Registering commitment (sign transaction)...");
+      const clients = initializeContractClients(publicKey);
+
+      const tx = await clients.membershipTree.register_with_caller({
+        dao_id: BigInt(numericDaoId),
+        commitment: BigInt(credentials.commitment),
+        caller: publicKey,
+      });
+
+      // Helper to check if error is CommitmentExists (error #5 from tree contract)
+      const isCommitmentExistsError = (err: any): boolean => {
+        const errStr = err?.message || err?.toString() || '';
+        return errStr.includes('#5') || errStr.includes('Error(Contract, #5)');
+      };
+
+      let alreadyRegistered = false;
+      try {
+        await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+      } catch (err: any) {
+        // Check if this is a CommitmentExists error - means we're already registered
+        if (isCommitmentExistsError(err)) {
+          console.log("[Registration] Commitment already exists on-chain - recovering credentials");
+          alreadyRegistered = true;
+        } else {
+          throw err;
+        }
+      }
+
+      if (alreadyRegistered) {
+        setRegistrationStatus("Found existing registration - recovering...");
+      }
+
+      // Get leaf index and store credentials
+      const leafIndexResult = await clients.membershipTree.get_leaf_index({
+        dao_id: BigInt(numericDaoId),
+        commitment: BigInt(credentials.commitment),
+      });
+
+      const leafIndex = Number(leafIndexResult.result);
+      storeZKCredentials(numericDaoId, publicKey, credentials, leafIndex);
+
+      setIsRegistered(true);
+      setRegistrationStatus(null);
+    } catch (err) {
+      if (!isUserRejection(err)) {
+        setActionError(err instanceof Error ? err.message : "Failed to register for voting");
+        console.error("Registration failed:", err);
+      }
+      setRegistrationStatus(null);
+    } finally {
+      setRegistering(false);
+    }
+  };
+
   // Show full page loading only if we have no cached DAO info
   if (loading && !dao) {
     return (
@@ -458,8 +576,12 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
               {dao && (
                 <p className="text-sm text-muted-foreground flex items-center gap-2">
                   <span className="font-mono text-xs bg-muted/50 px-1.5 py-0.5 rounded">ID: {dao.id}</span>
-                  <span>•</span>
-                  <span>Created by {dao.creator.slice(0, 4)}...{dao.creator.slice(-4)}</span>
+                  {dao.creator && (
+                    <>
+                      <span>•</span>
+                      <span>Created by {dao.creator.slice(0, 4)}...{dao.creator.slice(-4)}</span>
+                    </>
+                  )}
                 </p>
               )}
             </div>
@@ -492,8 +614,61 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
               <Users className="w-4 h-4" />
               Members
             </Button>
+
+            {/* Join DAO button - show for non-members when membership is open */}
+            {!hasMembership && dao?.membershipOpen && publicKey && (
+              <Button
+                variant="outline"
+                onClick={handleJoinDao}
+                disabled={joining}
+                size="sm"
+                className="gap-2"
+              >
+                {joining ? (
+                  <>
+                    <LoadingSpinner size="sm" />
+                    Joining...
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="w-4 h-4" />
+                    Join DAO
+                  </>
+                )}
+              </Button>
+            )}
+
+            {/* Register to Vote button - show for members who haven't registered */}
+            {hasMembership && !isRegistered && publicKey && (
+              <Button
+                variant="outline"
+                onClick={handleRegisterForVoting}
+                disabled={registering}
+                size="sm"
+                className="gap-2"
+              >
+                {registering ? (
+                  <>
+                    <LoadingSpinner size="sm" />
+                    {registrationStatus || "Registering..."}
+                  </>
+                ) : (
+                  <>
+                    <KeyRound className="w-4 h-4" />
+                    Register to Vote
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </div>
+
+        {/* Show action errors */}
+        {actionError && (
+          <div className="p-3 bg-destructive/10 text-destructive text-sm rounded-md">
+            {actionError}
+          </div>
+        )}
 
         {/* Proposal content */}
         <Card className="animate-fade-in">

@@ -305,10 +305,11 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
       }
 
       // get_tree_info returns [depth, leaf_count, root] as a tuple
+      // Handle case where tree is not yet initialized
       const freshTreeInfo = {
-        depth: Number(result.result[0]),
-        leafCount: Number(result.result[1]),
-        root: result.result[2].toString(),
+        depth: result?.result?.[0] !== undefined ? Number(result.result[0]) : 0,
+        leafCount: result?.result?.[1] !== undefined ? Number(result.result[1]) : 0,
+        root: result?.result?.[2]?.toString() || "0",
         vkVersion: vkResult?.result !== undefined ? Number(vkResult.result) : null,
       };
       setTreeInfo(freshTreeInfo);

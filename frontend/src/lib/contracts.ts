@@ -3,6 +3,7 @@ import { Client as DaoRegistryClient } from "../contracts/dao-registry/dist/inde
 import { Client as MembershipSbtClient } from "../contracts/membership-sbt/dist/index.js";
 import { Client as MembershipTreeClient } from "../contracts/membership-tree/dist/index.js";
 import { Client as VotingClient } from "../contracts/voting/dist/index.js";
+import { Client as CommentsClient } from "../contracts/comments/dist/index.js";
 import { NETWORK_CONFIG, CONTRACTS } from "../config/contracts";
 
 export interface ContractClients {
@@ -10,6 +11,7 @@ export interface ContractClients {
   membershipSbt: MembershipSbtClient;
   membershipTree: MembershipTreeClient;
   voting: VotingClient;
+  comments: CommentsClient;
 }
 
 /**
@@ -41,6 +43,10 @@ export function initializeContractClients(publicKey: string): ContractClients {
     voting: new VotingClient({
       ...clientOptions,
       contractId: CONTRACTS.VOTING_ID,
+    }),
+    comments: new CommentsClient({
+      ...clientOptions,
+      contractId: CONTRACTS.COMMENTS_ID,
     }),
   };
 }

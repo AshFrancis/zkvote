@@ -102,6 +102,7 @@ fn budget_vote_path_within_limit() {
     let _proposal_id = voting.create_proposal(
         &dao_id,
         &String::from_str(&env, "Budget Check"),
+        &String::from_str(&env, ""),
         &0u64,
         &admin,
         &voting::VoteMode::Fixed,

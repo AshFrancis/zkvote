@@ -15,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/
 import ProposalList from "./ProposalList";
 import ManageMembers from "./ManageMembers";
 import DAOInfoPanel from "./DAOInfoPanel";
-import { Shield, Users, Lock, Unlock, FileText, CheckCircle, AlertCircle, PlusCircle, X, Home } from "lucide-react";
+import { Shield, Users, Lock, Unlock, FileText, CheckCircle, PlusCircle, Home } from "lucide-react";
 
 interface DAODashboardProps {
   publicKey: string | null;
@@ -53,10 +53,9 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
   const [isRegistered, setIsRegistered] = useState(false);
   const [hasUnregisteredCredentials, setHasUnregisteredCredentials] = useState(false);
   const [joining, setJoining] = useState(false);
-  const [showCreateProposal, setShowCreateProposal] = useState(false);
   const [creatingProposal, setCreatingProposal] = useState(false);
   const [proposalKey, setProposalKey] = useState(0);
-  const [activeTab, setActiveTab] = useState<'info' | 'proposals' | 'members'>('proposals');
+  const [activeTab, setActiveTab] = useState<'info' | 'proposals' | 'members' | 'create-proposal'>('proposals');
 
   useEffect(() => {
     if (publicKey) {
@@ -275,15 +274,32 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
         caller: publicKey,
       });
 
+      // Helper to check if error is CommitmentExists (error #5 from tree contract)
+      const isCommitmentExistsError = (err: any): boolean => {
+        const errStr = err?.message || err?.toString() || '';
+        return errStr.includes('#5') || errStr.includes('Error(Contract, #5)');
+      };
+
+      let alreadyRegistered = false;
       try {
         console.log("[Registration] Calling signAndSend...");
         const result = await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
         console.log("[Registration] Step 2 complete - Transaction signed and sent:", result);
       } catch (err: any) {
-        console.error("[Registration] Step 2 (signAndSend) failed:", err);
-        const enhancedError = new Error(`Transaction signing failed: ${err?.message || 'Unknown error'}`);
-        (enhancedError as any).originalError = err;
-        throw enhancedError;
+        // Check if this is a CommitmentExists error - means we're already registered
+        if (isCommitmentExistsError(err)) {
+          console.log("[Registration] Commitment already exists on-chain - recovering credentials");
+          alreadyRegistered = true;
+        } else {
+          console.error("[Registration] Step 2 (signAndSend) failed:", err);
+          const enhancedError = new Error(`Transaction signing failed: ${err?.message || 'Unknown error'}`);
+          (enhancedError as any).originalError = err;
+          throw enhancedError;
+        }
+      }
+
+      if (alreadyRegistered) {
+        setRegistrationStatus("Found existing registration - recovering...");
       }
 
       const leafIndexResult = await clients.membershipTree.get_leaf_index({
@@ -296,8 +312,8 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
 
       setIsRegistered(true);
       setHasUnregisteredCredentials(false);
-      setRegistrationStatus("Registration complete!");
-      console.log("Registration successful! Leaf index:", leafIndex);
+      setRegistrationStatus(alreadyRegistered ? "Credentials recovered!" : "Registration complete!");
+      console.log(alreadyRegistered ? "Credentials recovered! Leaf index:" : "Registration successful! Leaf index:", leafIndex);
     } catch (err: any) {
       if (isUserRejection(err)) {
         console.log("User cancelled registration");
@@ -342,7 +358,8 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
   };
 
   const handleCreateProposal = async (data: {
-    description: string;
+    title: string;
+    contentCid: string;
     voteMode: "fixed" | "trailing";
     deadlineSeconds: number;
   }) => {
@@ -361,7 +378,8 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
 
       const tx = await clients.voting.create_proposal({
         dao_id: BigInt(daoId),
-        description: data.description,
+        title: data.title,
+        content_cid: data.contentCid,
         end_time: endTime,
         creator: publicKey,
         vote_mode: { tag: data.voteMode === "fixed" ? "Fixed" : "Trailing", values: void 0 },
@@ -373,7 +391,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
 
       await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
 
-      setShowCreateProposal(false);
+      setActiveTab('proposals');
       setProposalKey(prev => prev + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create proposal");
@@ -465,8 +483,8 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
           </Button>
           {dao.isAdmin && dao.vkSet && (
             <Button
-              variant="outline"
-              onClick={() => setShowCreateProposal(true)}
+              variant={activeTab === 'create-proposal' ? 'secondary' : 'outline'}
+              onClick={() => setActiveTab('create-proposal')}
               size="sm"
               className="gap-2"
             >
@@ -528,6 +546,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
           key={proposalKey}
           publicKey={publicKey}
           daoId={daoId}
+          daoName={dao.name}
           kit={kit}
           hasMembership={dao.hasMembership}
           vkSet={dao.vkSet}
@@ -542,43 +561,26 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
           isAdmin={dao.isAdmin}
         />
       )}
-    </div>
 
-    {/* Create Proposal Modal */}
-    {showCreateProposal && (
-      <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-fade-in"
-        onClick={() => setShowCreateProposal(false)}
-      >
-        <div className="relative w-full max-w-xl" onClick={(e) => e.stopPropagation()}>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowCreateProposal(false)}
-            className="absolute -top-10 right-0 h-8 w-8 rounded-full text-white hover:bg-white/20"
-          >
-            <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
-          </Button>
-          <Card className="w-full shadow-xl border-none">
-            <CardHeader>
-              <CardTitle>New Proposal</CardTitle>
-              <CardDescription>Create a new proposal for the community to vote on.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <CreateProposalForm
-                onSubmit={handleCreateProposal}
-                onCancel={() => {
-                  setShowCreateProposal(false);
-                  setError(null);
-                }}
-                isSubmitting={creatingProposal}
-              />
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )}
+      {activeTab === 'create-proposal' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>New Proposal</CardTitle>
+            <CardDescription>Create a new proposal for the community to vote on.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CreateProposalForm
+              onSubmit={handleCreateProposal}
+              onCancel={() => {
+                setActiveTab('proposals');
+                setError(null);
+              }}
+              isSubmitting={creatingProposal}
+            />
+          </CardContent>
+        </Card>
+      )}
+    </div>
     </>
   );
 }

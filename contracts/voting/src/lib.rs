@@ -63,13 +63,6 @@ pub enum VotingError {
     AlreadyInitialized = 18,
     InvalidState = 20,
     InvalidContentCid = 21,
-    // Comment errors
-    CommentNotFound = 22,
-    CommentDeleted = 23,
-    NotCommentOwner = 24,
-    InvalidParentComment = 25,
-    CommentNullifierUsed = 26,
-    CommentContentTooLong = 27,
 }
 
 // Maximum allowed IC vector length (num_public_inputs + 1)
@@ -81,7 +74,6 @@ const MAX_IC_LENGTH: u32 = 21;
 const MAX_TITLE_LEN: u32 = 100; // Max proposal title length (100 bytes)
 const MAX_CID_LEN: u32 = 64; // Max IPFS CID length (CIDv1 is ~59 chars)
 const EXPECTED_IC_LENGTH: u32 = 7; // Exact IC length for vote circuit (6 public signals + 1)
-const MAX_REVISIONS: u32 = 50; // Max number of revisions per comment
 
 #[contracttype]
 #[derive(Clone)]
@@ -93,10 +85,6 @@ pub enum DataKey {
     VkVersion(u64),            // dao_id -> current VK version
     VkByVersion(u64, u32),     // (dao_id, vk_version) -> VerificationKey
     VerifyOverride,            // Test-only: force verify_groth16 result (unused in prod)
-    // Comment storage keys
-    Comment(u64, u64, u64),    // (dao_id, proposal_id, comment_id) -> CommentInfo
-    CommentCount(u64, u64),    // (dao_id, proposal_id) -> comment count
-    CommentNullifier(u64, u64, U256), // (dao_id, proposal_id, nullifier) -> comment_id
 }
 
 #[contracttype]
@@ -132,29 +120,6 @@ pub struct ProposalInfo {
     pub eligible_root: U256, // Merkle root at creation - defines eligible voter set
     pub vote_mode: VoteMode, // Fixed or Trailing voting
     pub earliest_root_index: u32, // For Trailing mode: earliest valid root index
-}
-
-/// Who deleted a comment (0 = not deleted, 1 = user, 2 = admin)
-pub const DELETED_BY_NONE: u32 = 0;
-pub const DELETED_BY_USER: u32 = 1;
-pub const DELETED_BY_ADMIN: u32 = 2;
-
-/// Comment on a proposal
-#[contracttype]
-#[derive(Clone)]
-pub struct CommentInfo {
-    pub id: u64,
-    pub dao_id: u64,
-    pub proposal_id: u64,
-    pub author: Option<Address>,      // None for anonymous comments
-    pub content_cid: String,          // IPFS CID pointing to comment content
-    pub parent_id: Option<u64>,       // None for top-level comments
-    pub created_at: u64,              // Unix timestamp
-    pub updated_at: u64,              // Unix timestamp of last edit
-    pub revision_cids: Vec<String>,   // History of previous content CIDs
-    pub deleted: bool,                // Soft delete flag
-    pub deleted_by: u32,              // 0=not deleted, 1=user, 2=admin
-    pub nullifier: Option<U256>,      // For anonymous comments, stored for edit/delete auth
 }
 
 /// Groth16 Verification Key for BN254
@@ -233,39 +198,6 @@ pub struct VoteEvent {
 pub struct ContractUpgraded {
     pub from: u32,
     pub to: u32,
-}
-
-// Comment events
-#[soroban_sdk::contractevent]
-#[derive(Clone, Debug, PartialEq)]
-pub struct CommentCreatedEvent {
-    #[topic]
-    pub dao_id: u64,
-    #[topic]
-    pub proposal_id: u64,
-    pub comment_id: u64,
-    pub is_anonymous: bool,
-}
-
-#[soroban_sdk::contractevent]
-#[derive(Clone, Debug, PartialEq)]
-pub struct CommentEditedEvent {
-    #[topic]
-    pub dao_id: u64,
-    #[topic]
-    pub proposal_id: u64,
-    pub comment_id: u64,
-}
-
-#[soroban_sdk::contractevent]
-#[derive(Clone, Debug, PartialEq)]
-pub struct CommentDeletedEvent {
-    #[topic]
-    pub dao_id: u64,
-    #[topic]
-    pub proposal_id: u64,
-    pub comment_id: u64,
-    pub deleted_by: u32,  // 1=user, 2=admin
 }
 
 #[contract]
@@ -842,6 +774,30 @@ impl Voting {
             .expect("proposal not found")
     }
 
+    /// Get vote mode for a proposal (0 = Fixed, 1 = Trailing)
+    /// Used by comments contract for eligibility checks
+    pub fn get_vote_mode(env: Env, dao_id: u64, proposal_id: u64) -> u32 {
+        let proposal = Self::get_proposal(env, dao_id, proposal_id);
+        match proposal.vote_mode {
+            VoteMode::Fixed => 0,
+            VoteMode::Trailing => 1,
+        }
+    }
+
+    /// Get eligible root for a proposal (merkle root at snapshot)
+    /// Used by comments contract for Fixed mode eligibility checks
+    pub fn get_eligible_root(env: Env, dao_id: u64, proposal_id: u64) -> U256 {
+        let proposal = Self::get_proposal(env, dao_id, proposal_id);
+        proposal.eligible_root
+    }
+
+    /// Get earliest root index for a proposal (for Trailing mode)
+    /// Used by comments contract for Trailing mode eligibility checks
+    pub fn get_earliest_idx(env: Env, dao_id: u64, proposal_id: u64) -> u32 {
+        let proposal = Self::get_proposal(env, dao_id, proposal_id);
+        proposal.earliest_root_index
+    }
+
     /// Get proposal count for a DAO
     pub fn proposal_count(env: Env, dao_id: u64) -> u64 {
         env.storage()
@@ -937,6 +893,16 @@ impl Voting {
             .persistent()
             .get(&DataKey::VkVersion(dao_id))
             .unwrap_or(0)
+    }
+
+    /// Get the current VK for a DAO (used by other contracts like comments)
+    pub fn get_vk(env: Env, dao_id: u64) -> VerificationKey {
+        let version: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::VkVersion(dao_id))
+            .unwrap_or_else(|| panic_with_error!(&env, VotingError::VkNotSet));
+        Self::get_vk_by_version(&env, dao_id, version)
     }
 
     /// Get a specific VK version for observability/off-chain verification
@@ -1102,522 +1068,6 @@ impl Voting {
         }
 
         result
-    }
-
-    // ==================== COMMENT FUNCTIONS ====================
-
-    /// Add a public comment (author is visible)
-    pub fn add_comment(
-        env: Env,
-        dao_id: u64,
-        proposal_id: u64,
-        content_cid: String,
-        parent_id: Option<u64>,
-        author: Address,
-    ) -> u64 {
-        author.require_auth();
-
-        // Validate content CID
-        if content_cid.len() > MAX_CID_LEN {
-            panic_with_error!(&env, VotingError::CommentContentTooLong);
-        }
-
-        // Check membership (must be DAO member to comment)
-        Self::assert_membership(&env, dao_id, &author);
-
-        // Validate parent exists if provided
-        if let Some(pid) = parent_id {
-            let parent_key = DataKey::Comment(dao_id, proposal_id, pid);
-            if !env.storage().persistent().has(&parent_key) {
-                panic_with_error!(&env, VotingError::InvalidParentComment);
-            }
-        }
-
-        let comment_id = Self::next_comment_id(&env, dao_id, proposal_id);
-        let now = env.ledger().timestamp();
-
-        let comment = CommentInfo {
-            id: comment_id,
-            dao_id,
-            proposal_id,
-            author: Some(author),
-            content_cid,
-            parent_id,
-            created_at: now,
-            updated_at: now,
-            revision_cids: Vec::new(&env),
-            deleted: false,
-            deleted_by: DELETED_BY_NONE,
-            nullifier: None,
-        };
-
-        let key = DataKey::Comment(dao_id, proposal_id, comment_id);
-        env.storage().persistent().set(&key, &comment);
-
-        CommentCreatedEvent {
-            dao_id,
-            proposal_id,
-            comment_id,
-            is_anonymous: false,
-        }
-        .publish(&env);
-
-        comment_id
-    }
-
-    /// Add an anonymous comment (author hidden, requires ZK proof)
-    /// The nullifier allows the same user to edit/delete their comment later
-    pub fn add_anonymous_comment(
-        env: Env,
-        dao_id: u64,
-        proposal_id: u64,
-        content_cid: String,
-        parent_id: Option<u64>,
-        nullifier: U256,
-        root: U256,
-        commitment: U256,
-        proof: Proof,
-    ) -> u64 {
-        // Validate content CID
-        if content_cid.len() > MAX_CID_LEN {
-            panic_with_error!(&env, VotingError::CommentContentTooLong);
-        }
-
-        // Check nullifier not already used (prevents duplicate comments with same nonce)
-        let null_key = DataKey::CommentNullifier(dao_id, proposal_id, nullifier.clone());
-        if env.storage().persistent().has(&null_key) {
-            panic_with_error!(&env, VotingError::CommentNullifierUsed);
-        }
-
-        // Validate parent exists if provided
-        if let Some(pid) = parent_id {
-            let parent_key = DataKey::Comment(dao_id, proposal_id, pid);
-            if !env.storage().persistent().has(&parent_key) {
-                panic_with_error!(&env, VotingError::InvalidParentComment);
-            }
-        }
-
-        // Get proposal to get VK version and root for verification
-        let proposal = Self::get_proposal(env.clone(), dao_id, proposal_id);
-
-        // Verify root is valid (using same logic as voting)
-        match proposal.vote_mode {
-            VoteMode::Fixed => {
-                if root != proposal.eligible_root {
-                    panic_with_error!(&env, VotingError::RootMismatch);
-                }
-            }
-            VoteMode::Trailing => {
-                let tree_contract: Address = Self::tree_contract(env.clone());
-                let root_valid: bool = env.invoke_contract(
-                    &tree_contract,
-                    &symbol_short!("root_ok"),
-                    soroban_sdk::vec![&env, dao_id.into_val(&env), root.clone().into_val(&env)],
-                );
-                if !root_valid {
-                    panic_with_error!(&env, VotingError::RootNotInHistory);
-                }
-            }
-        }
-
-        // Verify ZK proof (same VK as voting)
-        let vk: VerificationKey = Self::get_vk_by_version(&env, dao_id, proposal.vk_version);
-
-        // Public signals: [root, nullifier, daoId, proposalId, voteChoice, commitment]
-        // For comments, voteChoice is 0 (not used)
-        let vote_signal = U256::from_u32(&env, 0);
-        let dao_signal = U256::from_u128(&env, dao_id as u128);
-        let proposal_signal = U256::from_u128(&env, proposal_id as u128);
-
-        let pub_signals = soroban_sdk::vec![
-            &env,
-            root.clone(),
-            nullifier.clone(),
-            dao_signal,
-            proposal_signal,
-            vote_signal,
-            commitment.clone()
-        ];
-
-        if !Self::verify_groth16(&env, &vk, &proof, &pub_signals) {
-            panic_with_error!(&env, VotingError::InvalidProof);
-        }
-
-        let comment_id = Self::next_comment_id(&env, dao_id, proposal_id);
-        let now = env.ledger().timestamp();
-
-        let comment = CommentInfo {
-            id: comment_id,
-            dao_id,
-            proposal_id,
-            author: None, // Anonymous
-            content_cid,
-            parent_id,
-            created_at: now,
-            updated_at: now,
-            revision_cids: Vec::new(&env),
-            deleted: false,
-            deleted_by: DELETED_BY_NONE,
-            nullifier: Some(nullifier.clone()),
-        };
-
-        let key = DataKey::Comment(dao_id, proposal_id, comment_id);
-        env.storage().persistent().set(&key, &comment);
-
-        // Store nullifier -> comment_id mapping for edit/delete
-        env.storage().persistent().set(&null_key, &comment_id);
-
-        CommentCreatedEvent {
-            dao_id,
-            proposal_id,
-            comment_id,
-            is_anonymous: true,
-        }
-        .publish(&env);
-
-        comment_id
-    }
-
-    /// Edit a public comment (owner only)
-    pub fn edit_comment(
-        env: Env,
-        dao_id: u64,
-        proposal_id: u64,
-        comment_id: u64,
-        new_content_cid: String,
-        author: Address,
-    ) {
-        author.require_auth();
-
-        if new_content_cid.len() > MAX_CID_LEN {
-            panic_with_error!(&env, VotingError::CommentContentTooLong);
-        }
-
-        let key = DataKey::Comment(dao_id, proposal_id, comment_id);
-        let mut comment: CommentInfo = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or_else(|| panic_with_error!(&env, VotingError::CommentNotFound));
-
-        if comment.deleted {
-            panic_with_error!(&env, VotingError::CommentDeleted);
-        }
-
-        // Must be the original author
-        match &comment.author {
-            Some(original_author) if original_author == &author => {}
-            _ => panic_with_error!(&env, VotingError::NotCommentOwner),
-        }
-
-        // Store old CID in revision history (limit revisions)
-        if comment.revision_cids.len() < MAX_REVISIONS {
-            comment.revision_cids.push_back(comment.content_cid.clone());
-        }
-
-        comment.content_cid = new_content_cid;
-        comment.updated_at = env.ledger().timestamp();
-
-        env.storage().persistent().set(&key, &comment);
-
-        CommentEditedEvent {
-            dao_id,
-            proposal_id,
-            comment_id,
-        }
-        .publish(&env);
-    }
-
-    /// Edit an anonymous comment (requires proof with same nullifier)
-    pub fn edit_anonymous_comment(
-        env: Env,
-        dao_id: u64,
-        proposal_id: u64,
-        comment_id: u64,
-        new_content_cid: String,
-        nullifier: U256,
-        root: U256,
-        commitment: U256,
-        proof: Proof,
-    ) {
-        if new_content_cid.len() > MAX_CID_LEN {
-            panic_with_error!(&env, VotingError::CommentContentTooLong);
-        }
-
-        let key = DataKey::Comment(dao_id, proposal_id, comment_id);
-        let mut comment: CommentInfo = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or_else(|| panic_with_error!(&env, VotingError::CommentNotFound));
-
-        if comment.deleted {
-            panic_with_error!(&env, VotingError::CommentDeleted);
-        }
-
-        // Must match the original nullifier
-        match &comment.nullifier {
-            Some(original_nullifier) if original_nullifier == &nullifier => {}
-            _ => panic_with_error!(&env, VotingError::NotCommentOwner),
-        }
-
-        // Verify ZK proof
-        let proposal = Self::get_proposal(env.clone(), dao_id, proposal_id);
-        let vk: VerificationKey = Self::get_vk_by_version(&env, dao_id, proposal.vk_version);
-
-        let vote_signal = U256::from_u32(&env, 0);
-        let dao_signal = U256::from_u128(&env, dao_id as u128);
-        let proposal_signal = U256::from_u128(&env, proposal_id as u128);
-
-        let pub_signals = soroban_sdk::vec![
-            &env,
-            root.clone(),
-            nullifier.clone(),
-            dao_signal,
-            proposal_signal,
-            vote_signal,
-            commitment.clone()
-        ];
-
-        if !Self::verify_groth16(&env, &vk, &proof, &pub_signals) {
-            panic_with_error!(&env, VotingError::InvalidProof);
-        }
-
-        // Store old CID in revision history
-        if comment.revision_cids.len() < MAX_REVISIONS {
-            comment.revision_cids.push_back(comment.content_cid.clone());
-        }
-
-        comment.content_cid = new_content_cid;
-        comment.updated_at = env.ledger().timestamp();
-
-        env.storage().persistent().set(&key, &comment);
-
-        CommentEditedEvent {
-            dao_id,
-            proposal_id,
-            comment_id,
-        }
-        .publish(&env);
-    }
-
-    /// Delete a public comment (owner only - soft delete)
-    pub fn delete_comment(
-        env: Env,
-        dao_id: u64,
-        proposal_id: u64,
-        comment_id: u64,
-        author: Address,
-    ) {
-        author.require_auth();
-
-        let key = DataKey::Comment(dao_id, proposal_id, comment_id);
-        let mut comment: CommentInfo = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or_else(|| panic_with_error!(&env, VotingError::CommentNotFound));
-
-        if comment.deleted {
-            return; // Already deleted, idempotent
-        }
-
-        // Must be the original author
-        match &comment.author {
-            Some(original_author) if original_author == &author => {}
-            _ => panic_with_error!(&env, VotingError::NotCommentOwner),
-        }
-
-        comment.deleted = true;
-        comment.deleted_by = DELETED_BY_USER;
-        comment.updated_at = env.ledger().timestamp();
-
-        env.storage().persistent().set(&key, &comment);
-
-        CommentDeletedEvent {
-            dao_id,
-            proposal_id,
-            comment_id,
-            deleted_by: DELETED_BY_USER,
-        }
-        .publish(&env);
-    }
-
-    /// Delete an anonymous comment (requires proof with same nullifier)
-    pub fn delete_anonymous_comment(
-        env: Env,
-        dao_id: u64,
-        proposal_id: u64,
-        comment_id: u64,
-        nullifier: U256,
-        root: U256,
-        commitment: U256,
-        proof: Proof,
-    ) {
-        let key = DataKey::Comment(dao_id, proposal_id, comment_id);
-        let mut comment: CommentInfo = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or_else(|| panic_with_error!(&env, VotingError::CommentNotFound));
-
-        if comment.deleted {
-            return; // Already deleted, idempotent
-        }
-
-        // Must match the original nullifier
-        match &comment.nullifier {
-            Some(original_nullifier) if original_nullifier == &nullifier => {}
-            _ => panic_with_error!(&env, VotingError::NotCommentOwner),
-        }
-
-        // Verify ZK proof
-        let proposal = Self::get_proposal(env.clone(), dao_id, proposal_id);
-        let vk: VerificationKey = Self::get_vk_by_version(&env, dao_id, proposal.vk_version);
-
-        let vote_signal = U256::from_u32(&env, 0);
-        let dao_signal = U256::from_u128(&env, dao_id as u128);
-        let proposal_signal = U256::from_u128(&env, proposal_id as u128);
-
-        let pub_signals = soroban_sdk::vec![
-            &env,
-            root.clone(),
-            nullifier.clone(),
-            dao_signal,
-            proposal_signal,
-            vote_signal,
-            commitment.clone()
-        ];
-
-        if !Self::verify_groth16(&env, &vk, &proof, &pub_signals) {
-            panic_with_error!(&env, VotingError::InvalidProof);
-        }
-
-        comment.deleted = true;
-        comment.deleted_by = DELETED_BY_USER;
-        comment.updated_at = env.ledger().timestamp();
-
-        env.storage().persistent().set(&key, &comment);
-
-        CommentDeletedEvent {
-            dao_id,
-            proposal_id,
-            comment_id,
-            deleted_by: DELETED_BY_USER,
-        }
-        .publish(&env);
-    }
-
-    /// Admin delete any comment (soft delete, preserves history)
-    pub fn admin_delete_comment(
-        env: Env,
-        dao_id: u64,
-        proposal_id: u64,
-        comment_id: u64,
-        admin: Address,
-    ) {
-        admin.require_auth();
-        Self::assert_admin(&env, dao_id, &admin);
-
-        let key = DataKey::Comment(dao_id, proposal_id, comment_id);
-        let mut comment: CommentInfo = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or_else(|| panic_with_error!(&env, VotingError::CommentNotFound));
-
-        if comment.deleted {
-            return; // Already deleted, idempotent
-        }
-
-        comment.deleted = true;
-        comment.deleted_by = DELETED_BY_ADMIN;
-        comment.updated_at = env.ledger().timestamp();
-
-        env.storage().persistent().set(&key, &comment);
-
-        CommentDeletedEvent {
-            dao_id,
-            proposal_id,
-            comment_id,
-            deleted_by: DELETED_BY_ADMIN,
-        }
-        .publish(&env);
-    }
-
-    /// Get a single comment
-    pub fn get_comment(env: Env, dao_id: u64, proposal_id: u64, comment_id: u64) -> CommentInfo {
-        let key = DataKey::Comment(dao_id, proposal_id, comment_id);
-        env.storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or_else(|| panic_with_error!(&env, VotingError::CommentNotFound))
-    }
-
-    /// Get comment count for a proposal
-    pub fn comment_count(env: Env, dao_id: u64, proposal_id: u64) -> u64 {
-        env.storage()
-            .instance()
-            .get(&DataKey::CommentCount(dao_id, proposal_id))
-            .unwrap_or(0)
-    }
-
-    /// Get all comments for a proposal (paginated)
-    /// Returns comments from start_id to start_id + limit (exclusive)
-    pub fn get_comments(
-        env: Env,
-        dao_id: u64,
-        proposal_id: u64,
-        start_id: u64,
-        limit: u64,
-    ) -> Vec<CommentInfo> {
-        let total = Self::comment_count(env.clone(), dao_id, proposal_id);
-        let mut comments = Vec::new(&env);
-
-        let end = if start_id + limit > total {
-            total
-        } else {
-            start_id + limit
-        };
-
-        for i in start_id..end {
-            let comment_id = i + 1; // IDs are 1-indexed
-            let key = DataKey::Comment(dao_id, proposal_id, comment_id);
-            if let Some(comment) = env.storage().persistent().get::<DataKey, CommentInfo>(&key) {
-                comments.push_back(comment);
-            }
-        }
-
-        comments
-    }
-
-    // Internal: Get next comment ID for a proposal
-    fn next_comment_id(env: &Env, dao_id: u64, proposal_id: u64) -> u64 {
-        let count_key = DataKey::CommentCount(dao_id, proposal_id);
-        let count: u64 = env.storage().instance().get(&count_key).unwrap_or(0);
-        let new_id = count + 1;
-        env.storage().instance().set(&count_key, &new_id);
-        new_id
-    }
-
-    // Internal: Assert user has membership in DAO
-    fn assert_membership(env: &Env, dao_id: u64, member: &Address) {
-        let tree_contract: Address = Self::tree_contract(env.clone());
-        let sbt_contract: Address = env.invoke_contract(
-            &tree_contract,
-            &symbol_short!("sbt_contr"),
-            soroban_sdk::vec![env],
-        );
-
-        let has_sbt: bool = env.invoke_contract(
-            &sbt_contract,
-            &symbol_short!("has"),
-            soroban_sdk::vec![env, dao_id.into_val(env), member.clone().into_val(env)],
-        );
-
-        if !has_sbt {
-            panic_with_error!(env, VotingError::NotDaoMember);
-        }
     }
 }
 

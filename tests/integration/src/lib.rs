@@ -238,13 +238,15 @@ mod tests {
         system.voting_client().set_vk(&dao_id, &vk, &admin);
 
         // Member creates proposal
-        let description = String::from_str(&system.env, "Increase funding");
+        let title = String::from_str(&system.env, "Increase funding");
+        let content_cid = String::from_str(&system.env, "");
         let now = system.env.ledger().timestamp();
         let end_time = now + 86400; // 1 day
 
         let proposal_id = system.voting_client().create_proposal(
             &dao_id,
-            &description,
+            &title,
+            &content_cid,
             &end_time,
             &member,
             &VoteMode::Fixed,
@@ -254,7 +256,7 @@ mod tests {
 
         // Verify proposal exists
         let proposal = system.voting_client().get_proposal(&dao_id, &proposal_id);
-        assert_eq!(proposal.description, description);
+        assert_eq!(proposal.title, title);
         assert_eq!(proposal.yes_votes, 0);
         assert_eq!(proposal.no_votes, 0);
     }
@@ -300,13 +302,15 @@ mod tests {
         system.voting_client().set_vk(&dao_id, &vk, &admin);
 
         // 7. Create proposal (member1 creates it)
-        let description = String::from_str(&system.env, "Fund development");
+        let title = String::from_str(&system.env, "Fund development");
+        let content_cid = String::from_str(&system.env, "");
         let now = system.env.ledger().timestamp();
         let end_time = now + 86400;
 
         let proposal_id = system.voting_client().create_proposal(
             &dao_id,
-            &description,
+            &title,
+            &content_cid,
             &end_time,
             &member1,
             &VoteMode::Fixed,
@@ -408,13 +412,15 @@ mod tests {
         system.voting_client().set_vk(&dao_id, &vk, &admin);
 
         // Non-member tries to create proposal
-        let description = String::from_str(&system.env, "Bad proposal");
+        let title = String::from_str(&system.env, "Bad proposal");
+        let content_cid = String::from_str(&system.env, "");
         let now = system.env.ledger().timestamp();
         let end_time = now + 86400;
 
         system.voting_client().create_proposal(
             &dao_id,
-            &description,
+            &title,
+            &content_cid,
             &end_time,
             &non_member,
             &VoteMode::Fixed,
@@ -448,12 +454,14 @@ mod tests {
         let vk = system.create_test_vk();
         system.voting_client().set_vk(&dao_id, &vk, &admin);
 
-        let description = String::from_str(&system.env, "Test");
+        let title = String::from_str(&system.env, "Test");
+        let content_cid = String::from_str(&system.env, "");
         let now = system.env.ledger().timestamp();
         let end_time = now + 86400;
         let proposal_id = system.voting_client().create_proposal(
             &dao_id,
-            &description,
+            &title,
+            &content_cid,
             &end_time,
             &member,
             &VoteMode::Fixed,
@@ -591,12 +599,14 @@ mod tests {
         let vk = system.create_test_vk();
         system.voting_client().set_vk(&dao_id, &vk, &admin);
 
-        let description = String::from_str(&system.env, "Test");
+        let title = String::from_str(&system.env, "Test");
+        let content_cid = String::from_str(&system.env, "");
         let now = system.env.ledger().timestamp();
         let end_time = now + 86400;
         let proposal_id = system.voting_client().create_proposal(
             &dao_id,
-            &description,
+            &title,
+            &content_cid,
             &end_time,
             &member1,
             &VoteMode::Fixed,
@@ -673,6 +683,7 @@ mod tests {
         let proposal_id = system.voting_client().create_proposal(
             &dao_id,
             &String::from_str(&system.env, "Test"),
+            &String::from_str(&system.env, ""),
             &end_time,
             &member1,
             &VoteMode::Fixed,
@@ -736,6 +747,7 @@ mod tests {
         let proposal_id = system.voting_client().create_proposal(
             &dao_id,
             &String::from_str(&system.env, "Trailing Mode Test"),
+            &String::from_str(&system.env, ""),
             &end_time,
             &member1,
             &VoteMode::Trailing, // Trailing mode allows late joiners
@@ -818,6 +830,7 @@ mod tests {
         let proposal_id = system.voting_client().create_proposal(
             &dao_id,
             &String::from_str(&system.env, "New Proposal"),
+            &String::from_str(&system.env, ""),
             &end_time,
             &member2,
             &VoteMode::Trailing,
@@ -879,6 +892,7 @@ mod tests {
         let proposal_id = system.voting_client().create_proposal(
             &dao_id,
             &String::from_str(&system.env, "Old Proposal"),
+            &String::from_str(&system.env, ""),
             &end_time,
             &member1,
             &VoteMode::Trailing,
@@ -935,6 +949,7 @@ mod tests {
         let proposal1 = system.voting_client().create_proposal(
             &dao_id,
             &String::from_str(&system.env, "P1"),
+            &String::from_str(&system.env, ""),
             &0,
             &member,
             &VoteMode::Fixed,
@@ -950,6 +965,7 @@ mod tests {
         let proposal2 = system.voting_client().create_proposal(
             &dao_id,
             &String::from_str(&system.env, "P2"),
+            &String::from_str(&system.env, ""),
             &0,
             &member,
             &VoteMode::Fixed,
@@ -1053,6 +1069,7 @@ mod tests {
         let proposal_id = system.voting_client().create_proposal(
             &dao_id,
             &String::from_str(&system.env, "Proposal A"),
+            &String::from_str(&system.env, ""),
             &0, // no deadline
             &admin,
             &VoteMode::Fixed,
@@ -1119,7 +1136,7 @@ mod tests {
         system.voting_client().set_vk(&dao1, &vk1, &admin1);
         let p1 = system
             .voting_client()
-            .create_proposal(&dao1, &String::from_str(&system.env, "P1"), &0, &member, &VoteMode::Fixed);
+            .create_proposal(&dao1, &String::from_str(&system.env, "P1"), &String::from_str(&system.env, ""), &0, &member, &VoteMode::Fixed);
 
         // DAO 2
         let dao2 = system.registry_client().create_dao(
@@ -1137,7 +1154,7 @@ mod tests {
         system.voting_client().set_vk(&dao2, &vk2, &admin2);
         let p2 = system
             .voting_client()
-            .create_proposal(&dao2, &String::from_str(&system.env, "P2"), &0, &member, &VoteMode::Fixed);
+            .create_proposal(&dao2, &String::from_str(&system.env, "P2"), &String::from_str(&system.env, ""), &0, &member, &VoteMode::Fixed);
 
         // Same nullifier scoped per dao/proposal should work
         let proof = system.create_test_proof();
@@ -1188,6 +1205,7 @@ mod tests {
         let proposal_id = system.voting_client().create_proposal(
             &dao_id,
             &String::from_str(&system.env, "Fuzz Proposal"),
+            &String::from_str(&system.env, ""),
             &(now + 3600),
             &member,
             &VoteMode::Fixed,

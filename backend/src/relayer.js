@@ -104,6 +104,7 @@ const GENERIC_ERRORS = process.env.RELAYER_GENERIC_ERRORS === 'true'; // when tr
 // Contract IDs - MUST be set or server won't start
 const VOTING_CONTRACT_ID = process.env.VOTING_CONTRACT_ID;
 const TREE_CONTRACT_ID = process.env.TREE_CONTRACT_ID;
+const COMMENTS_CONTRACT_ID = process.env.COMMENTS_CONTRACT_ID;
 const DAO_REGISTRY_CONTRACT_ID = process.env.DAO_REGISTRY_CONTRACT_ID;
 const MEMBERSHIP_SBT_CONTRACT_ID = process.env.MEMBERSHIP_SBT_CONTRACT_ID;
 
@@ -119,6 +120,13 @@ const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_METADATA_SIZE = 100 * 1024; // 100KB
 
 // Multer configuration for file uploads
+// Supported image types (allow all common image formats)
+const ALLOWED_IMAGE_MIMES = [
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'image/svg+xml', 'image/heic', 'image/heif', 'image/avif',
+  'image/bmp', 'image/tiff'
+];
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -126,12 +134,17 @@ const upload = multer({
     files: 1,
   },
   fileFilter: (_req, file, cb) => {
-    // Only allow images
-    const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (allowedMimes.includes(file.mimetype)) {
+    // Log the received MIME type for debugging
+    log('info', 'upload_file_filter', { mimetype: file.mimetype, originalname: file.originalname });
+
+    // Allow known image MIME types or any image/* type
+    if (ALLOWED_IMAGE_MIMES.includes(file.mimetype) || file.mimetype?.startsWith('image/')) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.'));
+      // Create error with specific message that will be caught by error handler
+      const err = new Error(`Unsupported file type: ${file.mimetype || 'unknown'}. Allowed: JPEG, PNG, GIF, WebP, AVIF, HEIC.`);
+      err.code = 'INVALID_FILE_TYPE';
+      cb(err);
     }
   },
 });
@@ -140,6 +153,7 @@ function validateEnv() {
   const missing = [];
   if (!VOTING_CONTRACT_ID) missing.push('VOTING_CONTRACT_ID');
   if (!TREE_CONTRACT_ID) missing.push('TREE_CONTRACT_ID');
+  if (!COMMENTS_CONTRACT_ID) missing.push('COMMENTS_CONTRACT_ID');
   if (!process.env.RELAYER_SECRET_KEY) missing.push('RELAYER_SECRET_KEY');
   if (!RPC_URL) missing.push('SOROBAN_RPC_URL');
   if (!NETWORK_PASSPHRASE) missing.push('NETWORK_PASSPHRASE');
@@ -156,6 +170,10 @@ function validateEnv() {
   }
   if (!isValidContractId(TREE_CONTRACT_ID)) {
     log('error', 'invalid_contract_id', { var: 'TREE_CONTRACT_ID', value: TREE_CONTRACT_ID });
+    process.exit(1);
+  }
+  if (!isValidContractId(COMMENTS_CONTRACT_ID)) {
+    log('error', 'invalid_contract_id', { var: 'COMMENTS_CONTRACT_ID', value: COMMENTS_CONTRACT_ID });
     process.exit(1);
   }
 }
@@ -691,7 +709,24 @@ function setCachedContent(cid, data) {
 }
 
 // Upload image to IPFS
-app.post('/ipfs/image', ipfsUploadLimiter, upload.single('image'), async (req, res) => {
+// Wrap multer to handle file filter errors with proper 400 status
+app.post('/ipfs/image', ipfsUploadLimiter, (req, res, next) => {
+  upload.single('image')(req, res, (err) => {
+    if (err) {
+      // Handle multer errors (file type, size, etc.)
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'File too large. Maximum size is 5MB.' });
+      }
+      if (err.code === 'INVALID_FILE_TYPE' || err.message?.includes('file type')) {
+        return res.status(400).json({ error: err.message });
+      }
+      // Other multer errors
+      log('error', 'multer_error', { code: err.code, message: err.message });
+      return res.status(400).json({ error: err.message || 'File upload failed' });
+    }
+    next();
+  });
+}, async (req, res) => {
   if (!IPFS_ENABLED) {
     return res.status(503).json({ error: 'IPFS service not configured' });
   }
@@ -906,18 +941,17 @@ app.post('/comment/public', authGuard, commentLimiter, async (req, res) => {
   try {
     log('info', 'comment_public_request', { daoId, proposalId });
 
-    const contract = new StellarSdk.Contract(VOTING_CONTRACT_ID);
+    const contract = new StellarSdk.Contract(COMMENTS_CONTRACT_ID);
 
     // Build args for add_comment
+    // Contract signature: add_comment(dao_id, proposal_id, content_cid, parent_id, author)
     const authorAddress = StellarSdk.Address.fromString(author);
     const args = [
       StellarSdk.nativeToScVal(daoId, { type: 'u64' }),
       StellarSdk.nativeToScVal(proposalId, { type: 'u64' }),
-      StellarSdk.xdr.ScVal.scvAddress(authorAddress.toScAddress()),
       StellarSdk.nativeToScVal(contentCid, { type: 'string' }),
-      parentId !== undefined && parentId !== null
-        ? StellarSdk.xdr.ScVal.scvVec([StellarSdk.nativeToScVal(parentId, { type: 'u64' })])
-        : StellarSdk.xdr.ScVal.scvVec([]),
+      StellarSdk.nativeToScVal(parentId !== undefined && parentId !== null ? BigInt(parentId) : null),
+      StellarSdk.xdr.ScVal.scvAddress(authorAddress.toScAddress()),
     ];
 
     const operation = contract.call('add_comment', ...args);
@@ -981,12 +1015,13 @@ app.post('/comment/public', authGuard, commentLimiter, async (req, res) => {
 });
 
 // POST /comment/anonymous - Submit anonymous comment with ZK proof
+// Uses the same vote circuit as voting - just verifies membership, doesn't track nullifiers
 app.post('/comment/anonymous', authGuard, commentLimiter, async (req, res) => {
-  const { daoId, proposalId, contentCid, parentId, nullifier, root, commitment, nonce, proof } = req.body;
+  const { daoId, proposalId, contentCid, parentId, voteChoice, nullifier, root, commitment, proof } = req.body;
 
   // Validate required fields
   if (daoId === undefined || proposalId === undefined || !contentCid ||
-      !nullifier || !root || !commitment || nonce === undefined || !proof) {
+      voteChoice === undefined || !nullifier || !root || !commitment || !proof) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
@@ -996,8 +1031,8 @@ app.post('/comment/anonymous', authGuard, commentLimiter, async (req, res) => {
   if (!Number.isInteger(proposalId) || proposalId < 0) {
     return res.status(400).json({ error: 'proposalId must be a non-negative integer' });
   }
-  if (!Number.isInteger(nonce) || nonce < 0) {
-    return res.status(400).json({ error: 'nonce must be a non-negative integer' });
+  if (typeof voteChoice !== 'boolean') {
+    return res.status(400).json({ error: 'voteChoice must be a boolean' });
   }
   if (!isValidU256Hex(nullifier) || !isWithinField(nullifier)) {
     return res.status(400).json({ error: 'nullifier must be a valid hex string < BN254 modulus' });
@@ -1023,18 +1058,20 @@ app.post('/comment/anonymous', authGuard, commentLimiter, async (req, res) => {
     const scCommitment = u256ToScVal(commitment);
     const scProof = proofToScVal(proof);
 
-    const contract = new StellarSdk.Contract(VOTING_CONTRACT_ID);
+    // Use comments contract for anonymous comments (same vote circuit, no nullifier tracking)
+    const contract = new StellarSdk.Contract(COMMENTS_CONTRACT_ID);
 
+    // Vote circuit public signals: [root, nullifier, daoId, proposalId, voteChoice, commitment]
+    // Contract args: dao_id, proposal_id, content_cid, parent_id, nullifier, root, commitment, vote_choice, proof
     const args = [
       StellarSdk.nativeToScVal(daoId, { type: 'u64' }),
       StellarSdk.nativeToScVal(proposalId, { type: 'u64' }),
       StellarSdk.nativeToScVal(contentCid, { type: 'string' }),
-      parentId !== undefined && parentId !== null
-        ? StellarSdk.xdr.ScVal.scvVec([StellarSdk.nativeToScVal(parentId, { type: 'u64' })])
-        : StellarSdk.xdr.ScVal.scvVec([]),
+      StellarSdk.nativeToScVal(parentId !== undefined && parentId !== null ? BigInt(parentId) : null),
       scNullifier,
       scRoot,
       scCommitment,
+      StellarSdk.nativeToScVal(voteChoice, { type: 'bool' }),
       scProof,
     ];
 
@@ -1092,13 +1129,69 @@ app.post('/comment/anonymous', authGuard, commentLimiter, async (req, res) => {
   }
 });
 
+// GET /comments/:daoId/:proposalId/nonce - Get next available comment nonce for a commitment
+// This is used to generate unique nullifiers for multiple anonymous comments
+app.get('/comments/:daoId/:proposalId/nonce', queryLimiter, async (req, res) => {
+  const { daoId, proposalId } = req.params;
+  const { commitment } = req.query;
+
+  if (!commitment) {
+    return res.status(400).json({ error: 'commitment query parameter is required' });
+  }
+
+  try {
+    // Query the comments contract to get the nonce for this commitment
+    // The nonce is the count of anonymous comments by this commitment on this proposal
+    const contract = new StellarSdk.Contract(COMMENTS_CONTRACT_ID);
+
+    // Convert commitment hex to U256
+    const scCommitment = u256ToScVal(commitment);
+
+    const args = [
+      StellarSdk.nativeToScVal(parseInt(daoId), { type: 'u64' }),
+      StellarSdk.nativeToScVal(parseInt(proposalId), { type: 'u64' }),
+      scCommitment,
+    ];
+
+    const operation = contract.call('get_comment_nonce', ...args);
+
+    const account = await server.getAccount(relayerKeypair.publicKey());
+    const tx = new StellarSdk.TransactionBuilder(account, {
+      fee: '100',
+      networkPassphrase: NETWORK_PASSPHRASE
+    })
+      .addOperation(operation)
+      .setTimeout(30)
+      .build();
+
+    const simResult = await callWithTimeout(
+      () => simulateWithBackoff(() => server.simulateTransaction(tx)),
+      'simulate_get_comment_nonce'
+    );
+
+    if (StellarSdk.rpc.Api.isSimulationSuccess(simResult)) {
+      const result = simResult.result?.retval;
+      const nonce = result ? Number(StellarSdk.scValToNative(result)) : 0;
+      res.json({ nonce });
+    } else {
+      // If contract doesn't have this function yet, return 0
+      log('warn', 'get_comment_nonce_failed', { daoId, proposalId, error: simResult.error });
+      res.json({ nonce: 0 });
+    }
+  } catch (err) {
+    log('error', 'get_comment_nonce_exception', { daoId, proposalId, error: err.message });
+    // Return 0 as fallback (first comment)
+    res.json({ nonce: 0 });
+  }
+});
+
 // GET /comments/:daoId/:proposalId - Fetch comments for a proposal
 app.get('/comments/:daoId/:proposalId', queryLimiter, async (req, res) => {
   const { daoId, proposalId } = req.params;
   const { limit = 50, offset = 0 } = req.query;
 
   try {
-    const contract = new StellarSdk.Contract(VOTING_CONTRACT_ID);
+    const contract = new StellarSdk.Contract(COMMENTS_CONTRACT_ID);
 
     const args = [
       StellarSdk.nativeToScVal(parseInt(daoId), { type: 'u64' }),
@@ -1160,7 +1253,7 @@ app.get('/comment/:daoId/:proposalId/:commentId', queryLimiter, async (req, res)
   const { daoId, proposalId, commentId } = req.params;
 
   try {
-    const contract = new StellarSdk.Contract(VOTING_CONTRACT_ID);
+    const contract = new StellarSdk.Contract(COMMENTS_CONTRACT_ID);
 
     const args = [
       StellarSdk.nativeToScVal(parseInt(daoId), { type: 'u64' }),
@@ -1225,7 +1318,7 @@ app.post('/comment/edit', authGuard, commentLimiter, async (req, res) => {
   try {
     log('info', 'comment_edit_request', { daoId, proposalId, commentId });
 
-    const contract = new StellarSdk.Contract(VOTING_CONTRACT_ID);
+    const contract = new StellarSdk.Contract(COMMENTS_CONTRACT_ID);
     const authorAddress = StellarSdk.Address.fromString(author);
 
     const args = [
@@ -1296,7 +1389,7 @@ app.post('/comment/delete', authGuard, commentLimiter, async (req, res) => {
   try {
     log('info', 'comment_delete_request', { daoId, proposalId, commentId });
 
-    const contract = new StellarSdk.Contract(VOTING_CONTRACT_ID);
+    const contract = new StellarSdk.Contract(COMMENTS_CONTRACT_ID);
     const authorAddress = StellarSdk.Address.fromString(author);
 
     const args = [
@@ -1583,6 +1676,7 @@ if (process.env.RELAYER_TEST_MODE !== 'true') {
     console.log('  POST /comment/public      - Submit public comment');
     console.log('  POST /comment/anonymous   - Submit anonymous comment (ZK)');
     console.log('  GET  /comments/:dao/:prop - Get comments for proposal');
+    console.log('  GET  /comments/:dao/:prop/nonce - Get next comment nonce');
     console.log('  GET  /comment/:dao/:prop/:id - Get single comment');
     console.log('  POST /comment/edit        - Edit public comment');
     console.log('  POST /comment/delete      - Delete public comment');

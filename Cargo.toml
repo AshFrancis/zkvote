@@ -4,6 +4,7 @@ members = [
     "contracts/membership-sbt",
     "contracts/membership-tree",
     "contracts/voting",
+    "contracts/comments",
     "tests/integration",
     "tests/p25-feature-check",
 ]

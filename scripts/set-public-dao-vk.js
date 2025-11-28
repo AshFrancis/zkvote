@@ -14,8 +14,8 @@ const fs = require('fs');
 const path = require('path');
 
 // Load configuration
-const VOTING_CONTRACT_ID = process.env.VOTING_CONTRACT_ID || 'CDDJZIZVRYOHVDRWBFICTWMQPY4QJTWXO6AHAWSEZN5E3GURWWAS2ZCE';
-const RPC_URL = process.env.SOROBAN_RPC_URL || 'http://localhost:8000/soroban/rpc';
+const VOTING_CONTRACT_ID = process.env.VOTING_CONTRACT_ID || 'CBSJT3XYBRBBDVTIMV6PHAWVNRNRJTHU5NKBPIEQDW4CCSEPDOAL755K';
+const RPC_URL = process.env.SOROBAN_RPC_URL || 'https://rpc-futurenet.stellar.org';
 const NETWORK_PASSPHRASE = process.env.NETWORK_PASSPHRASE || 'Test SDF Future Network ; October 2022';
 const SECRET_KEY = process.env.SECRET_KEY || 'REPLACE_ME_RELAYER_SECRET';
 

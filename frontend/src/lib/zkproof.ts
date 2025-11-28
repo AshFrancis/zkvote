@@ -3,7 +3,7 @@
 import { groth16 } from "snarkjs";
 import type { Groth16Proof } from "snarkjs";
 
-export interface ProofInput {
+export interface VoteProofInput {
   secret: string;
   salt: string;
   root: string;
@@ -15,6 +15,22 @@ export interface ProofInput {
   pathElements: string[];
   pathIndices: number[];
 }
+
+export interface CommentProofInput {
+  secret: string;
+  salt: string;
+  root: string;
+  nullifier: string;
+  daoId: string;
+  proposalId: string;
+  commentNonce: string; // Nonce for multiple comments (0, 1, 2, ...)
+  commitment: string; // Identity commitment for revocation checks
+  pathElements: string[];
+  pathIndices: number[];
+}
+
+// Legacy alias for backwards compatibility
+export type ProofInput = VoteProofInput;
 
 export interface GeneratedProof {
   proof: Groth16Proof;
@@ -29,7 +45,7 @@ export interface GeneratedProof {
  * @returns Generated proof and public signals
  */
 export async function generateVoteProof(
-  input: ProofInput,
+  input: VoteProofInput,
   wasmPath: string,
   zkeyPath: string
 ): Promise<GeneratedProof> {
@@ -50,7 +66,7 @@ export async function generateVoteProof(
       pathIndices: input.pathIndices,
     };
 
-    console.log("Circuit input:", circuitInput);
+    console.log("Vote circuit input:", circuitInput);
 
     // Generate proof using snarkjs
     const { proof, publicSignals } = await groth16.fullProve(
@@ -61,8 +77,53 @@ export async function generateVoteProof(
 
     return { proof, publicSignals };
   } catch (error) {
-    console.error("Failed to generate proof:", error);
-    throw new Error(`Proof generation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    console.error("Failed to generate vote proof:", error);
+    throw new Error(`Vote proof generation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+  }
+}
+
+/**
+ * Generate a Groth16 proof for anonymous commenting
+ * @param input Proof input parameters (uses commentNonce instead of voteChoice)
+ * @param wasmPath Path to compiled comment circuit WASM
+ * @param zkeyPath Path to comment proving key
+ * @returns Generated proof and public signals
+ */
+export async function generateCommentProof(
+  input: CommentProofInput,
+  wasmPath: string = "/circuits/comment/comment.wasm",
+  zkeyPath: string = "/circuits/comment/comment_final.zkey"
+): Promise<GeneratedProof> {
+  try {
+    // Format input for circuit - matches comment.circom signal names
+    const circuitInput = {
+      // Public signals (verified on-chain)
+      root: input.root,
+      nullifier: input.nullifier,
+      daoId: input.daoId,
+      proposalId: input.proposalId,
+      commentNonce: input.commentNonce,
+      commitment: input.commitment,
+      // Private signals (hidden in ZK proof)
+      secret: input.secret,
+      salt: input.salt,
+      pathElements: input.pathElements,
+      pathIndices: input.pathIndices,
+    };
+
+    console.log("Comment circuit input:", circuitInput);
+
+    // Generate proof using snarkjs
+    const { proof, publicSignals } = await groth16.fullProve(
+      circuitInput,
+      wasmPath,
+      zkeyPath
+    );
+
+    return { proof, publicSignals };
+  } catch (error) {
+    console.error("Failed to generate comment proof:", error);
+    throw new Error(`Comment proof generation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
   }
 }
 
@@ -120,7 +181,7 @@ export function generateSecret(): string {
 }
 
 /**
- * Calculate nullifier using Poseidon hash
+ * Calculate vote nullifier using Poseidon hash
  * nullifier = Poseidon(secret, daoId, proposalId)
  */
 export async function calculateNullifier(
@@ -133,6 +194,27 @@ export async function calculateNullifier(
 
   const hash = poseidon.F.toString(
     poseidon([BigInt(secret), BigInt(daoId), BigInt(proposalId)])
+  );
+
+  return hash;
+}
+
+/**
+ * Calculate comment nullifier using Poseidon hash
+ * nullifier = Poseidon(secret, daoId, proposalId, commentNonce)
+ * The nonce allows multiple comments per proposal from the same user
+ */
+export async function calculateCommentNullifier(
+  secret: string,
+  daoId: string,
+  proposalId: string,
+  commentNonce: string
+): Promise<string> {
+  const { buildPoseidon } = await import("circomlibjs");
+  const poseidon = await buildPoseidon();
+
+  const hash = poseidon.F.toString(
+    poseidon([BigInt(secret), BigInt(daoId), BigInt(proposalId), BigInt(commentNonce)])
   );
 
   return hash;

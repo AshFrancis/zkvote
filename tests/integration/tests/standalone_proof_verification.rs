@@ -234,13 +234,15 @@ fn test_real_groth16_proof_verification() {
     println!("Step 7: Creating proposal...");
     println!("============================\n");
 
-    let description = String::from_str(&env, "Test proposal for real proof verification");
+    let title = String::from_str(&env, "Test proposal for real proof verification");
+    let content_cid = String::from_str(&env, "");
     let current_time = env.ledger().timestamp();
     let end_time = current_time + 3600; // 1 hour from now
 
     let proposal_id = voting_client.create_proposal(
         &dao_id,
-        &description,
+        &title,
+        &content_cid,
         &end_time,
         &admin,
         &voting::VoteMode::Fixed,
