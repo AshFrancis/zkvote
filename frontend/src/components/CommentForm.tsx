@@ -5,8 +5,24 @@ import { Textarea } from "./ui/Textarea";
 import { Label } from "./ui/Label";
 import { Badge } from "./ui/Badge";
 import { MessageSquare, Eye, EyeOff, Loader2, AlertTriangle } from "lucide-react";
-import { uploadCommentContent, saveAnonymousComment, getNextNonce } from "../lib/comments";
-import { getZKCredentials, generateVoteProof } from "../lib/zk";
+import {
+  uploadCommentContent,
+  saveAnonymousComment,
+  getNextNonce,
+} from "../lib/comments";
+import {
+  generateDeterministicZKCredentials,
+  getZKCredentials,
+  storeZKCredentials,
+} from "../lib/zk";
+import {
+  generateVoteProof,
+  formatProofForSoroban,
+  type ProofInput,
+} from "../lib/zkproof";
+import { getMerklePath } from "../lib/merkletree";
+import { initializeContractClients } from "../lib/contracts";
+import { buildPoseidon } from "circomlibjs";
 
 const RELAYER_URL = import.meta.env.VITE_RELAYER_URL || "http://localhost:3001";
 
@@ -24,10 +40,29 @@ interface CommentFormProps {
   placeholder?: string;
 }
 
+/**
+ * Calculate comment nullifier using Poseidon hash
+ * commentNullifier = Poseidon(secret, daoId, proposalId, nonce)
+ * The nonce allows multiple anonymous comments per user per proposal
+ */
+async function calculateCommentNullifier(
+  secret: string,
+  daoId: number,
+  proposalId: number,
+  nonce: number
+): Promise<string> {
+  const poseidon = await buildPoseidon();
+  const hash = poseidon.F.toString(
+    poseidon([BigInt(secret), BigInt(daoId), BigInt(proposalId), BigInt(nonce)])
+  );
+  return hash;
+}
+
 export default function CommentForm({
   daoId,
   proposalId,
   publicKey,
+  kit,
   hasMembership,
   isRegistered,
   eligibleRoot,
@@ -40,6 +75,7 @@ export default function CommentForm({
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState("");
 
   const canComment = hasMembership && (isAnonymous ? isRegistered : true);
 
@@ -51,33 +87,102 @@ export default function CommentForm({
 
     setIsSubmitting(true);
     setError(null);
+    setProgress("");
 
     try {
       // Upload content to IPFS
+      setProgress("Uploading comment...");
       const { cid } = await uploadCommentContent(body.trim());
 
       if (isAnonymous) {
-        // Generate ZK proof for anonymous comment
-        const credentials = getZKCredentials(daoId, publicKey);
-        if (!credentials) {
-          throw new Error("No ZK credentials found. Please register first.");
+        // Generate ZK proof for anonymous comment (same flow as voting)
+        setProgress("Loading credentials...");
+        const clients = initializeContractClients(publicKey);
+
+        let secret: string, salt: string, commitment: string, leafIndex: number;
+        const cached = getZKCredentials(daoId, publicKey);
+
+        if (!cached) {
+          if (!kit) {
+            throw new Error("You must register for anonymous comments first.");
+          }
+
+          setProgress("Regenerating credentials...");
+          const credentials = await generateDeterministicZKCredentials(kit, daoId);
+
+          const leafIndexResult = await clients.membershipTree.get_leaf_index({
+            dao_id: BigInt(daoId),
+            commitment: BigInt(credentials.commitment),
+          });
+
+          leafIndex = Number(leafIndexResult.result);
+          secret = credentials.secret;
+          salt = credentials.salt;
+          commitment = credentials.commitment;
+
+          storeZKCredentials(daoId, publicKey, credentials, leafIndex);
+        } else {
+          secret = cached.secret;
+          salt = cached.salt;
+          commitment = cached.commitment;
+          leafIndex = cached.leafIndex;
         }
 
+        // Get next nonce for this user's anonymous comments
         const nonce = getNextNonce(daoId, proposalId);
 
-        // Generate proof (using vote circuit with comment nonce)
-        // Note: In production, this would use a separate comment circuit
-        const proofData = await generateVoteProof({
-          commitment: credentials.commitment,
-          secret: credentials.secret,
-          merkleProof: credentials.merkleProof,
-          proposalId,
+        // Calculate comment-specific nullifier (includes nonce for multiple comments)
+        setProgress("Computing nullifier...");
+        const nullifier = await calculateCommentNullifier(
+          secret,
           daoId,
-          voteChoice: 0, // Not used for comments, but required by circuit
-          root: eligibleRoot.toString(),
-        });
+          proposalId,
+          nonce
+        );
+
+        // Get Merkle path
+        setProgress("Fetching Merkle path...");
+        const { pathElements, pathIndices } = await getMerklePath(
+          leafIndex,
+          daoId,
+          publicKey
+        );
+
+        // Use eligible_root from proposal (snapshot of when proposal was created)
+        const root = eligibleRoot;
+
+        // Generate ZK proof using same vote circuit
+        // We use voteChoice=0 as a placeholder since it's not used for comments
+        setProgress("Generating ZK proof...");
+        const wasmPath = "/circuits/vote.wasm";
+        const zkeyPath = "/circuits/vote_final.zkey";
+
+        const proofInput: ProofInput = {
+          root: root.toString(),
+          nullifier: nullifier.toString(),
+          daoId: daoId.toString(),
+          proposalId: proposalId.toString(),
+          voteChoice: "0", // Not used for comments
+          commitment: commitment.toString(),
+          secret: secret.toString(),
+          salt: salt.toString(),
+          pathElements,
+          pathIndices,
+        };
+
+        const { proof } = await generateVoteProof(proofInput, wasmPath, zkeyPath);
+
+        // Format proof for Soroban
+        const { proof_a, proof_b, proof_c } = formatProofForSoroban(proof);
+
+        // Convert to hex strings
+        const toHexBE = (value: string | bigint): string => {
+          const bigInt = typeof value === "string" ? BigInt(value) : value;
+          return bigInt.toString(16).padStart(64, "0");
+        };
 
         // Submit anonymous comment via relayer
+        setProgress("Submitting comment...");
         const response = await fetch(`${RELAYER_URL}/comment/anonymous`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -86,8 +191,15 @@ export default function CommentForm({
             proposalId,
             contentCid: cid,
             parentId: parentId ?? null,
-            proof: proofData.proof,
-            publicSignals: [proofData.root, proofData.nullifier],
+            nullifier: toHexBE(nullifier),
+            root: toHexBE(root),
+            commitment: toHexBE(commitment),
+            nonce,
+            proof: {
+              a: proof_a,
+              b: proof_b,
+              c: proof_c,
+            },
           }),
         });
 
@@ -101,11 +213,12 @@ export default function CommentForm({
           commentId: data.commentId,
           proposalId,
           daoId,
-          nullifier: proofData.nullifier,
+          nullifier,
           nonce,
         });
       } else {
-        // Submit public comment via relayer
+        // Submit public comment via relayer (simpler, no ZK proof needed)
+        setProgress("Submitting comment...");
         const response = await fetch(`${RELAYER_URL}/comment/public`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -126,6 +239,7 @@ export default function CommentForm({
 
       // Success - clear form and notify parent
       setBody("");
+      setProgress("");
       onSubmit();
     } catch (err) {
       console.error("Failed to submit comment:", err);
@@ -199,6 +313,10 @@ export default function CommentForm({
             Anonymous comments use zero-knowledge proofs. Generating the proof may take a few seconds.
           </p>
         </div>
+      )}
+
+      {progress && isSubmitting && (
+        <div className="text-xs text-muted-foreground">{progress}</div>
       )}
 
       {error && (
