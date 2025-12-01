@@ -8,6 +8,7 @@ import {
   decryptAlias,
 } from '../lib/encryption';
 import { Alert, LoadingSpinner, Badge } from './ui';
+import { ConfirmModal } from './ui/ConfirmModal';
 
 interface ManageMembersProps {
   publicKey: string | null;
@@ -58,6 +59,9 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
   const [leaving, setLeaving] = useState(false);
   const [aliasesVisible, setAliasesVisible] = useState(false);
   const [aliasInputUnlocked, setAliasInputUnlocked] = useState(false);
+  const [revokeConfirm, setRevokeConfirm] = useState<{ address: string } | null>(null);
+  const [leaveConfirm, setLeaveConfirm] = useState(false);
+  const [revoking, setRevoking] = useState(false);
 
   const signMessage = async (message: string): Promise<string | Uint8Array<ArrayBufferLike>> => {
     if (!kit?.signMessage) {
@@ -454,17 +458,20 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
     }
   };
 
-  const handleRemoveMember = async (address: string) => {
+  const handleRemoveMemberClick = (address: string) => {
     if (!isAdmin) {
       setError("Only admins can remove members");
       return;
     }
+    setRevokeConfirm({ address });
+  };
 
-    if (!confirm(`Revoke membership for ${address.substring(0, 8)}...? They will no longer be able to vote.`)) {
-      return;
-    }
+  const handleRemoveMemberConfirm = async () => {
+    if (!revokeConfirm) return;
+    const address = revokeConfirm.address;
 
     try {
+      setRevoking(true);
       setError(null);
       setSuccess(null);
 
@@ -506,17 +513,21 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
 
       // Reload tree info to show updated root
       await loadTreeInfo();
+      setRevokeConfirm(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove member");
       console.error("Failed to remove member:", err);
+    } finally {
+      setRevoking(false);
+      setRevokeConfirm(null);
     }
   };
 
-  const handleLeave = async () => {
-    if (!confirm(`Leave this DAO? You will no longer be able to vote.`)) {
-      return;
-    }
+  const handleLeaveClick = () => {
+    setLeaveConfirm(true);
+  };
 
+  const handleLeaveConfirm = async () => {
     try {
       setLeaving(true);
       setError(null);
@@ -544,11 +555,13 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
 
       setMembers(updatedMembers);
       setRemovedMembers(updatedRemoved);
+      setLeaveConfirm(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to leave DAO");
       console.error("Failed to leave DAO:", err);
     } finally {
       setLeaving(false);
+      setLeaveConfirm(false);
     }
   };
 
@@ -816,7 +829,7 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
                     )}
                     {isAdmin && member.address !== publicKey && !member.isAdmin && editingAlias !== member.address && (
                       <button
-                        onClick={() => handleRemoveMember(member.address)}
+                        onClick={() => handleRemoveMemberClick(member.address)}
                         className="p-1 text-destructive hover:bg-destructive/10 rounded transition-colors"
                         title="Revoke membership"
                       >
@@ -827,7 +840,7 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
                     )}
                     {!isAdmin && member.address === publicKey && (
                       <button
-                        onClick={handleLeave}
+                        onClick={handleLeaveClick}
                         disabled={leaving}
                         className="px-3 py-1 text-sm font-medium text-destructive bg-destructive/10 border border-destructive/20 rounded-md hover:bg-destructive/20 transition-colors disabled:opacity-50"
                         title="Leave DAO"
@@ -944,6 +957,29 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
         </div>
       )}
 
+      {/* Revoke membership confirmation modal */}
+      <ConfirmModal
+        isOpen={!!revokeConfirm}
+        onClose={() => setRevokeConfirm(null)}
+        onConfirm={handleRemoveMemberConfirm}
+        title="Revoke Membership"
+        message={revokeConfirm ? `Revoke membership for ${revokeConfirm.address.substring(0, 8)}...? They will no longer be able to vote.` : ""}
+        confirmText="Revoke"
+        variant="danger"
+        isLoading={revoking}
+      />
+
+      {/* Leave DAO confirmation modal */}
+      <ConfirmModal
+        isOpen={leaveConfirm}
+        onClose={() => setLeaveConfirm(false)}
+        onConfirm={handleLeaveConfirm}
+        title="Leave DAO"
+        message="Leave this DAO? You will no longer be able to vote."
+        confirmText="Leave"
+        variant="warning"
+        isLoading={leaving}
+      />
     </div>
   );
 }

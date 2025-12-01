@@ -26,6 +26,9 @@
                 },
                 {
                   "bool": false
+                },
+                {
+                  "bool": true
                 }
               ]
             }
@@ -132,6 +135,14 @@
                       },
                       "val": {
                         "u64": "1"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "members_can_propose"
+                      },
+                      "val": {
+                        "bool": true
                       }
                     },
                     {

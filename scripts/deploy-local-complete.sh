@@ -210,7 +210,7 @@ success "Comments bindings built"
 step "Creating Public DAO..."
 ADMIN_ADDRESS=$(stellar keys address "$KEY_NAME")
 
-# Create DAO with open membership
+# Create DAO with open membership and members can propose
 echo "Creating Public Votes DAO..."
 CREATE_OUTPUT=$(stellar contract invoke \
   --id "$REGISTRY_ID" \
@@ -220,7 +220,8 @@ CREATE_OUTPUT=$(stellar contract invoke \
   -- create_dao \
   --name "Public Votes" \
   --creator "$ADMIN_ADDRESS" \
-  --membership_open true 2>&1)
+  --membership_open true \
+  --members_can_propose true 2>&1)
 echo "$CREATE_OUTPUT"
 # Extract DAO ID - look for the number in the output
 DAO_ID=$(echo "$CREATE_OUTPUT" | grep -oE '^[0-9]+$' | head -1)

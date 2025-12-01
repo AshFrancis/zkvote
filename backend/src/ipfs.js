@@ -19,6 +19,119 @@ const PUBLIC_GATEWAYS = [
   "https://w3s.link/ipfs",
 ];
 
+// Content size limits (DoS protection)
+const MAX_JSON_SIZE = 1024 * 1024; // 1MB for JSON metadata
+const MAX_RAW_SIZE = 10 * 1024 * 1024; // 10MB for raw content (images)
+
+// Metadata schema validation
+const PROPOSAL_METADATA_SCHEMA = {
+  requiredFields: ["version", "body"],
+  maxBodyLength: 100000, // 100KB of text
+  allowedVersions: [1],
+};
+
+const COMMENT_METADATA_SCHEMA = {
+  requiredFields: ["version", "body", "createdAt"],
+  maxBodyLength: 10000, // 10KB for comments
+  allowedVersions: [1],
+};
+
+/**
+ * Sanitize string content to prevent XSS
+ * Removes script tags and event handlers
+ * @param {string} str - String to sanitize
+ * @returns {string} Sanitized string
+ */
+function sanitizeString(str) {
+  if (typeof str !== "string") return str;
+
+  // Remove script tags and their content
+  let sanitized = str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
+
+  // Remove event handlers (onclick, onerror, etc.)
+  sanitized = sanitized.replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, "");
+  sanitized = sanitized.replace(/\bon\w+\s*=\s*[^\s>]*/gi, "");
+
+  // Remove javascript: URLs
+  sanitized = sanitized.replace(/javascript:/gi, "");
+
+  // Remove data: URLs that could contain scripts
+  sanitized = sanitized.replace(/data:\s*text\/html/gi, "data:blocked");
+
+  return sanitized;
+}
+
+/**
+ * Validate metadata against a schema
+ * @param {object} data - Data to validate
+ * @param {object} schema - Schema to validate against
+ * @returns {{valid: boolean, error?: string}}
+ */
+function validateMetadataSchema(data, schema) {
+  if (!data || typeof data !== "object") {
+    return { valid: false, error: "Metadata must be an object" };
+  }
+
+  // Check required fields
+  for (const field of schema.requiredFields) {
+    if (!(field in data)) {
+      return { valid: false, error: `Missing required field: ${field}` };
+    }
+  }
+
+  // Validate version
+  if ("version" in data && !schema.allowedVersions.includes(data.version)) {
+    return { valid: false, error: `Invalid version: ${data.version}` };
+  }
+
+  // Validate body length
+  if ("body" in data) {
+    if (typeof data.body !== "string") {
+      return { valid: false, error: "Body must be a string" };
+    }
+    if (data.body.length > schema.maxBodyLength) {
+      return { valid: false, error: `Body exceeds maximum length of ${schema.maxBodyLength}` };
+    }
+  }
+
+  // Validate createdAt format if present
+  if ("createdAt" in data && typeof data.createdAt === "string") {
+    const date = new Date(data.createdAt);
+    if (isNaN(date.getTime())) {
+      return { valid: false, error: "Invalid createdAt date format" };
+    }
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Sanitize metadata object recursively
+ * @param {object} data - Data to sanitize
+ * @returns {object} Sanitized data
+ */
+function sanitizeMetadata(data) {
+  if (typeof data === "string") {
+    return sanitizeString(data);
+  }
+
+  if (Array.isArray(data)) {
+    return data.map(sanitizeMetadata);
+  }
+
+  if (data && typeof data === "object") {
+    const sanitized = {};
+    for (const [key, value] of Object.entries(data)) {
+      // Sanitize both keys and values
+      const sanitizedKey = sanitizeString(key);
+      sanitized[sanitizedKey] = sanitizeMetadata(value);
+    }
+    return sanitized;
+  }
+
+  return data;
+}
+
 /**
  * Initialize the Pinata client (SDK v2.x)
  * @param {string} jwt - Pinata JWT token

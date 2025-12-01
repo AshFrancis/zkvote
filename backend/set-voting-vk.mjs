@@ -6,10 +6,22 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const RPC_URL = 'https://rpc-futurenet.stellar.org:443';
-const NETWORK_PASSPHRASE = 'Test SDF Future Network ; October 2022';
-const VOTING_CONTRACT_ID = 'CBWWDS244CQD2GYVRA2CDVT6CG7BHJBSMAGMT2WS6KTJXQFF7PULVYDR';
-const ADMIN_SECRET = 'SAGSGX6EUVF2DYOAXEACSYIENMQ2ZLHEFP42Z65IYA5IYGXA3YJK23GT';
+import dotenv from 'dotenv';
+dotenv.config();
+
+const RPC_URL = process.env.SOROBAN_RPC_URL || 'https://rpc-futurenet.stellar.org:443';
+const NETWORK_PASSPHRASE = process.env.NETWORK_PASSPHRASE || 'Test SDF Future Network ; October 2022';
+const VOTING_CONTRACT_ID = process.env.VOTING_CONTRACT_ID;
+const ADMIN_SECRET = process.env.ADMIN_SECRET_KEY;
+
+if (!VOTING_CONTRACT_ID) {
+  console.error('ERROR: VOTING_CONTRACT_ID not set in environment');
+  process.exit(1);
+}
+if (!ADMIN_SECRET) {
+  console.error('ERROR: ADMIN_SECRET_KEY not set in environment');
+  process.exit(1);
+}
 
 // Get DAO ID from command line args (default to 2)
 const daoId = parseInt(process.argv[2] || '2', 10);

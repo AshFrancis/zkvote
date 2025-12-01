@@ -148,7 +148,10 @@ export default function ProposalCard({
 
   return (
     <>
-      <Card className="transition-all hover:shadow-md overflow-hidden">
+      <Card
+        className="group/card transition-all overflow-hidden cursor-pointer hover:shadow-md hover:border-primary/30"
+        onClick={handleViewDetails}
+      >
         <CardContent className="p-0">
           <div className="flex">
             {/* Thumbnail image on left */}
@@ -233,7 +236,10 @@ export default function ProposalCard({
                 {/* Action buttons */}
                 <div className="flex items-center justify-end gap-2 pt-2">
                   <Button
-                    onClick={handleViewDetails}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleViewDetails();
+                    }}
                     variant="outline"
                     size="sm"
                   >
@@ -242,7 +248,10 @@ export default function ProposalCard({
                   </Button>
                   {hasMembership && !proposal.hasVoted && (
                     <Button
-                      onClick={() => setShowVoteModal(true)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowVoteModal(true);
+                      }}
                       disabled={!isRegistered || isPastDeadline}
                       variant="outline"
                       size="sm"

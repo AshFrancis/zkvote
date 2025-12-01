@@ -46,7 +46,7 @@ echo "Voting:   $VOTING_ID"
 ADMIN=$(soroban keys generate --no-fund --json | jq -r .public)
 
 # Create DAO
-DAO_ID=$(soroban contract invoke --id "$REG_ID" -- simulate -- create_dao --name "Budget DAO" --admin "$ADMIN" --membership_open false | jq -r .return)
+DAO_ID=$(soroban contract invoke --id "$REG_ID" -- simulate -- create_dao --name "Budget DAO" --admin "$ADMIN" --membership_open false --members_can_propose true | jq -r .return)
 echo "DAO_ID: $DAO_ID"
 
 # Init tree

@@ -70,6 +70,7 @@ mod mock_registry {
     pub enum DataKey {
         Admin(u64),
         MembershipOpen(u64),
+        MembersCanPropose(u64),
     }
 
     #[contract]
@@ -101,6 +102,19 @@ mod mock_registry {
                 .persistent()
                 .get(&DataKey::MembershipOpen(dao_id))
                 .unwrap_or(false)
+        }
+
+        pub fn set_members_can_propose(env: Env, dao_id: u64, can_propose: bool) {
+            env.storage()
+                .persistent()
+                .set(&DataKey::MembersCanPropose(dao_id), &can_propose);
+        }
+
+        pub fn members_can_propose(env: Env, dao_id: u64) -> bool {
+            env.storage()
+                .persistent()
+                .get(&DataKey::MembersCanPropose(dao_id))
+                .unwrap_or(true) // Default to true so existing tests pass
         }
     }
 }

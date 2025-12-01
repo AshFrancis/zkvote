@@ -63,6 +63,8 @@ pub enum VotingError {
     AlreadyInitialized = 18,
     InvalidState = 20,
     InvalidContentCid = 21,
+    /// Only DAO admin can create proposals (members_can_propose = false)
+    OnlyAdminCanPropose = 22,
 }
 
 // Maximum allowed IC vector length (num_public_inputs + 1)
@@ -456,26 +458,36 @@ impl Voting {
             soroban_sdk::vec![&env],
         );
 
-        // Check if DAO has open membership
-        let membership_open: bool = env.invoke_contract(
+        // Always require SBT membership to create proposals (regardless of membership_open)
+        let has_sbt: bool = env.invoke_contract(
+            &sbt_contract,
+            &symbol_short!("has"),
+            soroban_sdk::vec![&env, dao_id.into_val(&env), creator.clone().into_val(&env)],
+        );
+
+        if !has_sbt {
+            panic_with_error!(&env, VotingError::NotDaoMember);
+        }
+
+        // Check if members are allowed to create proposals
+        let members_can_propose: bool = env.invoke_contract(
             &registry,
-            &Symbol::new(&env, "is_membership_open"),
+            &Symbol::new(&env, "members_can_propose"),
             soroban_sdk::vec![&env, dao_id.into_val(&env)],
         );
 
-        // For non-public DAOs, verify creator has SBT membership
-        if !membership_open {
-            let has_sbt: bool = env.invoke_contract(
-                &sbt_contract,
-                &symbol_short!("has"),
-                soroban_sdk::vec![&env, dao_id.into_val(&env), creator.clone().into_val(&env)],
+        // If members cannot propose, only admin can create proposals
+        if !members_can_propose {
+            let dao_admin: Address = env.invoke_contract(
+                &registry,
+                &symbol_short!("get_admin"),
+                soroban_sdk::vec![&env, dao_id.into_val(&env)],
             );
 
-            if !has_sbt {
-                panic_with_error!(&env, VotingError::NotDaoMember);
+            if creator != dao_admin {
+                panic_with_error!(&env, VotingError::OnlyAdminCanPropose);
             }
         }
-        // For public DAOs (membership_open = true), anyone can create proposals
 
         let now = env.ledger().timestamp();
 

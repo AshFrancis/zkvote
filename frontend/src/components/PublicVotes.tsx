@@ -503,7 +503,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
       {error && <Alert variant="error">{error}</Alert>}
 
       {activeTab === 'info' && dao && (
-        <DAOInfoPanel daoId={dao.id} publicKey={publicKey} />
+        <DAOInfoPanel daoId={dao.id} publicKey={publicKey} kit={kit} />
       )}
 
       {activeTab === 'proposals' && (

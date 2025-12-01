@@ -38,7 +38,54 @@ let testDaoId = null;
 let testProposalId = null;
 let testCommentId = null;
 let testContentCid = null;
-let testAuthor = 'GTEST000000000000000000000000000000000000000000000000000';
+let testAuthor = null;  // Will be set from mykey
+let commentsContractId = null;
+let networkFlag = '--network futurenet';  // Default, will detect
+
+// Helper to create a public comment via CLI (direct contract invoke)
+async function createCommentViaCLI(daoId, proposalId, contentCid, parentId = null) {
+  if (!commentsContractId) {
+    console.log('  Comments contract not configured, skipping CLI comment creation');
+    return null;
+  }
+
+  try {
+    if (!testAuthor) {
+      console.log('  No author address available');
+      return null;
+    }
+
+    // Build the stellar contract invoke command
+    // Note: parent_id is Option<u64>, so we need to pass it as --parent_id <value> or omit entirely
+    let cmd = `stellar contract invoke \
+      --id ${commentsContractId} \
+      --source mykey \
+      ${networkFlag} \
+      -- add_comment \
+      --dao_id ${daoId} \
+      --proposal_id ${proposalId} \
+      --content_cid "${contentCid}" \
+      --author ${testAuthor}`;
+
+    if (parentId !== null) {
+      cmd += ` --parent_id ${parentId}`;
+    }
+
+    console.log(`  Creating comment via CLI...`);
+    const result = execSync(cmd, { cwd: PROJECT_ROOT, encoding: 'utf-8', timeout: 60000 });
+
+    // Parse the returned comment ID
+    const commentId = parseInt(result.trim(), 10);
+    if (!isNaN(commentId)) {
+      console.log(`  Created comment ID: ${commentId}`);
+      return commentId;
+    }
+    return null;
+  } catch (error) {
+    console.log(`  CLI comment creation failed: ${error.message}`);
+    return null;
+  }
+}
 
 // Helper to make authenticated requests
 async function fetchRelayer(endpoint, options = {}) {
@@ -128,6 +175,50 @@ describe('Comment System E2E Tests', () => {
     if (contracts) {
       console.log('Deployed contracts found');
       console.log(`  Voting: ${contracts.VOTING_ID || 'not set'}`);
+      commentsContractId = contracts.COMMENTS_ID || null;
+      console.log(`  Comments: ${commentsContractId || 'not set'}`);
+    }
+
+    // Also check backend/.env for COMMENTS_CONTRACT_ID
+    if (!commentsContractId) {
+      try {
+        const envPath = path.join(PROJECT_ROOT, 'backend/.env');
+        if (fs.existsSync(envPath)) {
+          const envContent = fs.readFileSync(envPath, 'utf-8');
+          const match = envContent.match(/COMMENTS_CONTRACT_ID=(\S+)/);
+          if (match) {
+            commentsContractId = match[1];
+            console.log(`  Comments (from .env): ${commentsContractId}`);
+          }
+        }
+      } catch (e) {
+        // Ignore
+      }
+    }
+
+    // Get test author address and detect network
+    try {
+      // Try futurenet first
+      testAuthor = execSync(
+        'stellar keys address mykey --network futurenet 2>/dev/null',
+        { cwd: PROJECT_ROOT, encoding: 'utf-8' }
+      ).trim();
+      networkFlag = '--network futurenet';
+    } catch {
+      try {
+        // Fall back to local
+        testAuthor = execSync(
+          'stellar keys address mykey --network local 2>/dev/null',
+          { cwd: PROJECT_ROOT, encoding: 'utf-8' }
+        ).trim();
+        networkFlag = '--network local';
+      } catch {
+        console.log('  Warning: No mykey available for CLI comment creation');
+      }
+    }
+    if (testAuthor) {
+      console.log(`Test Author: ${testAuthor.substring(0, 10)}...`);
+      console.log(`Network: ${networkFlag}`);
     }
 
     // Find or create test DAO
@@ -210,9 +301,44 @@ describe('Comment System E2E Tests', () => {
   // ============================================
 
   describe('Public Comment Operations', () => {
-    test('Submit public comment', async (t) => {
+    test('Create public comment via CLI (direct contract invoke)', async (t) => {
+      if (!commentsContractId || !testAuthor) {
+        t.skip('Comments contract or author not configured for CLI');
+        return;
+      }
+
       if (!testContentCid) {
-        // Create content if IPFS test was skipped
+        // Create content first
+        const uploadRes = await fetchRelayer('/ipfs/metadata', {
+          method: 'POST',
+          body: JSON.stringify({
+            version: 1,
+            body: 'Test comment created via CLI',
+            createdAt: new Date().toISOString(),
+          }),
+        });
+        if (!uploadRes.ok) {
+          t.skip('Cannot create content CID');
+          return;
+        }
+        testContentCid = uploadRes.data.cid;
+      }
+
+      // Create comment via CLI
+      const commentId = await createCommentViaCLI(testDaoId, testProposalId, testContentCid);
+      if (commentId !== null) {
+        testCommentId = commentId;
+        console.log(`  Created comment ${testCommentId} via CLI`);
+      } else {
+        console.log('  CLI comment creation not available (network may not be running)');
+      }
+    });
+
+    test('Public comments require direct wallet signing', async (t) => {
+      // NOTE: Public comments are now submitted directly through wallet signing (Freighter)
+      // The relayer no longer handles public comments - they go through the contract directly
+      // This test verifies the relayer correctly rejects public comment requests
+      if (!testContentCid) {
         const uploadRes = await fetchRelayer('/ipfs/metadata', {
           method: 'POST',
           body: JSON.stringify({
@@ -229,7 +355,8 @@ describe('Comment System E2E Tests', () => {
         }
       }
 
-      const { status, data } = await fetchRelayer('/comment/public', {
+      // The /comment/public endpoint has been removed - public comments go through Freighter
+      const { status } = await fetchRelayer('/comment/public', {
         method: 'POST',
         body: JSON.stringify({
           daoId: testDaoId,
@@ -240,19 +367,10 @@ describe('Comment System E2E Tests', () => {
         }),
       });
 
-      // 404 = endpoint not found, 401 = auth required, 400 = validation error
-      // All are acceptable in test mode
-      if ([404, 401].includes(status)) {
-        console.log(`  Comment endpoint returned ${status} - may need auth or setup`);
-        return;
-      }
-
-      if (status === 200 || status === 201) {
-        testCommentId = data.commentId;
-        console.log(`  Created comment ID: ${testCommentId}`);
-      } else {
-        console.log(`  Comment creation returned ${status}: ${JSON.stringify(data)}`);
-      }
+      // Expect 404 or 500 since endpoint was removed - public comments require wallet signing
+      // Express may return 404 (route not found) or 500 (error handler) depending on config
+      assert.ok(status === 404 || status >= 400, `Public comment endpoint should reject requests (got ${status})`);
+      console.log(`  Public comment endpoint correctly rejected with ${status} (use Freighter for public comments)`);
     });
 
     test('Fetch comments for proposal', async () => {
@@ -474,7 +592,12 @@ describe('Comment System E2E Tests', () => {
     let parentCommentId = null;
     let replyCommentId = null;
 
-    test('Create parent comment for reply test', async (t) => {
+    test('Create parent comment for reply test via CLI', async (t) => {
+      if (!commentsContractId || !testAuthor) {
+        t.skip('Comments contract or author not configured for CLI');
+        return;
+      }
+
       const uploadRes = await fetchRelayer('/ipfs/metadata', {
         method: 'POST',
         body: JSON.stringify({
@@ -489,26 +612,21 @@ describe('Comment System E2E Tests', () => {
         return;
       }
 
-      const { status, data } = await fetchRelayer('/comment/public', {
-        method: 'POST',
-        body: JSON.stringify({
-          daoId: testDaoId,
-          proposalId: testProposalId,
-          contentCid: uploadRes.data.cid,
-          parentId: null,
-          author: testAuthor,
-        }),
-      });
-
-      if (status === 200 || status === 201) {
-        parentCommentId = data.commentId;
+      // Create parent comment via CLI
+      parentCommentId = await createCommentViaCLI(testDaoId, testProposalId, uploadRes.data.cid);
+      if (parentCommentId !== null) {
         console.log(`  Created parent comment: ${parentCommentId}`);
-      } else if ([404, 401].includes(status)) {
-        console.log('  Comment endpoint not available');
+      } else {
+        console.log('  CLI comment creation not available');
       }
     });
 
-    test('Create reply to parent comment', async (t) => {
+    test('Create reply to parent comment via CLI', async (t) => {
+      if (!commentsContractId || !testAuthor) {
+        t.skip('Comments contract or author not configured for CLI');
+        return;
+      }
+
       if (!parentCommentId) {
         t.skip('No parent comment for reply');
         return;
@@ -528,19 +646,9 @@ describe('Comment System E2E Tests', () => {
         return;
       }
 
-      const { status, data } = await fetchRelayer('/comment/public', {
-        method: 'POST',
-        body: JSON.stringify({
-          daoId: testDaoId,
-          proposalId: testProposalId,
-          contentCid: uploadRes.data.cid,
-          parentId: parentCommentId,
-          author: testAuthor,
-        }),
-      });
-
-      if (status === 200 || status === 201) {
-        replyCommentId = data.commentId;
+      // Create reply via CLI with parent_id
+      replyCommentId = await createCommentViaCLI(testDaoId, testProposalId, uploadRes.data.cid, parentCommentId);
+      if (replyCommentId !== null) {
         console.log(`  Created reply comment: ${replyCommentId}`);
       }
     });

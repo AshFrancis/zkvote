@@ -121,7 +121,11 @@ test('GET /ipfs/health - check IPFS service status', skipIfNoIpfs, async () => {
 // COMMENT API VALIDATION TESTS
 // ============================================
 
-test('POST /comment/public - requires authentication', async () => {
+// NOTE: The /comment/public endpoint has been REMOVED.
+// Public comments now go directly through Freighter wallet signing to the contract.
+// The relayer only handles anonymous comments that require ZK proof submission.
+
+test('POST /comment/public - endpoint removed (use direct wallet signing)', async () => {
   app = await setupApp();
 
   const res = await request(app)
@@ -133,102 +137,8 @@ test('POST /comment/public - requires authentication', async () => {
       author: TEST_AUTHOR,
     });
 
-  assert.equal(res.statusCode, 401);
-});
-
-test('POST /comment/public - validates required fields', async () => {
-  app = await setupApp();
-
-  // Missing daoId
-  let res = await request(app)
-    .post('/comment/public')
-    .set('Authorization', `Bearer ${token}`)
-    .send({
-      proposalId: 1,
-      contentCid: 'bafytest123',
-      author: TEST_AUTHOR,
-    });
-  assert.equal(res.statusCode, 400);
-  assert.ok(res.body.error.includes('daoId'));
-
-  // Missing contentCid
-  res = await request(app)
-    .post('/comment/public')
-    .set('Authorization', `Bearer ${token}`)
-    .send({
-      daoId: 1,
-      proposalId: 1,
-      author: TEST_AUTHOR,
-    });
-  assert.equal(res.statusCode, 400);
-  assert.ok(res.body.error.includes('contentCid'));
-
-  // Missing author
-  res = await request(app)
-    .post('/comment/public')
-    .set('Authorization', `Bearer ${token}`)
-    .send({
-      daoId: 1,
-      proposalId: 1,
-      contentCid: 'bafytest123',
-    });
-  assert.equal(res.statusCode, 400);
-  assert.ok(res.body.error.includes('author'));
-});
-
-test('POST /comment/public - validates daoId is non-negative integer', async () => {
-  app = await setupApp();
-
-  const res = await request(app)
-    .post('/comment/public')
-    .set('Authorization', `Bearer ${token}`)
-    .send({
-      daoId: -1,
-      proposalId: 1,
-      contentCid: 'bafytest123',
-      author: TEST_AUTHOR,
-    });
-
-  assert.equal(res.statusCode, 400);
-  assert.ok(res.body.error.includes('daoId'));
-});
-
-test('POST /comment/public - validates parentId when provided', async () => {
-  app = await setupApp();
-
-  const res = await request(app)
-    .post('/comment/public')
-    .set('Authorization', `Bearer ${token}`)
-    .send({
-      daoId: 1,
-      proposalId: 1,
-      contentCid: 'bafytest123',
-      author: TEST_AUTHOR,
-      parentId: -5, // Invalid
-    });
-
-  assert.equal(res.statusCode, 400);
-  assert.ok(res.body.error.includes('parentId'));
-});
-
-test('POST /comment/public - accepts null parentId for top-level comments', async () => {
-  app = await setupApp();
-
-  // In test mode, contract calls are mocked, so this should pass validation
-  const res = await request(app)
-    .post('/comment/public')
-    .set('Authorization', `Bearer ${token}`)
-    .send({
-      daoId: 1,
-      proposalId: 1,
-      contentCid: 'bafytest123',
-      author: TEST_AUTHOR,
-      parentId: null,
-    });
-
-  // In test mode, we only test validation - actual submission may fail without real contract
-  // Status 400 or 500 is acceptable (contract mock failure), but not 401 or validation errors about parentId
-  assert.notEqual(res.body.error?.includes('parentId'), true);
+  // Endpoint was removed - should return 404 (no route matched)
+  assert.equal(res.statusCode, 404, 'Public comment endpoint should be removed (now uses direct wallet signing)');
 });
 
 // ============================================
@@ -464,7 +374,7 @@ test('GET /comment/:daoId/:proposalId/:commentId - returns 404 for non-existent 
 // FULL IPFS + COMMENT WORKFLOW TESTS
 // ============================================
 
-test('Full workflow: upload content to IPFS then reference in comment', skipIfNoIpfs, async () => {
+test('Full workflow: upload content to IPFS and verify retrieval', skipIfNoIpfs, async () => {
   app = await setupApp();
 
   // Step 1: Upload comment content to IPFS
@@ -482,23 +392,15 @@ test('Full workflow: upload content to IPFS then reference in comment', skipIfNo
   const contentCid = uploadRes.body.cid;
   console.log(`  Step 1: Uploaded content CID: ${contentCid}`);
 
-  // Step 2: Submit comment with the CID (validation only in test mode)
+  // Step 2: Verify the /comment/public endpoint was removed (public comments now go through wallet signing)
   const commentRes = await request(app)
     .post('/comment/public')
-    .set('Authorization', `Bearer ${token}`)
-    .send({
-      daoId: 1,
-      proposalId: 1,
-      contentCid: contentCid,
-      author: TEST_AUTHOR,
-      parentId: null,
-    });
+    .send({ daoId: 1, proposalId: 1, contentCid: contentCid, author: TEST_AUTHOR });
 
-  // In test mode, contract calls fail but validation passes
-  // We're testing the full request/response cycle
-  console.log(`  Step 2: Comment submission status: ${commentRes.statusCode}`);
+  assert.equal(commentRes.statusCode, 404, 'Public comment endpoint should be removed');
+  console.log(`  Step 2: Confirmed /comment/public returns 404 (use wallet signing)`);
 
-  // Step 3: Verify we can still fetch the content
+  // Step 3: Verify we can still fetch the content from IPFS
   await new Promise(r => setTimeout(r, 1000));
 
   const fetchRes = await request(app)

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 import { MessageSquare, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "./ui/Button";
@@ -13,6 +13,27 @@ import {
   fetchCommentContent,
   buildCommentTree,
 } from "../lib/comments";
+
+// Build a map of nullifiers to anonymous member numbers
+function buildNullifierMap(comments: CommentWithContent[]): Map<string, number> {
+  const nullifierMap = new Map<string, number>();
+  let memberNumber = 1;
+
+  // Collect all nullifiers from comments and their replies (in order of appearance)
+  const collectNullifiers = (commentList: CommentWithContent[]) => {
+    for (const comment of commentList) {
+      if (comment.nullifier && !nullifierMap.has(comment.nullifier)) {
+        nullifierMap.set(comment.nullifier, memberNumber++);
+      }
+      if (comment.replies.length > 0) {
+        collectNullifiers(comment.replies);
+      }
+    }
+  };
+
+  collectNullifiers(comments);
+  return nullifierMap;
+}
 
 interface CommentSectionProps {
   daoId: number;
@@ -86,6 +107,9 @@ export default function CommentSection({
   const totalComments =
     comments.length +
     comments.reduce((sum, c) => sum + c.replies.length, 0);
+
+  // Build nullifier map for anonymous member numbering
+  const nullifierMap = useMemo(() => buildNullifierMap(comments), [comments]);
 
   return (
     <Card>
@@ -173,6 +197,7 @@ export default function CommentSection({
                 isRegistered={isRegistered}
                 eligibleRoot={eligibleRoot}
                 isAdmin={isAdmin}
+                nullifierMap={nullifierMap}
                 onRefresh={handleRefresh}
                 onShowRevisions={setShowRevisions}
               />

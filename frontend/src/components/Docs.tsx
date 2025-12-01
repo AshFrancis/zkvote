@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
 
-type Section = "getting-started" | "how-it-works" | "creating-dao" | "voting" | "privacy" | "technical";
+type Section = "getting-started" | "how-it-works" | "creating-dao" | "creating-proposal" | "voting" | "comments" | "privacy" | "technical";
 
 export function Docs() {
   const [activeSection, setActiveSection] = useState<Section>("getting-started");
@@ -11,7 +11,9 @@ export function Docs() {
     { id: "getting-started" as Section, title: "Getting Started" },
     { id: "how-it-works" as Section, title: "How It Works" },
     { id: "creating-dao" as Section, title: "Creating a DAO" },
+    { id: "creating-proposal" as Section, title: "Creating a Proposal" },
     { id: "voting" as Section, title: "Casting a Vote" },
+    { id: "comments" as Section, title: "Commenting" },
     { id: "privacy" as Section, title: "Privacy Model" },
     { id: "technical" as Section, title: "Technical Deep Dive" },
   ];
@@ -87,7 +89,9 @@ export function Docs() {
           {activeSection === "getting-started" && <GettingStarted />}
           {activeSection === "how-it-works" && <HowItWorks />}
           {activeSection === "creating-dao" && <CreatingDAO />}
+          {activeSection === "creating-proposal" && <CreatingProposal />}
           {activeSection === "voting" && <Voting />}
+          {activeSection === "comments" && <Commenting />}
           {activeSection === "privacy" && <PrivacyModel />}
           {activeSection === "technical" && <TechnicalDeepDive />}
         </div>
@@ -374,6 +378,198 @@ function CreatingDAO() {
           Admin privileges are tied to your wallet address. If you lose access to your wallet,
           you lose admin access to your DAO. There's currently no way to transfer admin rights.
         </p>
+      </div>
+    </div>
+  );
+}
+
+function CreatingProposal() {
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight mb-3">Creating a Proposal</h2>
+        <p className="text-muted-foreground leading-relaxed">
+          Any DAO member can create proposals for the community to vote on. Proposals define
+          what decisions the DAO will make through its anonymous voting system.
+        </p>
+      </div>
+
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Who Can Create Proposals</h3>
+        <div className="space-y-3">
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border">
+            <svg className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+            </svg>
+            <div>
+              <span className="font-medium">Closed DAOs</span>
+              <p className="text-sm text-muted-foreground mt-0.5">Only members with an SBT can create proposals</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border">
+            <svg className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+            </svg>
+            <div>
+              <span className="font-medium">Open DAOs</span>
+              <p className="text-sm text-muted-foreground mt-0.5">Anyone can create proposals, even non-members</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Step-by-Step Guide</h3>
+        <div className="space-y-4">
+          <div className="flex gap-4">
+            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium shrink-0">1</div>
+            <div>
+              <p className="font-medium">Navigate to your DAO</p>
+              <p className="text-sm text-muted-foreground mt-1">Go to the DAO dashboard where you want to create the proposal.</p>
+            </div>
+          </div>
+          <div className="flex gap-4">
+            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium shrink-0">2</div>
+            <div>
+              <p className="font-medium">Click "Create Proposal"</p>
+              <p className="text-sm text-muted-foreground mt-1">This opens the proposal creation form.</p>
+            </div>
+          </div>
+          <div className="flex gap-4">
+            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium shrink-0">3</div>
+            <div>
+              <p className="font-medium">Enter proposal details</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                <span className="font-medium text-foreground">Title</span> - A short summary (max 100 characters)<br />
+                <span className="font-medium text-foreground">Description</span> - Full proposal text (stored on IPFS)
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-4">
+            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium shrink-0">4</div>
+            <div>
+              <p className="font-medium">Set the voting deadline</p>
+              <p className="text-sm text-muted-foreground mt-1">Choose when voting ends. Must be in the future. Set to 0 for no deadline (voting never closes).</p>
+            </div>
+          </div>
+          <div className="flex gap-4">
+            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium shrink-0">5</div>
+            <div>
+              <p className="font-medium">Choose vote mode</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                <span className="font-medium text-foreground">Fixed</span> - Only members at proposal creation can vote (snapshot-based)<br />
+                <span className="font-medium text-foreground">Trailing</span> - Members who join after creation can also vote
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-4">
+            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium shrink-0">6</div>
+            <div>
+              <p className="font-medium">Confirm the transaction</p>
+              <p className="text-sm text-muted-foreground mt-1">Approve in your wallet to publish the proposal on-chain.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-lg font-semibold mb-4">What Happens On-Chain</h3>
+        <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+          When you create a proposal, several important snapshots are taken:
+        </p>
+        <ul className="space-y-2 text-sm text-muted-foreground">
+          <li className="flex items-start gap-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-foreground/50 mt-2 shrink-0"></span>
+            <span><span className="font-medium text-foreground">Merkle root snapshot</span> - The current member tree root is recorded. For Fixed mode, only these members can vote.</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-foreground/50 mt-2 shrink-0"></span>
+            <span><span className="font-medium text-foreground">VK hash snapshot</span> - The verification key hash is recorded to prevent mid-vote circuit changes.</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-foreground/50 mt-2 shrink-0"></span>
+            <span><span className="font-medium text-foreground">VK version</span> - The VK version number is pinned to ensure proof compatibility.</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-foreground/50 mt-2 shrink-0"></span>
+            <span><span className="font-medium text-foreground">Creation timestamp</span> - Used for revocation checks during voting.</span>
+          </li>
+        </ul>
+      </div>
+
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Vote Modes Explained</h3>
+        <div className="space-y-4">
+          <div className="p-4 rounded-lg border bg-card">
+            <h4 className="font-medium mb-2 flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-xs font-medium">Fixed</span>
+              Snapshot-Based Eligibility
+            </h4>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Only members who were registered when the proposal was created can vote. This prevents
+              last-minute membership additions to sway a vote. The Merkle root is checked exactly against
+              the snapshot. Most secure for governance decisions.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-lg border bg-card">
+            <h4 className="font-medium mb-2 flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-400 text-xs font-medium">Trailing</span>
+              Inclusive Eligibility
+            </h4>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Members who join after proposal creation can also vote, as long as they use a valid
+              Merkle root from after the proposal was created. Good for growing communities where
+              you want new members to participate immediately.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Proposal Data Model</h3>
+        <div className="p-6 rounded-lg border bg-card font-mono text-sm">
+          <p className="text-muted-foreground mb-2">// On-chain ProposalInfo</p>
+          <p>{"{"}</p>
+          <p className="ml-4">id: u64,</p>
+          <p className="ml-4">dao_id: u64,</p>
+          <p className="ml-4">title: String,       <span className="text-muted-foreground">// Max 100 bytes</span></p>
+          <p className="ml-4">content_cid: String, <span className="text-muted-foreground">// IPFS CID for full content</span></p>
+          <p className="ml-4">yes_votes: u64,</p>
+          <p className="ml-4">no_votes: u64,</p>
+          <p className="ml-4">end_time: u64,       <span className="text-muted-foreground">// Unix timestamp, 0 = no deadline</span></p>
+          <p className="ml-4">created_by: Address,</p>
+          <p className="ml-4">created_at: u64,</p>
+          <p className="ml-4">state: ProposalState,</p>
+          <p className="ml-4">vk_hash: BytesN&lt;32&gt;,</p>
+          <p className="ml-4">vk_version: u32,</p>
+          <p className="ml-4">eligible_root: U256, <span className="text-muted-foreground">// Merkle root snapshot</span></p>
+          <p className="ml-4">vote_mode: VoteMode, <span className="text-muted-foreground">// Fixed or Trailing</span></p>
+          <p className="ml-4">earliest_root_index: u32, <span className="text-muted-foreground">// For Trailing mode</span></p>
+          <p>{"}"}</p>
+        </div>
+      </div>
+
+      <div className="p-5 rounded-lg border bg-card">
+        <h4 className="font-semibold mb-2">Important Notes</h4>
+        <ul className="space-y-2 text-sm text-muted-foreground">
+          <li className="flex items-start gap-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-foreground/50 mt-2 shrink-0"></span>
+            <span>Proposals cannot be edited or deleted once created</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-foreground/50 mt-2 shrink-0"></span>
+            <span>The deadline cannot be extended after creation</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-foreground/50 mt-2 shrink-0"></span>
+            <span>Voting starts immediately when the proposal is created</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-foreground/50 mt-2 shrink-0"></span>
+            <span>Content is stored on IPFS; only the CID is stored on-chain</span>
+          </li>
+        </ul>
       </div>
     </div>
   );
@@ -669,6 +865,15 @@ function TechnicalDeepDive() {
             <div className="border-l-2 border-border ml-1.5 pl-6 py-2">
               <p className="text-muted-foreground text-xs">Groth16 proof verification and vote tallying</p>
             </div>
+
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+              <span className="font-semibold">Comments</span>
+              <span className="text-muted-foreground ml-auto">add_comment(), add_anonymous_comment()</span>
+            </div>
+            <div className="border-l-2 border-border ml-1.5 pl-6 py-2">
+              <p className="text-muted-foreground text-xs">Public and anonymous comments with ZK proof verification</p>
+            </div>
           </div>
         </div>
       </div>
@@ -722,6 +927,77 @@ function TechnicalDeepDive() {
       </div>
 
       <div>
+        <h3 className="text-lg font-semibold mb-4">Comments Contract</h3>
+        <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+          The Comments contract enables on-chain discussions with both public and anonymous modes:
+        </p>
+        <div className="p-6 rounded-lg border bg-card font-mono text-sm">
+          <p className="text-muted-foreground mb-2">// Public comment (signed by author)</p>
+          <p>add_comment(dao_id, proposal_id, content_cid, parent_id, author)</p>
+          <p className="text-muted-foreground mt-4 mb-2">// Anonymous comment (ZK proof verified)</p>
+          <p>add_anonymous_comment(dao_id, proposal_id, content_cid, parent_id, proof, public_signals)</p>
+          <p className="text-muted-foreground mt-4 mb-2">// Comment management</p>
+          <p>edit_comment(dao_id, proposal_id, comment_id, new_cid, author)</p>
+          <p>delete_comment(dao_id, proposal_id, comment_id, caller)</p>
+          <p>get_comments(dao_id, proposal_id) -&gt; Vec&lt;CommentInfo&gt;</p>
+        </div>
+        <p className="text-sm text-muted-foreground leading-relaxed mt-4">
+          Anonymous comments use the same vote circuit and nullifier formula as votes. The key difference
+          is that the Comments contract doesn't enforce nullifier uniqueness, allowing multiple anonymous
+          comments per member per proposal. All anonymous comments by the same member on the same proposal
+          will have the same nullifier value.
+        </p>
+      </div>
+
+      <div>
+        <h3 className="text-lg font-semibold mb-4">IPFS Integration</h3>
+        <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+          Comment and proposal content is stored off-chain on IPFS. The contract stores only the CID
+          (Content Identifier), a cryptographic hash that uniquely identifies the content.
+        </p>
+        <div className="p-6 rounded-lg border bg-card font-mono text-sm">
+          <p className="text-muted-foreground mb-2">// Comment metadata format</p>
+          <p>{"{"}</p>
+          <p className="ml-4">"version": 1,</p>
+          <p className="ml-4">"body": "Comment text...",</p>
+          <p className="ml-4">"createdAt": "2024-01-15T10:30:00Z"</p>
+          <p>{"}"}</p>
+          <p className="text-muted-foreground mt-4">-&gt; IPFS CID: bafybeig...</p>
+        </div>
+        <p className="text-sm text-muted-foreground leading-relaxed mt-4">
+          The relayer provides an IPFS pinning endpoint that stores content via Pinata. Content
+          is immutable - edits create new CIDs that are added to the revision history.
+        </p>
+      </div>
+
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Relayer Architecture</h3>
+        <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+          The relayer is a backend service that enables anonymous operations by breaking the link
+          between user wallets and on-chain actions.
+        </p>
+        <div className="space-y-3">
+          {[
+            { endpoint: "POST /vote", desc: "Submit anonymous vote with ZK proof" },
+            { endpoint: "POST /comment/anonymous", desc: "Submit anonymous comment with ZK proof" },
+            { endpoint: "POST /ipfs/metadata", desc: "Upload content to IPFS" },
+            { endpoint: "GET /ipfs/:cid", desc: "Retrieve content from IPFS" },
+            { endpoint: "GET /comments/:daoId/:proposalId", desc: "Fetch comments for a proposal" },
+            { endpoint: "GET /health", desc: "Check relayer status" },
+          ].map((item, i) => (
+            <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border font-mono text-sm">
+              <span className="text-muted-foreground shrink-0 w-48">{item.endpoint}</span>
+              <span className="text-xs text-muted-foreground">{item.desc}</span>
+            </div>
+          ))}
+        </div>
+        <p className="text-sm text-muted-foreground leading-relaxed mt-4">
+          The frontend uses exponential backoff (1s, 2s, 4s... up to 30s) when the relayer is unreachable,
+          preventing request flooding and showing a status banner to users.
+        </p>
+      </div>
+
+      <div>
         <h3 className="text-lg font-semibold mb-4">Costs</h3>
         <p className="text-sm text-muted-foreground leading-relaxed mb-4">
           Groth16 verification on Soroban requires 4 pairing operations and 6 scalar multiplications.
@@ -738,9 +1014,155 @@ function TechnicalDeepDive() {
           </li>
           <li className="flex items-start gap-3">
             <span className="w-1.5 h-1.5 rounded-full bg-foreground/50 mt-2 shrink-0"></span>
-            <span>Vote submission paid by relayer</span>
+            <span>Vote/anonymous comment submission: paid by relayer</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-foreground/50 mt-2 shrink-0"></span>
+            <span>Public comment: ~0.01 XLM (paid by author)</span>
           </li>
         </ul>
+      </div>
+    </div>
+  );
+}
+
+function Commenting() {
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight mb-3">Commenting on Proposals</h2>
+        <p className="text-muted-foreground leading-relaxed">
+          ZKVote supports both public and anonymous comments on proposals. Public comments are tied to your
+          wallet address, while anonymous comments use ZK proofs to verify membership without revealing identity.
+        </p>
+      </div>
+
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Comment Types</h3>
+        <div className="space-y-4">
+          <div className="p-4 rounded-lg border bg-card">
+            <h4 className="font-medium mb-2 flex items-center gap-2">
+              <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clipRule="evenodd"/>
+              </svg>
+              Public Comments
+            </h4>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Signed with your wallet and tied to your address. Other members can see who posted the comment.
+              Use this when you want to be accountable for your opinion or build reputation.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-lg border bg-card">
+            <h4 className="font-medium mb-2 flex items-center gap-2">
+              <svg className="w-5 h-5 text-purple-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd"/>
+                <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z"/>
+              </svg>
+              Anonymous Comments
+            </h4>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Use ZK proofs to verify you're a DAO member without revealing your identity. Perfect for
+              sensitive feedback, whistleblowing, or honest opinions without social pressure.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-lg font-semibold mb-4">How Anonymous Comments Work</h3>
+        <div className="space-y-4">
+          <div className="flex gap-4 items-start p-4 rounded-lg border bg-card">
+            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-sm font-medium shrink-0">1</div>
+            <div>
+              <h4 className="font-medium">Generate ZK Proof</h4>
+              <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                When you submit an anonymous comment, your browser generates a zero-knowledge proof that you're
+                a DAO member. This uses the same circuit as voting - proving Merkle tree membership.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-4 items-start p-4 rounded-lg border bg-card">
+            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-sm font-medium shrink-0">2</div>
+            <div>
+              <h4 className="font-medium">Submit via Relayer</h4>
+              <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                The comment is sent through the relayer service, which submits it to the Comments contract.
+                This breaks the link between your wallet and the comment.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-4 items-start p-4 rounded-lg border bg-card">
+            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-sm font-medium shrink-0">3</div>
+            <div>
+              <h4 className="font-medium">Multiple Comments Allowed</h4>
+              <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                Unlike voting, you can post multiple anonymous comments on the same proposal. Anonymous
+                comments use the same nullifier formula as votes (Poseidon(secret, daoId, proposalId)),
+                but the Comments contract doesn't enforce nullifier uniqueness for comments.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Comment Features</h3>
+        <ul className="space-y-2 text-muted-foreground">
+          <li className="flex items-start gap-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-foreground/50 mt-2 shrink-0"></span>
+            <span><span className="font-medium text-foreground">Threaded replies</span> - Reply to any comment to create discussion threads</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-foreground/50 mt-2 shrink-0"></span>
+            <span><span className="font-medium text-foreground">IPFS storage</span> - Comment content stored on IPFS for decentralization</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-foreground/50 mt-2 shrink-0"></span>
+            <span><span className="font-medium text-foreground">Edit history</span> - Revisions tracked on-chain with IPFS CIDs</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-foreground/50 mt-2 shrink-0"></span>
+            <span><span className="font-medium text-foreground">Moderation</span> - Authors can delete their own comments; admins can moderate</span>
+          </li>
+        </ul>
+      </div>
+
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Content Storage with IPFS</h3>
+        <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+          Comment content is stored on IPFS (InterPlanetary File System) rather than directly on-chain.
+          This provides several benefits:
+        </p>
+        <div className="space-y-3">
+          {[
+            { title: "Cost efficiency", desc: "IPFS storage is cheaper than on-chain storage" },
+            { title: "Decentralization", desc: "Content persists across multiple nodes" },
+            { title: "Immutability", desc: "Content-addressed storage ensures data integrity" },
+            { title: "Privacy", desc: "Content can be stored before on-chain reference is created" },
+          ].map((item, i) => (
+            <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border">
+              <svg className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
+              </svg>
+              <div>
+                <span className="font-medium">{item.title}</span>
+                <p className="text-sm text-muted-foreground mt-0.5">{item.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="p-5 rounded-lg border bg-card">
+        <h4 className="font-semibold mb-2">Relayer Dependency</h4>
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          Anonymous comments require the relayer service to be online. If the relayer is unavailable,
+          you'll see a warning banner and can only post public comments. Public comments are submitted
+          directly through your wallet without needing the relayer.
+        </p>
       </div>
     </div>
   );

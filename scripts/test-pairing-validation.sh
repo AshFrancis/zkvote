@@ -35,7 +35,8 @@ DAO_ID=$(stellar contract invoke \
   -- create_dao \
   --name "Pairing Validation Test" \
   --creator "$ADMIN_ADDRESS" \
-  --membership_open false 2>&1 | tr -d '"')
+  --membership_open false \
+  --members_can_propose true 2>&1 | tr -d '"')
 
 echo "✅ DAO ID: $DAO_ID"
 echo ""

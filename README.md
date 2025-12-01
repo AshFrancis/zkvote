@@ -208,15 +208,35 @@ tree.register_with_caller(dao_id, commitment, member_address);
 ```
 
 ### 4. Create Proposal (Members)
+
+DAO members can create proposals via the voting contract. For open DAOs, anyone can create proposals.
+
 ```rust
 let proposal_id = voting.create_proposal(
     dao_id,
-    "Fund development",        // Max 1024 chars
-    end_time,                  // Unix timestamp (must be in the future)
-    creator_address
+    "Fund development",        // title: Max 100 bytes
+    "bafybeig...",             // content_cid: IPFS CID for full content
+    end_time,                  // Unix timestamp (must be in the future, or 0 for no deadline)
+    creator_address,
+    VoteMode::Fixed            // Fixed or Trailing
 );
 // Voting starts immediately - Merkle root snapshot taken at creation
-// This defines the eligible voter set (snapshot-based eligibility)
+// This defines the eligible voter set (for Fixed mode)
+```
+
+**Via CLI:**
+```bash
+stellar contract invoke \
+  --id $VOTING_CONTRACT_ID \
+  --source mykey \
+  --network futurenet \
+  -- create_proposal \
+  --dao_id 1 \
+  --title "Fund Q1 development" \
+  --content_cid "bafybeig..." \
+  --end_time 1735689600 \
+  --creator $MY_ADDRESS \
+  --vote_mode Fixed
 ```
 
 **Proposal Data Model**:
@@ -224,28 +244,50 @@ let proposal_id = voting.create_proposal(
 pub struct ProposalInfo {
     pub id: u64,
     pub dao_id: u64,
-    pub description: String,    // Max 1024 chars (DoS protection)
+    pub title: String,         // Max 100 bytes (short display title)
+    pub content_cid: String,   // IPFS CID for full content (max 64 chars)
     pub yes_votes: u64,
     pub no_votes: u64,
-    pub end_time: u64,         // Unix timestamp
+    pub end_time: u64,         // Unix timestamp (0 = no deadline)
     pub created_by: Address,   // Proposal creator
+    pub created_at: u64,       // Creation timestamp
+    pub state: ProposalState,  // Active, Closed, or Archived
     pub vk_hash: BytesN<32>,   // SHA256 of VK (prevents mid-vote VK changes)
-    pub eligible_root: U256,   // Merkle root snapshot (defines voter set)
+    pub vk_version: u32,       // VK version at proposal creation
+    pub eligible_root: U256,   // Merkle root snapshot (defines voter set for Fixed mode)
+    pub vote_mode: VoteMode,   // Fixed or Trailing
+    pub earliest_root_index: u32, // For Trailing mode
 }
 ```
 
+**Vote Modes**:
+- **Fixed**: Only members at proposal creation can vote (snapshot-based eligibility)
+- **Trailing**: Members who join after creation can also vote
+
+**Key Considerations**:
+- **Membership Required**: For closed DAOs, only SBT holders can create proposals. Open DAOs allow anyone.
+- **Root Snapshot**: For Fixed mode, the eligible voter set is determined by the Merkle root at proposal creation
+- **VK Snapshot**: The verification key hash is recorded to prevent mid-vote circuit changes
+- **End Time**: Must be in the future (or 0 for no deadline); cannot be extended after creation
+
 ### 5. Vote Anonymously
 
-**Snapshot-Based Eligibility**: Only members present when the proposal was created can vote.
+**Eligibility depends on Vote Mode**:
+- **Fixed mode**: Only members at proposal creation can vote (uses exact snapshot root)
+- **Trailing mode**: Members who join after can also vote (uses any valid root after proposal creation)
 
 ```rust
-// First fetch the proposal to get the eligible voter set root
+// First fetch the proposal to get vote mode and eligible voter set root
 let proposal = voting.get_proposal(dao_id, proposal_id);
-let root = proposal.eligible_root;  // Must use this exact root (snapshot)
+let root = match proposal.vote_mode {
+    VoteMode::Fixed => proposal.eligible_root,  // Must use exact snapshot root
+    VoteMode::Trailing => tree.get_root(dao_id),  // Can use current root (must be >= earliest_root_index)
+};
 
 // Generate ZK proof off-chain proving:
-// - Membership in Merkle tree at eligible_root (snapshot at proposal creation)
-// - Valid nullifier derivation
+// - Commitment matches Poseidon(secret, salt)
+// - Membership in Merkle tree at root
+// - Valid nullifier derivation (Poseidon(secret, daoId, proposalId))
 // - Binary vote choice
 
 voting.vote(
@@ -253,7 +295,8 @@ voting.vote(
     proposal_id,
     vote_choice,  // true=yes, false=no
     nullifier,    // Prevents double voting (scoped to proposal)
-    root,         // Must EXACTLY match proposal.eligible_root
+    root,         // Must match expected root for vote mode
+    commitment,   // Allows revocation checks
     proof         // Groth16 proof
 );
 ```
@@ -269,11 +312,12 @@ voting.vote(
 
 The vote circuit (`circuits/vote.circom`) proves:
 
-1. **Membership**: `Poseidon(secret, salt) = commitment ∈ MerkleTree`
-2. **Nullifier**: `Poseidon(secret, daoId, proposalId) = nullifier` (domain-separated)
-3. **Vote validity**: `voteChoice ∈ {0, 1}`
+1. **Commitment**: `Poseidon(secret, salt) = commitment` (matches public input)
+2. **Membership**: `commitment ∈ MerkleTree` (Merkle inclusion proof)
+3. **Nullifier**: `Poseidon(secret, daoId, proposalId) = nullifier` (domain-separated)
+4. **Vote validity**: `voteChoice ∈ {0, 1}`
 
-Public signals: `[root, nullifier, daoId, proposalId, voteChoice]`
+Public signals: `[root, nullifier, daoId, proposalId, voteChoice, commitment]` (6 signals)
 Private inputs: `[secret, salt, pathElements, pathIndices]`
 
 **Domain-Separated Nullifiers**:
@@ -378,8 +422,8 @@ If KAT fails, circuit and on-chain Poseidon parameters don't match - system will
 
 ### DoS Protection
 - **DAO Names**: Max 256 characters
-- **Proposal Descriptions**: Max 1024 characters (1KB)
-- **VK IC Length**: Exactly 6 elements (5 public signals + 1) for vote circuit
+- **Proposal Titles**: Max 100 bytes
+- **VK IC Length**: Exactly 7 elements (6 public signals + 1) for vote circuit
 - **Tree Depth**: Max 20 levels (supports ~1M members)
 - **Backend Rate Limiting**: 10 votes/min, 60 queries/min per IP
 

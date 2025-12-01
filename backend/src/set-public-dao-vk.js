@@ -25,7 +25,24 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 const VOTING_CONTRACT_ID = process.env.VOTING_CONTRACT_ID;
 const RPC_URL = process.env.SOROBAN_RPC_URL;
 const NETWORK_PASSPHRASE = process.env.NETWORK_PASSPHRASE;
-const SECRET_KEY = process.env.SECRET_KEY || 'REPLACE_ME_RELAYER_SECRET';
+const SECRET_KEY = process.env.ADMIN_SECRET_KEY;
+
+if (!VOTING_CONTRACT_ID) {
+  console.error('ERROR: VOTING_CONTRACT_ID not set in environment');
+  process.exit(1);
+}
+if (!RPC_URL) {
+  console.error('ERROR: SOROBAN_RPC_URL not set in environment');
+  process.exit(1);
+}
+if (!NETWORK_PASSPHRASE) {
+  console.error('ERROR: NETWORK_PASSPHRASE not set in environment');
+  process.exit(1);
+}
+if (!SECRET_KEY) {
+  console.error('ERROR: ADMIN_SECRET_KEY not set in environment');
+  process.exit(1);
+}
 
 // Load verification key
 const vkPath = path.join(__dirname, '../../frontend/src/lib/verification_key_soroban.json');

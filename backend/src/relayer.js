@@ -916,104 +916,6 @@ const commentLimiter = rateLimit({
   keyGenerator: limiterKeyGen,
 });
 
-// POST /comment/public - Submit public comment (author identified)
-app.post('/comment/public', authGuard, commentLimiter, async (req, res) => {
-  const { daoId, proposalId, contentCid, parentId, author } = req.body;
-
-  // Validate required fields
-  if (daoId === undefined || proposalId === undefined || !contentCid || !author) {
-    return res.status(400).json({ error: 'Missing required fields: daoId, proposalId, contentCid, author' });
-  }
-
-  if (!Number.isInteger(daoId) || daoId < 0) {
-    return res.status(400).json({ error: 'daoId must be a non-negative integer' });
-  }
-  if (!Number.isInteger(proposalId) || proposalId < 0) {
-    return res.status(400).json({ error: 'proposalId must be a non-negative integer' });
-  }
-  if (typeof contentCid !== 'string' || contentCid.length > 100) {
-    return res.status(400).json({ error: 'Invalid contentCid' });
-  }
-  if (parentId !== undefined && parentId !== null && (!Number.isInteger(parentId) || parentId < 0)) {
-    return res.status(400).json({ error: 'parentId must be a non-negative integer or null' });
-  }
-
-  try {
-    log('info', 'comment_public_request', { daoId, proposalId });
-
-    const contract = new StellarSdk.Contract(COMMENTS_CONTRACT_ID);
-
-    // Build args for add_comment
-    // Contract signature: add_comment(dao_id, proposal_id, content_cid, parent_id, author)
-    const authorAddress = StellarSdk.Address.fromString(author);
-    const args = [
-      StellarSdk.nativeToScVal(daoId, { type: 'u64' }),
-      StellarSdk.nativeToScVal(proposalId, { type: 'u64' }),
-      StellarSdk.nativeToScVal(contentCid, { type: 'string' }),
-      StellarSdk.nativeToScVal(parentId !== undefined && parentId !== null ? BigInt(parentId) : null),
-      StellarSdk.xdr.ScVal.scvAddress(authorAddress.toScAddress()),
-    ];
-
-    const operation = contract.call('add_comment', ...args);
-
-    const account = await server.getAccount(relayerKeypair.publicKey());
-    const tx = new StellarSdk.TransactionBuilder(account, {
-      fee: '100000',
-      networkPassphrase: NETWORK_PASSPHRASE
-    })
-      .addOperation(operation)
-      .setTimeout(30)
-      .build();
-
-    // Simulate
-    const simResult = await callWithTimeout(
-      () => simulateWithBackoff(() => server.simulateTransaction(tx)),
-      'simulate_add_comment'
-    );
-
-    if (!StellarSdk.rpc.Api.isSimulationSuccess(simResult)) {
-      log('warn', 'comment_simulation_failed', { daoId, proposalId, error: simResult.error });
-      return res.status(400).json({ error: 'Failed to add comment' });
-    }
-
-    // Get comment ID from simulation result
-    const commentId = simResult.result?.retval
-      ? Number(StellarSdk.scValToNative(simResult.result.retval))
-      : null;
-
-    // Prepare and sign
-    const preparedTx = StellarSdk.rpc.assembleTransaction(tx, simResult).build();
-    preparedTx.sign(relayerKeypair);
-
-    // Submit
-    const sendResult = await callWithTimeout(
-      () => server.sendTransaction(preparedTx),
-      'send_add_comment'
-    );
-
-    if (sendResult.status === 'ERROR') {
-      log('error', 'comment_submit_failed', { daoId, proposalId });
-      return res.status(500).json({ error: 'Transaction submission failed' });
-    }
-
-    // Wait for confirmation
-    const result = await callWithTimeout(
-      () => waitForTransaction(sendResult.hash),
-      'wait_for_comment'
-    );
-
-    if (result.status === 'SUCCESS') {
-      log('info', 'comment_public_success', { daoId, proposalId, commentId });
-      res.json({ success: true, commentId, txHash: sendResult.hash });
-    } else {
-      res.status(500).json({ error: 'Transaction failed', txHash: sendResult.hash });
-    }
-  } catch (err) {
-    log('error', 'comment_public_exception', { message: err.message });
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
 // POST /comment/anonymous - Submit anonymous comment with ZK proof
 // Uses the same vote circuit as voting - just verifies membership, doesn't track nullifiers
 app.post('/comment/anonymous', authGuard, commentLimiter, async (req, res) => {
@@ -1226,6 +1128,7 @@ app.get('/comments/:daoId/:proposalId', queryLimiter, async (req, res) => {
           daoId: Number(c.dao_id),
           proposalId: Number(c.proposal_id),
           author: c.author || null,
+          nullifier: c.nullifier ? c.nullifier.toString() : null,
           contentCid: c.content_cid,
           parentId: c.parent_id !== undefined ? Number(c.parent_id) : null,
           createdAt: Number(c.created_at),
@@ -1673,7 +1576,6 @@ if (process.env.RELAYER_TEST_MODE !== 'true') {
     console.log('  GET  /events/:daoId       - Get events for a DAO');
     console.log('  GET  /indexer/status      - Get indexer status');
     console.log('\nComment Endpoints:');
-    console.log('  POST /comment/public      - Submit public comment');
     console.log('  POST /comment/anonymous   - Submit anonymous comment (ZK)');
     console.log('  GET  /comments/:dao/:prop - Get comments for proposal');
     console.log('  GET  /comments/:dao/:prop/nonce - Get next comment nonce');

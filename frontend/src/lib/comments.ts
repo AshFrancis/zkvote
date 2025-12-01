@@ -1,6 +1,6 @@
 // Comment types and utilities for the commenting system
 
-const RELAYER_URL = import.meta.env.VITE_RELAYER_URL || "http://localhost:3001";
+import { relayerFetch, RELAYER_URL } from "./api";
 
 export interface CommentMetadata {
   version: 1;
@@ -91,7 +91,7 @@ export async function uploadCommentContent(
     createdAt: new Date().toISOString(),
   };
 
-  const response = await fetch(`${RELAYER_URL}/ipfs/metadata`, {
+  const response = await relayerFetch("/ipfs/metadata", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(metadata),
@@ -109,7 +109,7 @@ export async function fetchCommentContent(
   cid: string
 ): Promise<CommentMetadata | null> {
   try {
-    const response = await fetch(`${RELAYER_URL}/ipfs/${cid}`);
+    const response = await relayerFetch(`/ipfs/${cid}`);
     if (!response.ok) return null;
     return response.json();
   } catch {
@@ -122,9 +122,7 @@ export async function fetchComments(
   daoId: number,
   proposalId: number
 ): Promise<CommentInfo[]> {
-  const response = await fetch(
-    `${RELAYER_URL}/comments/${daoId}/${proposalId}`
-  );
+  const response = await relayerFetch(`/comments/${daoId}/${proposalId}`);
   if (!response.ok) {
     // If endpoint doesn't exist yet, return empty array
     if (response.status === 404) return [];
@@ -162,7 +160,7 @@ export async function submitAnonymousComment(params: {
   proof: { a: string; b: string; c: string };
   publicSignals: [string, string]; // [root, nullifier]
 }): Promise<{ success: boolean; commentId?: number; error?: string }> {
-  const response = await fetch(`${RELAYER_URL}/comment/anonymous`, {
+  const response = await relayerFetch("/comment/anonymous", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
@@ -175,45 +173,60 @@ export async function submitAnonymousComment(params: {
   return { success: true, commentId: data.commentId };
 }
 
-// Edit a public comment
+// Edit a public comment (uses wallet for direct contract call)
 export async function editComment(params: {
   daoId: number;
   proposalId: number;
   commentId: number;
   newContentCid: string;
   author: string;
+  commentsClient: import("../contracts/comments/dist/index.js").Client;
+  kit: import("@creit.tech/stellar-wallets-kit").StellarWalletsKit;
 }): Promise<{ success: boolean; error?: string }> {
-  const response = await fetch(`${RELAYER_URL}/comment/edit`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
+  try {
+    const tx = await params.commentsClient.edit_comment({
+      dao_id: BigInt(params.daoId),
+      proposal_id: BigInt(params.proposalId),
+      comment_id: BigInt(params.commentId),
+      new_content_cid: params.newContentCid,
+      author: params.author,
+    });
 
-  const data = await response.json();
-  if (!response.ok) {
-    return { success: false, error: data.error || "Failed to edit comment" };
+    // Sign and send the transaction
+    await tx.signAndSend({ signTransaction: params.kit.signTransaction.bind(params.kit) });
+
+    return { success: true };
+  } catch (err) {
+    console.error("Edit comment error:", err);
+    return { success: false, error: err instanceof Error ? err.message : "Failed to edit comment" };
   }
-  return { success: true };
 }
 
-// Delete a public comment
+// Delete a public comment (uses wallet for direct contract call)
 export async function deleteComment(params: {
   daoId: number;
   proposalId: number;
   commentId: number;
   author: string;
+  commentsClient: import("../contracts/comments/dist/index.js").Client;
+  kit: import("@creit.tech/stellar-wallets-kit").StellarWalletsKit;
 }): Promise<{ success: boolean; error?: string }> {
-  const response = await fetch(`${RELAYER_URL}/comment/delete`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
+  try {
+    const tx = await params.commentsClient.delete_comment({
+      dao_id: BigInt(params.daoId),
+      proposal_id: BigInt(params.proposalId),
+      comment_id: BigInt(params.commentId),
+      author: params.author,
+    });
 
-  const data = await response.json();
-  if (!response.ok) {
-    return { success: false, error: data.error || "Failed to delete comment" };
+    // Sign and send the transaction
+    await tx.signAndSend({ signTransaction: params.kit.signTransaction.bind(params.kit) });
+
+    return { success: true };
+  } catch (err) {
+    console.error("Delete comment error:", err);
+    return { success: false, error: err instanceof Error ? err.message : "Failed to delete comment" };
   }
-  return { success: true };
 }
 
 // Build comment tree from flat list

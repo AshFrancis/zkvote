@@ -6,10 +6,22 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const RPC_URL = 'https://rpc-futurenet.stellar.org:443';
-const NETWORK_PASSPHRASE = 'Test SDF Future Network ; October 2022';
-const COMMENTS_CONTRACT_ID = 'CC4CD66KN5QIATS5PSEYV4KRVA4HHYB5ZH3USOZK6AI6UMV4YCWZRSOT';
-const ADMIN_SECRET = 'SAGSGX6EUVF2DYOAXEACSYIENMQ2ZLHEFP42Z65IYA5IYGXA3YJK23GT'; // Admin for DAO 1
+import dotenv from 'dotenv';
+dotenv.config();
+
+const RPC_URL = process.env.SOROBAN_RPC_URL || 'https://rpc-futurenet.stellar.org:443';
+const NETWORK_PASSPHRASE = process.env.NETWORK_PASSPHRASE || 'Test SDF Future Network ; October 2022';
+const COMMENTS_CONTRACT_ID = process.env.COMMENTS_CONTRACT_ID;
+const ADMIN_SECRET = process.env.ADMIN_SECRET_KEY;
+
+if (!COMMENTS_CONTRACT_ID) {
+  console.error('ERROR: COMMENTS_CONTRACT_ID not set in environment');
+  process.exit(1);
+}
+if (!ADMIN_SECRET) {
+  console.error('ERROR: ADMIN_SECRET_KEY not set in environment');
+  process.exit(1);
+}
 
 // Load pre-formatted Soroban VK (same as used for voting contract)
 const vkPath = path.join(__dirname, '../frontend/src/lib/verification_key_soroban.json');

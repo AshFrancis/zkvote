@@ -174,11 +174,22 @@ pub struct Proof {
 }
 
 #[contracttype]
-pub struct Proposal {
-    pub description: String,
-    pub end_time: u64,
+pub struct ProposalInfo {
+    pub id: u64,
+    pub dao_id: u64,
+    pub title: String,           // Max 100 bytes (short display title)
+    pub content_cid: String,     // IPFS CID for full content (max 64 chars)
     pub yes_votes: u64,
     pub no_votes: u64,
+    pub end_time: u64,           // Unix timestamp (0 = no deadline)
+    pub created_by: Address,     // Proposal creator
+    pub created_at: u64,         // Creation timestamp
+    pub state: ProposalState,    // Active, Closed, or Archived
+    pub vk_hash: BytesN<32>,     // SHA256 of VK (prevents mid-vote VK changes)
+    pub vk_version: u32,         // VK version at proposal creation
+    pub eligible_root: U256,     // Merkle root snapshot (defines voter set for Fixed mode)
+    pub vote_mode: VoteMode,     // Fixed or Trailing
+    pub earliest_root_index: u32, // For Trailing mode
 }
 ```
 
@@ -343,12 +354,29 @@ use soroban_sdk::crypto::bn254::{Fr, G1Affine, G2Affine};
 trait Voting {
     fn init(env: Env, tree_contr: Address);
     fn set_vk(env: Env, dao_id: u64, vk: VerificationKey, admin: Address);
-    fn create_proposal(env: Env, dao_id: u64, desc: String, end_time: u64, creator: Address) -> u64;  // voting starts immediately, ends at end_time
-    fn vote(env: Env, dao_id: u64, proposal_id: u64, choice: bool, nullifier: U256, root: U256, proof: Proof);
+    fn create_proposal(
+        env: Env,
+        dao_id: u64,
+        title: String,           // Max 100 bytes
+        content_cid: String,     // IPFS CID for full content
+        end_time: u64,
+        creator: Address,
+        vote_mode: VoteMode,     // Fixed or Trailing
+    ) -> u64;  // Returns proposal_id. Voting starts immediately, ends at end_time
+    fn vote(
+        env: Env,
+        dao_id: u64,
+        proposal_id: u64,
+        choice: bool,
+        nullifier: U256,
+        root: U256,
+        commitment: U256,        // For revocation checks
+        proof: Proof,
+    );
     fn get_results(env: Env, dao_id: u64, proposal_id: u64) -> (u64, u64); // (yes, no)
 }
 
-fn vote(env: Env, dao_id: u64, proposal_id: u64, choice: bool, nullifier: U256, root: U256, proof: Proof) {
+fn vote(env: Env, dao_id: u64, proposal_id: u64, choice: bool, nullifier: U256, root: U256, commitment: U256, proof: Proof) {
     // 1) Verify root is valid/recent for this DAO
     let tree: Address = env.storage().instance().get(&TREE_CONTR).unwrap();
     let valid: bool = env.invoke_contract(&tree, &symbol_short!("root_ok"),
@@ -357,7 +385,7 @@ fn vote(env: Env, dao_id: u64, proposal_id: u64, choice: bool, nullifier: U256, 
 
     // 2) Check proposal exists and is active
     let prop_key = (dao_id, symbol_short!("proposal"), proposal_id);
-    let proposal: Proposal = env.storage().persistent().get(&prop_key).unwrap();
+    let proposal: ProposalInfo = env.storage().persistent().get(&prop_key).unwrap();
     assert!(env.ledger().timestamp() < proposal.end_time, "expired");
 
     // 3) Nullifier must be unused for this proposal
@@ -367,12 +395,14 @@ fn vote(env: Env, dao_id: u64, proposal_id: u64, choice: bool, nullifier: U256, 
     // 4) Verify Groth16 proof using REAL P25 BN254 pairing
     let vk_key = (dao_id, symbol_short!("vk"));
     let vk: VerificationKey = env.storage().persistent().get(&vk_key).unwrap();
+    // 6 public signals: [root, nullifier, daoId, proposalId, voteChoice, commitment]
     let pub_signals = vec![&env,
         root,
         nullifier.clone(),
         U256::from_u128(&env, dao_id as u128),
         U256::from_u128(&env, proposal_id as u128),
-        U256::from_u128(&env, choice as u128)
+        U256::from_u128(&env, choice as u128),
+        commitment,
     ];
     let ok = Self::verify_groth16(&env, &vk, &proof, &pub_signals);
     assert!(ok, "invalid proof");
@@ -767,7 +797,7 @@ nullifier = Poseidon(secret, daoId, proposalId)
 - Same user, same proposal ID, different DAOs → different nullifiers
 - Cross-DAO linkability is prevented
 - Users can safely reuse identity secrets across DAOs
-- Public signals order: `[root, nullifier, daoId, proposalId, voteChoice]`
+- Public signals order: `[root, nullifier, daoId, proposalId, voteChoice, commitment]` (6 signals)
 
 **Implementation:**
 - Circuit: Uses 3-ary Poseidon hash (`Poseidon(3)`) to include all three inputs
@@ -1350,51 +1380,56 @@ impl Voting {
 }
 ```
 
-### 14.4 Circom circuit skeleton (Semaphore membership)
+### 14.4 Circom circuit skeleton (Vote proof with domain-separated nullifiers)
 ```circom
 // circuits/vote.circom
 pragma circom 2.1.6;
 include "poseidon.circom";
-include "merkletree.circom"; // your Poseidon Merkle gadgets
+include "merkle_tree.circom";
 
 template Vote(depth) {
-    // Private
-    signal input identity_nullifier;
-    signal input identity_trapdoor;
-    signal input path_elements[depth];
-    signal input path_index[depth]; // 0/1 bits
+    // Private inputs
+    signal input secret;
+    signal input salt;
+    signal input pathElements[depth];
+    signal input pathIndices[depth]; // 0/1 bits
 
-    // Public
+    // Public inputs (6 signals)
     signal input root;
-    signal input nullifier_hash;
-    signal input signal_hash;
-    signal input epoch;
+    signal input nullifier;
+    signal input daoId;
+    signal input proposalId;
+    signal input voteChoice;
+    signal input commitment;
 
-    // Commitment
-    component H = Poseidon(2);
-    H.inputs[0] <== identity_nullifier;
-    H.inputs[1] <== identity_trapdoor;
-    signal commitment <== H.out;
+    // 1) Verify commitment = Poseidon(secret, salt)
+    component commitmentHasher = Poseidon(2);
+    commitmentHasher.inputs[0] <== secret;
+    commitmentHasher.inputs[1] <== salt;
+    commitmentHasher.out === commitment;
 
-    // Merkle inclusion
-    component MT = MerkleProofPoseidon(depth);
-    MT.leaf <== commitment;
-    for (var i=0; i<depth; i++) {
-        MT.pathElements[i] <== path_elements[i];
-        MT.pathIndex[i] <== path_index[i];
+    // 2) Verify Merkle inclusion (commitment is in tree at root)
+    component merkleProof = MerkleTreeChecker(depth);
+    merkleProof.leaf <== commitment;
+    merkleProof.root <== root;
+    for (var i = 0; i < depth; i++) {
+        merkleProof.pathElements[i] <== pathElements[i];
+        merkleProof.pathIndices[i] <== pathIndices[i];
     }
-    MT.root === root;
 
-    // Nullifier
-    component Hn = Poseidon(2);
-    Hn.inputs[0] <== identity_nullifier;
-    Hn.inputs[1] <== epoch;
-    Hn.out === nullifier_hash;
+    // 3) Verify nullifier = Poseidon(secret, daoId, proposalId) - domain-separated
+    component nullifierHasher = Poseidon(3);
+    nullifierHasher.inputs[0] <== secret;
+    nullifierHasher.inputs[1] <== daoId;
+    nullifierHasher.inputs[2] <== proposalId;
+    nullifierHasher.out === nullifier;
 
-    // Optionally constrain signal_hash if you want structured ballots
+    // 4) Verify voteChoice is binary (0 or 1)
+    voteChoice * (1 - voteChoice) === 0;
 }
 
-component main = Vote(20);
+// Tree depth 18 supports ~262,144 members per DAO
+component main {public [root, nullifier, daoId, proposalId, voteChoice, commitment]} = Vote(18);
 ```
 
 ### 14.5 Proof Query Service (optional, Node/TypeScript)

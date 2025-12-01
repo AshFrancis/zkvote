@@ -57,7 +57,8 @@ DAO_ID=$(invoke \
     -- create_dao \
     --name '"ZK Test DAO Futurenet"' \
     --creator $KEY_ADDRESS \
-    --membership_open 2>&1 | tail -1)
+    --membership_open \
+    --members_can_propose 2>&1 | tail -1)
 
 echo "   Created DAO ID: $DAO_ID"
 

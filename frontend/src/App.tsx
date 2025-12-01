@@ -20,8 +20,14 @@ import { CONTRACTS } from "./config/contracts";
 import { validateStaticConfig } from "./config/guardrails";
 import { useRelayerStatus } from "./hooks/useRelayerStatus";
 import { RelayerStatus as RelayerStatusComponent } from "./components/RelayerStatus";
+import { RelayerStatusBanner } from "./components/RelayerStatusBanner";
 import { Alert, LoadingSpinner } from "./components/ui";
 import { Button } from "./components/ui/Button";
+import { Input } from "./components/ui/Input";
+import { Textarea } from "./components/ui/Textarea";
+import { Label } from "./components/ui/Label";
+import { uploadDAOMetadata, uploadImage, MAX_DESCRIPTION_LENGTH } from "./lib/daoMetadata";
+import { ChevronDown, ChevronUp, Image as ImageIcon, Link2, Globe, Twitter, Linkedin, Github, X } from "lucide-react";
 // ZK credentials will be generated deterministically after DAO creation
 
 // Component for DAO detail page
@@ -325,11 +331,24 @@ function App() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newDaoName, setNewDaoName] = useState("");
   const [membershipOpen, setMembershipOpen] = useState(false);
+  const [membersCanPropose, setMembersCanPropose] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [configErrors, setConfigErrors] = useState<string[]>([]);
   const { status: relayerStatusState, relayerConfig } = useRelayerStatus();
+
+  // Profile fields for Create DAO form
+  const [showProfileOptions, setShowProfileOptions] = useState(false);
+  const [description, setDescription] = useState("");
+  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
+  const [coverImagePreview, setCoverImagePreview] = useState<string | null>(null);
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
+  const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
+  const [website, setWebsite] = useState("");
+  const [twitter, setTwitter] = useState("");
+  const [linkedin, setLinkedin] = useState("");
+  const [github, setGithub] = useState("");
 
   // Determine current view from URL path
   const getCurrentView = (): 'home' | 'browse' | 'votes' | 'docs' => {
@@ -412,6 +431,44 @@ function App() {
     navigate(`/daos/${slug}`);
   };
 
+  // Image upload handlers for Create DAO form
+  const handleCoverImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCoverImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCoverImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setProfileImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfileImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const resetProfileFields = () => {
+    setShowProfileOptions(false);
+    setDescription("");
+    setCoverImageFile(null);
+    setCoverImagePreview(null);
+    setProfileImageFile(null);
+    setProfileImagePreview(null);
+    setWebsite("");
+    setTwitter("");
+    setLinkedin("");
+    setGithub("");
+  };
+
   const handleCreateDao = async () => {
     if (!newDaoName.trim()) {
       setError("DAO name is required");
@@ -471,6 +528,7 @@ function App() {
           name: newDaoName,
           creator: publicKey,
           membership_open: membershipOpen,
+          members_can_propose: membersCanPropose,
           sbt_contract: CONTRACTS.SBT_ID,
           tree_contract: CONTRACTS.TREE_ID,
           voting_contract: CONTRACTS.VOTING_ID,
@@ -491,6 +549,73 @@ function App() {
       const newDaoId = Number(result.result);
       console.log(`DAO created and fully initialized with ID: ${newDaoId}`);
 
+      // Upload profile metadata if any profile fields were provided
+      const hasProfileData = description || coverImageFile || profileImageFile || website || twitter || linkedin || github;
+      if (hasProfileData) {
+        try {
+          setSuccess("Uploading DAO profile to IPFS...");
+
+          // Upload images if provided
+          let coverImageCid: string | undefined;
+          let profileImageCid: string | undefined;
+
+          if (coverImageFile) {
+            const coverResult = await uploadImage(coverImageFile);
+            coverImageCid = coverResult.cid;
+          }
+
+          if (profileImageFile) {
+            const profileResult = await uploadImage(profileImageFile);
+            profileImageCid = profileResult.cid;
+          }
+
+          // Build metadata object
+          const metadataToUpload: {
+            description: string;
+            coverImageCid?: string;
+            profileImageCid?: string;
+            links?: {
+              website?: string;
+              twitter?: string;
+              linkedin?: string;
+              github?: string;
+            };
+          } = {
+            description: description || "",
+            coverImageCid,
+            profileImageCid,
+          };
+
+          // Add links if any are provided
+          if (website || twitter || linkedin || github) {
+            metadataToUpload.links = {};
+            if (website) metadataToUpload.links.website = website;
+            if (twitter) metadataToUpload.links.twitter = twitter;
+            if (linkedin) metadataToUpload.links.linkedin = linkedin;
+            if (github) metadataToUpload.links.github = github;
+          }
+
+          // Upload metadata to IPFS
+          const { cid: metadataCid } = await uploadDAOMetadata(metadataToUpload);
+          console.log("Metadata uploaded to IPFS:", metadataCid);
+
+          // Set metadata CID on-chain
+          setSuccess("Saving profile to blockchain...");
+          const setMetadataTx = await clients.daoRegistry.set_metadata_cid({
+            dao_id: BigInt(newDaoId),
+            metadata_cid: metadataCid,
+            admin: publicKey,
+          });
+
+          await sendWithRetry(setMetadataTx);
+          console.log("Metadata CID set on-chain:", metadataCid);
+        } catch (metadataErr) {
+          // Log the error but don't fail the whole operation - DAO is already created
+          console.error("Failed to upload profile metadata:", metadataErr);
+          setError("DAO created but failed to save profile. You can add it later from Settings.");
+        }
+      }
+
       setSuccess(
         `DAO "${newDaoName}" created successfully! Redirecting...`
       );
@@ -499,6 +624,7 @@ function App() {
       const createdDaoName = newDaoName; // Capture before clearing
       setNewDaoName("");
       setShowCreateForm(false);
+      resetProfileFields();
 
       // Navigate to DAO page with slug
       navigate(`/daos/${toIdSlug(newDaoId, createdDaoName)}`);
@@ -529,6 +655,9 @@ function App() {
         relayerStatus={relayerStatus}
         relayerErrors={configErrors}
       />
+
+      {/* Relayer Status Banner */}
+      <RelayerStatusBanner />
 
       {/* Main Content */}
       <main className="container mx-auto py-8 md:py-24 px-4 sm:px-6 lg:px-8">
@@ -575,6 +704,9 @@ function App() {
                         <div className="space-y-2">
                           <label htmlFor="dao-name-input" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                             DAO Name
+                            <span className="ml-2 text-xs text-muted-foreground font-normal">
+                              ({newDaoName.length}/24 characters)
+                            </span>
                           </label>
                           <input
                             id="dao-name-input"
@@ -582,6 +714,7 @@ function App() {
                             value={newDaoName}
                             onChange={(e) => setNewDaoName(e.target.value)}
                             placeholder="Enter DAO name..."
+                            maxLength={24}
                             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                           />
                         </div>
@@ -591,13 +724,166 @@ function App() {
                             id="membership-open"
                             checked={membershipOpen}
                             onChange={(e) => setMembershipOpen(e.target.checked)}
-                            className="h-4 w-4 rounded border-primary text-primary ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                            className="h-4 w-4 rounded border-gray-400 text-primary focus:ring-1 focus:ring-primary/50 focus:ring-offset-0"
                           />
                           <label htmlFor="membership-open" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                             Open Membership
                             <span className="ml-2 text-xs text-muted-foreground font-normal">(Allow users to join without admin approval)</span>
                           </label>
                         </div>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="members-can-propose"
+                            checked={membersCanPropose}
+                            onChange={(e) => setMembersCanPropose(e.target.checked)}
+                            className="h-4 w-4 rounded border-gray-400 text-primary focus:ring-1 focus:ring-primary/50 focus:ring-offset-0"
+                          />
+                          <label htmlFor="members-can-propose" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                            Member Proposals
+                            <span className="ml-2 text-xs text-muted-foreground font-normal">(Allow members to create proposals, or admin-only)</span>
+                          </label>
+                        </div>
+
+                        {/* Profile Options Toggle */}
+                        <button
+                          type="button"
+                          onClick={() => setShowProfileOptions(!showProfileOptions)}
+                          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mt-2"
+                        >
+                          {showProfileOptions ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          <ImageIcon className="w-4 h-4" />
+                          Add Profile (optional)
+                        </button>
+
+                        {/* Profile Options */}
+                        {showProfileOptions && (
+                          <div className="space-y-4 pt-4 border-t mt-4">
+                            {/* Description */}
+                            <div className="space-y-2">
+                              <Label htmlFor="dao-description">
+                                Description
+                                <span className="ml-2 text-xs text-muted-foreground font-normal">
+                                  ({description.length}/{MAX_DESCRIPTION_LENGTH} characters, Markdown supported)
+                                </span>
+                              </Label>
+                              <Textarea
+                                id="dao-description"
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value.slice(0, MAX_DESCRIPTION_LENGTH))}
+                                placeholder="Describe your DAO..."
+                                rows={3}
+                              />
+                            </div>
+
+                            {/* Images */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {/* Cover Image */}
+                              <div className="space-y-2">
+                                <Label htmlFor="cover-image">Cover Image</Label>
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    id="cover-image"
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleCoverImageChange}
+                                    className="flex-1"
+                                  />
+                                  {coverImagePreview && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setCoverImageFile(null);
+                                        setCoverImagePreview(null);
+                                      }}
+                                      className="p-1 hover:bg-muted rounded"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </div>
+                                {coverImagePreview && (
+                                  <div className="relative h-24 rounded-lg overflow-hidden bg-muted">
+                                    <img src={coverImagePreview} alt="Cover preview" className="w-full h-full object-cover" />
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Profile Image */}
+                              <div className="space-y-2">
+                                <Label htmlFor="profile-image">Profile Image</Label>
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    id="profile-image"
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleProfileImageChange}
+                                    className="flex-1"
+                                  />
+                                  {profileImagePreview && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setProfileImageFile(null);
+                                        setProfileImagePreview(null);
+                                      }}
+                                      className="p-1 hover:bg-muted rounded"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </div>
+                                {profileImagePreview && (
+                                  <div className="w-16 h-16 rounded-full overflow-hidden bg-muted">
+                                    <img src={profileImagePreview} alt="Profile preview" className="w-full h-full object-cover" />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Social Links */}
+                            <div className="space-y-3">
+                              <Label className="flex items-center gap-1">
+                                <Link2 className="w-4 h-4" />
+                                Social Links
+                              </Label>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="flex items-center gap-2">
+                                  <Globe className="w-4 h-4 text-muted-foreground shrink-0" />
+                                  <Input
+                                    value={website}
+                                    onChange={(e) => setWebsite(e.target.value)}
+                                    placeholder="https://example.com"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Twitter className="w-4 h-4 text-muted-foreground shrink-0" />
+                                  <Input
+                                    value={twitter}
+                                    onChange={(e) => setTwitter(e.target.value)}
+                                    placeholder="@handle or x.com/handle"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Linkedin className="w-4 h-4 text-muted-foreground shrink-0" />
+                                  <Input
+                                    value={linkedin}
+                                    onChange={(e) => setLinkedin(e.target.value)}
+                                    placeholder="linkedin.com/company/..."
+                                  />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Github className="w-4 h-4 text-muted-foreground shrink-0" />
+                                  <Input
+                                    value={github}
+                                    onChange={(e) => setGithub(e.target.value)}
+                                    placeholder="github.com/org"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex gap-3">
@@ -615,6 +901,8 @@ function App() {
                           setShowCreateForm(false);
                           setNewDaoName("");
                           setMembershipOpen(false);
+                          setMembersCanPropose(true);
+                          resetProfileFields();
                           setError(null);
                         }}
                         className="flex-1"

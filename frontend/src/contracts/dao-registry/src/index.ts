@@ -34,7 +34,7 @@ if (typeof window !== 'undefined') {
 export const networks = {
   futurenet: {
     networkPassphrase: "Test SDF Future Network ; October 2022",
-    contractId: "CDCR6HA6NKVVQ4P4TVOPC6O3TQCAAQJPWNDWTPITL3FKWORY6HFKBQZZ",
+    contractId: "CCEOH2VJEWCELRK3XFCHHVVL4TFBAZYH6WY57VW4JHVL4BHZXWGLHSKM",
   }
 } as const
 
@@ -43,7 +43,15 @@ export interface DaoInfo {
   admin: string;
   created_at: u64;
   id: u64;
+  /**
+ * If true, any member can create proposals. If false, only admin can create proposals.
+ */
+members_can_propose: boolean;
   membership_open: boolean;
+  /**
+ * IPFS CID for extended metadata (description, images, links)
+ */
+metadata_cid: Option<string>;
   name: string;
 }
 
@@ -81,6 +89,12 @@ export interface Client {
   version: (options?: MethodOptions) => Promise<AssembledTransaction<u32>>
 
   /**
+   * Construct and simulate a set_name transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Set DAO name (admin only). Max 100 characters.
+   */
+  set_name: ({dao_id, name, admin}: {dao_id: u64, name: string, admin: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
    * Construct and simulate a dao_count transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Get total number of DAOs created
    */
@@ -97,8 +111,9 @@ export interface Client {
    * Create a new DAO (permissionless).
    * Creator automatically becomes the admin.
    * Cannot create DAOs for other people - you can only create your own DAO.
+   * - `members_can_propose`: if true, any member can create proposals; if false, only admin
    */
-  create_dao: ({name, creator, membership_open}: {name: string, creator: string, membership_open: boolean}, options?: MethodOptions) => Promise<AssembledTransaction<u64>>
+  create_dao: ({name, creator, membership_open, members_can_propose}: {name: string, creator: string, membership_open: boolean, members_can_propose: boolean}, options?: MethodOptions) => Promise<AssembledTransaction<u64>>
 
   /**
    * Construct and simulate a dao_exists transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -111,6 +126,28 @@ export interface Client {
    * Transfer admin rights (current admin only)
    */
   transfer_admin: ({dao_id, new_admin}: {dao_id: u64, new_admin: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a get_metadata_cid transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Get DAO metadata CID
+   */
+  get_metadata_cid: ({dao_id}: {dao_id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<Option<string>>>
+
+  /**
+   * Construct and simulate a set_metadata_cid transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Set DAO metadata CID (admin only).
+   * The CID points to IPFS JSON with description, images, and links.
+   * Pass None to clear metadata.
+   */
+  set_metadata_cid: ({dao_id, metadata_cid, admin}: {dao_id: u64, metadata_cid: Option<string>, admin: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a set_proposal_mode transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Set proposal mode (admin only).
+   * If `members_can_propose` is true, any member can create proposals.
+   * If false, only the DAO admin can create proposals.
+   */
+  set_proposal_mode: ({dao_id, members_can_propose, admin}: {dao_id: u64, members_can_propose: boolean, admin: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
    * Construct and simulate a is_membership_open transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -128,7 +165,21 @@ export interface Client {
    * 4. membership_tree.register_from_registry (registers creator's commitment)
    * 5. voting.set_vk (sets verification key)
    */
-  create_and_init_dao: ({name, creator, membership_open, sbt_contract, tree_contract, voting_contract, tree_depth, creator_commitment, vk}: {name: string, creator: string, membership_open: boolean, sbt_contract: string, tree_contract: string, voting_contract: string, tree_depth: u32, creator_commitment: u256, vk: VerificationKey}, options?: MethodOptions) => Promise<AssembledTransaction<u64>>
+  create_and_init_dao: ({name, creator, membership_open, members_can_propose, sbt_contract, tree_contract, voting_contract, tree_depth, creator_commitment, vk}: {name: string, creator: string, membership_open: boolean, members_can_propose: boolean, sbt_contract: string, tree_contract: string, voting_contract: string, tree_depth: u32, creator_commitment: u256, vk: VerificationKey}, options?: MethodOptions) => Promise<AssembledTransaction<u64>>
+
+  /**
+   * Construct and simulate a members_can_propose transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Check if members can create proposals (vs admin-only)
+   */
+  members_can_propose: ({dao_id}: {dao_id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<boolean>>
+
+  /**
+   * Construct and simulate a set_membership_open transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Set membership open/closed (admin only).
+   * If `membership_open` is true, users can join (mint SBT) themselves.
+   * If false, only the admin can add members.
+   */
+  set_membership_open: ({dao_id, membership_open, admin}: {dao_id: u64, membership_open: boolean, admin: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
    * Construct and simulate a create_and_init_dao_no_reg transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -140,7 +191,7 @@ export interface Client {
    * 3. membership_tree.init_tree (initializes Merkle tree)
    * 4. voting.set_vk (sets verification key)
    */
-  create_and_init_dao_no_reg: ({name, creator, membership_open, sbt_contract, tree_contract, voting_contract, tree_depth, vk}: {name: string, creator: string, membership_open: boolean, sbt_contract: string, tree_contract: string, voting_contract: string, tree_depth: u32, vk: VerificationKey}, options?: MethodOptions) => Promise<AssembledTransaction<u64>>
+  create_and_init_dao_no_reg: ({name, creator, membership_open, members_can_propose, sbt_contract, tree_contract, voting_contract, tree_depth, vk}: {name: string, creator: string, membership_open: boolean, members_can_propose: boolean, sbt_contract: string, tree_contract: string, voting_contract: string, tree_depth: u32, vk: VerificationKey}, options?: MethodOptions) => Promise<AssembledTransaction<u64>>
 
 }
 export class Client extends ContractClient {
@@ -160,35 +211,47 @@ export class Client extends ContractClient {
   }
   constructor(public readonly options: ContractClientOptions) {
     super(
-      new ContractSpec([ "AAAAAQAAAAAAAAAAAAAAB0Rhb0luZm8AAAAABQAAAAAAAAAFYWRtaW4AAAAAAAATAAAAAAAAAApjcmVhdGVkX2F0AAAAAAAGAAAAAAAAAAJpZAAAAAAABgAAAAAAAAAPbWVtYmVyc2hpcF9vcGVuAAAAAAEAAAAAAAAABG5hbWUAAAAQ",
+      new ContractSpec([ "AAAAAQAAAAAAAAAAAAAAB0Rhb0luZm8AAAAABwAAAAAAAAAFYWRtaW4AAAAAAAATAAAAAAAAAApjcmVhdGVkX2F0AAAAAAAGAAAAAAAAAAJpZAAAAAAABgAAAFRJZiB0cnVlLCBhbnkgbWVtYmVyIGNhbiBjcmVhdGUgcHJvcG9zYWxzLiBJZiBmYWxzZSwgb25seSBhZG1pbiBjYW4gY3JlYXRlIHByb3Bvc2Fscy4AAAATbWVtYmVyc19jYW5fcHJvcG9zZQAAAAABAAAAAAAAAA9tZW1iZXJzaGlwX29wZW4AAAAAAQAAADtJUEZTIENJRCBmb3IgZXh0ZW5kZWQgbWV0YWRhdGEgKGRlc2NyaXB0aW9uLCBpbWFnZXMsIGxpbmtzKQAAAAAMbWV0YWRhdGFfY2lkAAAD6AAAABAAAAAAAAAABG5hbWUAAAAQ",
         "AAAAAAAAAAxHZXQgREFPIGluZm8AAAAHZ2V0X2RhbwAAAAABAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAH0AAAAAdEYW9JbmZvAA==",
         "AAAAAAAAACZDb250cmFjdCB2ZXJzaW9uIGZvciB1cGdyYWRlIHRyYWNraW5nLgAAAAAAB3ZlcnNpb24AAAAAAAAAAAEAAAAE",
+        "AAAAAAAAAC5TZXQgREFPIG5hbWUgKGFkbWluIG9ubHkpLiBNYXggMTAwIGNoYXJhY3RlcnMuAAAAAAAIc2V0X25hbWUAAAADAAAAAAAAAAZkYW9faWQAAAAAAAYAAAAAAAAABG5hbWUAAAAQAAAAAAAAAAVhZG1pbgAAAAAAABMAAAAA",
         "AAAABAAAAAAAAAAAAAAADVJlZ2lzdHJ5RXJyb3IAAAAAAAACAAAAAAAAAAtOYW1lVG9vTG9uZwAAAAABAAAAAAAAAAtEYW9Ob3RGb3VuZAAAAAAC",
         "AAAAAAAAACBHZXQgdG90YWwgbnVtYmVyIG9mIERBT3MgY3JlYXRlZAAAAAlkYW9fY291bnQAAAAAAAAAAAAAAQAAAAY=",
         "AAAAAAAAABJHZXQgYWRtaW4gb2YgYSBEQU8AAAAAAAlnZXRfYWRtaW4AAAAAAAABAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAEw==",
-        "AAAAAAAAAJNDcmVhdGUgYSBuZXcgREFPIChwZXJtaXNzaW9ubGVzcykuCkNyZWF0b3IgYXV0b21hdGljYWxseSBiZWNvbWVzIHRoZSBhZG1pbi4KQ2Fubm90IGNyZWF0ZSBEQU9zIGZvciBvdGhlciBwZW9wbGUgLSB5b3UgY2FuIG9ubHkgY3JlYXRlIHlvdXIgb3duIERBTy4AAAAACmNyZWF0ZV9kYW8AAAAAAAMAAAAAAAAABG5hbWUAAAAQAAAAAAAAAAdjcmVhdG9yAAAAABMAAAAAAAAAD21lbWJlcnNoaXBfb3BlbgAAAAABAAAAAQAAAAY=",
+        "AAAAAAAAAOtDcmVhdGUgYSBuZXcgREFPIChwZXJtaXNzaW9ubGVzcykuCkNyZWF0b3IgYXV0b21hdGljYWxseSBiZWNvbWVzIHRoZSBhZG1pbi4KQ2Fubm90IGNyZWF0ZSBEQU9zIGZvciBvdGhlciBwZW9wbGUgLSB5b3UgY2FuIG9ubHkgY3JlYXRlIHlvdXIgb3duIERBTy4KLSBgbWVtYmVyc19jYW5fcHJvcG9zZWA6IGlmIHRydWUsIGFueSBtZW1iZXIgY2FuIGNyZWF0ZSBwcm9wb3NhbHM7IGlmIGZhbHNlLCBvbmx5IGFkbWluAAAAAApjcmVhdGVfZGFvAAAAAAAEAAAAAAAAAARuYW1lAAAAEAAAAAAAAAAHY3JlYXRvcgAAAAATAAAAAAAAAA9tZW1iZXJzaGlwX29wZW4AAAAAAQAAAAAAAAATbWVtYmVyc19jYW5fcHJvcG9zZQAAAAABAAAAAQAAAAY=",
         "AAAAAAAAABNDaGVjayBpZiBEQU8gZXhpc3RzAAAAAApkYW9fZXhpc3RzAAAAAAABAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAQ==",
         "AAAABQAAAAAAAAAAAAAADkFkbWluWGZlckV2ZW50AAAAAAABAAAAEGFkbWluX3hmZXJfZXZlbnQAAAADAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAAAAAAlvbGRfYWRtaW4AAAAAAAATAAAAAAAAAAAAAAAJbmV3X2FkbWluAAAAAAAAEwAAAAAAAAAC",
         "AAAABQAAAAAAAAAAAAAADkRhb0NyZWF0ZUV2ZW50AAAAAAABAAAAEGRhb19jcmVhdGVfZXZlbnQAAAADAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAAAAAAVhZG1pbgAAAAAAABMAAAAAAAAAAAAAAARuYW1lAAAAEAAAAAAAAAAC",
         "AAAAAQAAACJHcm90aDE2IFZlcmlmaWNhdGlvbiBLZXkgZm9yIEJOMjU0AAAAAAAAAAAAD1ZlcmlmaWNhdGlvbktleQAAAAAFAAAAAAAAAAVhbHBoYQAAAAAAA+4AAABAAAAAAAAAAARiZXRhAAAD7gAAAIAAAAAAAAAABWRlbHRhAAAAAAAD7gAAAIAAAAAAAAAABWdhbW1hAAAAAAAD7gAAAIAAAAAAAAAAAmljAAAAAAPqAAAD7gAAAEA=",
         "AAAABQAAAAAAAAAAAAAAEENvbnRyYWN0VXBncmFkZWQAAAABAAAAEWNvbnRyYWN0X3VwZ3JhZGVkAAAAAAAAAgAAAAAAAAAEZnJvbQAAAAQAAAAAAAAAAAAAAAJ0bwAAAAAABAAAAAAAAAAC",
         "AAAAAAAAACpUcmFuc2ZlciBhZG1pbiByaWdodHMgKGN1cnJlbnQgYWRtaW4gb25seSkAAAAAAA50cmFuc2Zlcl9hZG1pbgAAAAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAluZXdfYWRtaW4AAAAAAAATAAAAAA==",
+        "AAAAAAAAABRHZXQgREFPIG1ldGFkYXRhIENJRAAAABBnZXRfbWV0YWRhdGFfY2lkAAAAAQAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAQAAA+gAAAAQ",
+        "AAAAAAAAAIBTZXQgREFPIG1ldGFkYXRhIENJRCAoYWRtaW4gb25seSkuClRoZSBDSUQgcG9pbnRzIHRvIElQRlMgSlNPTiB3aXRoIGRlc2NyaXB0aW9uLCBpbWFnZXMsIGFuZCBsaW5rcy4KUGFzcyBOb25lIHRvIGNsZWFyIG1ldGFkYXRhLgAAABBzZXRfbWV0YWRhdGFfY2lkAAAAAwAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAxtZXRhZGF0YV9jaWQAAAPoAAAAEAAAAAAAAAAFYWRtaW4AAAAAAAATAAAAAA==",
+        "AAAAAAAAAJVTZXQgcHJvcG9zYWwgbW9kZSAoYWRtaW4gb25seSkuCklmIGBtZW1iZXJzX2Nhbl9wcm9wb3NlYCBpcyB0cnVlLCBhbnkgbWVtYmVyIGNhbiBjcmVhdGUgcHJvcG9zYWxzLgpJZiBmYWxzZSwgb25seSB0aGUgREFPIGFkbWluIGNhbiBjcmVhdGUgcHJvcG9zYWxzLgAAAAAAABFzZXRfcHJvcG9zYWxfbW9kZQAAAAAAAAMAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAATbWVtYmVyc19jYW5fcHJvcG9zZQAAAAABAAAAAAAAAAVhZG1pbgAAAAAAABMAAAAA",
         "AAAAAAAAACJDaGVjayBpZiBhIERBTyBoYXMgb3BlbiBtZW1iZXJzaGlwAAAAAAASaXNfbWVtYmVyc2hpcF9vcGVuAAAAAAABAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAQ==",
-        "AAAAAAAAAUZDcmVhdGUgYW5kIGZ1bGx5IGluaXRpYWxpemUgYSBEQU8gaW4gYSBzaW5nbGUgdHJhbnNhY3Rpb24uClRoaXMgY2FsbHM6CjEuIGNyZWF0ZV9kYW8gKGNyZWF0ZXMgcmVnaXN0cnkgZW50cnkpCjIuIG1lbWJlcnNoaXBfc2J0Lm1pbnQgKG1pbnRzIFNCVCB0byBjcmVhdG9yKQozLiBtZW1iZXJzaGlwX3RyZWUuaW5pdF90cmVlIChpbml0aWFsaXplcyBNZXJrbGUgdHJlZSkKNC4gbWVtYmVyc2hpcF90cmVlLnJlZ2lzdGVyX2Zyb21fcmVnaXN0cnkgKHJlZ2lzdGVycyBjcmVhdG9yJ3MgY29tbWl0bWVudCkKNS4gdm90aW5nLnNldF92ayAoc2V0cyB2ZXJpZmljYXRpb24ga2V5KQAAAAAAE2NyZWF0ZV9hbmRfaW5pdF9kYW8AAAAACQAAAAAAAAAEbmFtZQAAABAAAAAAAAAAB2NyZWF0b3IAAAAAEwAAAAAAAAAPbWVtYmVyc2hpcF9vcGVuAAAAAAEAAAAAAAAADHNidF9jb250cmFjdAAAABMAAAAAAAAADXRyZWVfY29udHJhY3QAAAAAAAATAAAAAAAAAA92b3RpbmdfY29udHJhY3QAAAAAEwAAAAAAAAAKdHJlZV9kZXB0aAAAAAAABAAAAAAAAAASY3JlYXRvcl9jb21taXRtZW50AAAAAAAMAAAAAAAAAAJ2awAAAAAH0AAAAA9WZXJpZmljYXRpb25LZXkAAAAAAQAAAAY=",
-        "AAAAAAAAAURDcmVhdGUgYW5kIGluaXRpYWxpemUgREFPIHdpdGhvdXQgcmVnaXN0ZXJpbmcgY3JlYXRvciBmb3Igdm90aW5nLgpDcmVhdG9yIG11c3QgcmVnaXN0ZXIgc2VwYXJhdGVseSB1c2luZyBkZXRlcm1pbmlzdGljIGNyZWRlbnRpYWxzLgpUaGlzIGNhbGxzOgoxLiBjcmVhdGVfZGFvIChjcmVhdGVzIHJlZ2lzdHJ5IGVudHJ5KQoyLiBtZW1iZXJzaGlwX3NidC5taW50IChtaW50cyBTQlQgdG8gY3JlYXRvcikKMy4gbWVtYmVyc2hpcF90cmVlLmluaXRfdHJlZSAoaW5pdGlhbGl6ZXMgTWVya2xlIHRyZWUpCjQuIHZvdGluZy5zZXRfdmsgKHNldHMgdmVyaWZpY2F0aW9uIGtleSkAAAAaY3JlYXRlX2FuZF9pbml0X2Rhb19ub19yZWcAAAAAAAgAAAAAAAAABG5hbWUAAAAQAAAAAAAAAAdjcmVhdG9yAAAAABMAAAAAAAAAD21lbWJlcnNoaXBfb3BlbgAAAAABAAAAAAAAAAxzYnRfY29udHJhY3QAAAATAAAAAAAAAA10cmVlX2NvbnRyYWN0AAAAAAAAEwAAAAAAAAAPdm90aW5nX2NvbnRyYWN0AAAAABMAAAAAAAAACnRyZWVfZGVwdGgAAAAAAAQAAAAAAAAAAnZrAAAAAAfQAAAAD1ZlcmlmaWNhdGlvbktleQAAAAABAAAABg==" ]),
+        "AAAAAAAAAUZDcmVhdGUgYW5kIGZ1bGx5IGluaXRpYWxpemUgYSBEQU8gaW4gYSBzaW5nbGUgdHJhbnNhY3Rpb24uClRoaXMgY2FsbHM6CjEuIGNyZWF0ZV9kYW8gKGNyZWF0ZXMgcmVnaXN0cnkgZW50cnkpCjIuIG1lbWJlcnNoaXBfc2J0Lm1pbnQgKG1pbnRzIFNCVCB0byBjcmVhdG9yKQozLiBtZW1iZXJzaGlwX3RyZWUuaW5pdF90cmVlIChpbml0aWFsaXplcyBNZXJrbGUgdHJlZSkKNC4gbWVtYmVyc2hpcF90cmVlLnJlZ2lzdGVyX2Zyb21fcmVnaXN0cnkgKHJlZ2lzdGVycyBjcmVhdG9yJ3MgY29tbWl0bWVudCkKNS4gdm90aW5nLnNldF92ayAoc2V0cyB2ZXJpZmljYXRpb24ga2V5KQAAAAAAE2NyZWF0ZV9hbmRfaW5pdF9kYW8AAAAACgAAAAAAAAAEbmFtZQAAABAAAAAAAAAAB2NyZWF0b3IAAAAAEwAAAAAAAAAPbWVtYmVyc2hpcF9vcGVuAAAAAAEAAAAAAAAAE21lbWJlcnNfY2FuX3Byb3Bvc2UAAAAAAQAAAAAAAAAMc2J0X2NvbnRyYWN0AAAAEwAAAAAAAAANdHJlZV9jb250cmFjdAAAAAAAABMAAAAAAAAAD3ZvdGluZ19jb250cmFjdAAAAAATAAAAAAAAAAp0cmVlX2RlcHRoAAAAAAAEAAAAAAAAABJjcmVhdG9yX2NvbW1pdG1lbnQAAAAAAAwAAAAAAAAAAnZrAAAAAAfQAAAAD1ZlcmlmaWNhdGlvbktleQAAAAABAAAABg==",
+        "AAAAAAAAADVDaGVjayBpZiBtZW1iZXJzIGNhbiBjcmVhdGUgcHJvcG9zYWxzICh2cyBhZG1pbi1vbmx5KQAAAAAAABNtZW1iZXJzX2Nhbl9wcm9wb3NlAAAAAAEAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAAB",
+        "AAAAAAAAAJZTZXQgbWVtYmVyc2hpcCBvcGVuL2Nsb3NlZCAoYWRtaW4gb25seSkuCklmIGBtZW1iZXJzaGlwX29wZW5gIGlzIHRydWUsIHVzZXJzIGNhbiBqb2luIChtaW50IFNCVCkgdGhlbXNlbHZlcy4KSWYgZmFsc2UsIG9ubHkgdGhlIGFkbWluIGNhbiBhZGQgbWVtYmVycy4AAAAAABNzZXRfbWVtYmVyc2hpcF9vcGVuAAAAAAMAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAAPbWVtYmVyc2hpcF9vcGVuAAAAAAEAAAAAAAAABWFkbWluAAAAAAAAEwAAAAA=",
+        "AAAAAAAAAURDcmVhdGUgYW5kIGluaXRpYWxpemUgREFPIHdpdGhvdXQgcmVnaXN0ZXJpbmcgY3JlYXRvciBmb3Igdm90aW5nLgpDcmVhdG9yIG11c3QgcmVnaXN0ZXIgc2VwYXJhdGVseSB1c2luZyBkZXRlcm1pbmlzdGljIGNyZWRlbnRpYWxzLgpUaGlzIGNhbGxzOgoxLiBjcmVhdGVfZGFvIChjcmVhdGVzIHJlZ2lzdHJ5IGVudHJ5KQoyLiBtZW1iZXJzaGlwX3NidC5taW50IChtaW50cyBTQlQgdG8gY3JlYXRvcikKMy4gbWVtYmVyc2hpcF90cmVlLmluaXRfdHJlZSAoaW5pdGlhbGl6ZXMgTWVya2xlIHRyZWUpCjQuIHZvdGluZy5zZXRfdmsgKHNldHMgdmVyaWZpY2F0aW9uIGtleSkAAAAaY3JlYXRlX2FuZF9pbml0X2Rhb19ub19yZWcAAAAAAAkAAAAAAAAABG5hbWUAAAAQAAAAAAAAAAdjcmVhdG9yAAAAABMAAAAAAAAAD21lbWJlcnNoaXBfb3BlbgAAAAABAAAAAAAAABNtZW1iZXJzX2Nhbl9wcm9wb3NlAAAAAAEAAAAAAAAADHNidF9jb250cmFjdAAAABMAAAAAAAAADXRyZWVfY29udHJhY3QAAAAAAAATAAAAAAAAAA92b3RpbmdfY29udHJhY3QAAAAAEwAAAAAAAAAKdHJlZV9kZXB0aAAAAAAABAAAAAAAAAACdmsAAAAAB9AAAAAPVmVyaWZpY2F0aW9uS2V5AAAAAAEAAAAG" ]),
       options
     )
   }
   public readonly fromJSON = {
     get_dao: this.txFromJSON<DaoInfo>,
         version: this.txFromJSON<u32>,
+        set_name: this.txFromJSON<null>,
         dao_count: this.txFromJSON<u64>,
         get_admin: this.txFromJSON<string>,
         create_dao: this.txFromJSON<u64>,
         dao_exists: this.txFromJSON<boolean>,
         transfer_admin: this.txFromJSON<null>,
+        get_metadata_cid: this.txFromJSON<Option<string>>,
+        set_metadata_cid: this.txFromJSON<null>,
+        set_proposal_mode: this.txFromJSON<null>,
         is_membership_open: this.txFromJSON<boolean>,
         create_and_init_dao: this.txFromJSON<u64>,
+        members_can_propose: this.txFromJSON<boolean>,
+        set_membership_open: this.txFromJSON<null>,
         create_and_init_dao_no_reg: this.txFromJSON<u64>
   }
 }

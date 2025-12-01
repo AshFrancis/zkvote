@@ -26,6 +26,9 @@
                 },
                 {
                   "bool": false
+                },
+                {
+                  "bool": true
                 }
               ]
             }
@@ -254,6 +257,9 @@
                 },
                 {
                   "bool": false
+                },
+                {
+                  "bool": true
                 }
               ]
             }
@@ -541,6 +547,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "members_can_propose"
+                      },
+                      "val": {
+                        "bool": true
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "membership_open"
                       },
                       "val": {
@@ -623,6 +637,14 @@
                       },
                       "val": {
                         "u64": "2"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "members_can_propose"
+                      },
+                      "val": {
+                        "bool": true
                       }
                     },
                     {

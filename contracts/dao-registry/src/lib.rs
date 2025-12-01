@@ -16,7 +16,8 @@ pub enum RegistryError {
 }
 
 // Size limit to prevent DoS attacks
-const MAX_DAO_NAME_LEN: u32 = 256; // Max DAO name length (256 chars)
+const MAX_DAO_NAME_LEN: u32 = 24; // Max DAO name length (24 chars)
+const MAX_METADATA_CID_LEN: u32 = 64; // Max IPFS CID length
 
 #[contracttype]
 #[derive(Clone)]
@@ -26,6 +27,10 @@ pub struct DaoInfo {
     pub admin: Address,
     pub created_at: u64,
     pub membership_open: bool,
+    /// If true, any member can create proposals. If false, only admin can create proposals.
+    pub members_can_propose: bool,
+    /// IPFS CID for extended metadata (description, images, links)
+    pub metadata_cid: Option<String>,
 }
 
 /// Groth16 Verification Key for BN254
@@ -73,7 +78,14 @@ impl DaoRegistry {
     /// Create a new DAO (permissionless).
     /// Creator automatically becomes the admin.
     /// Cannot create DAOs for other people - you can only create your own DAO.
-    pub fn create_dao(env: Env, name: String, creator: Address, membership_open: bool) -> u64 {
+    /// - `members_can_propose`: if true, any member can create proposals; if false, only admin
+    pub fn create_dao(
+        env: Env,
+        name: String,
+        creator: Address,
+        membership_open: bool,
+        members_can_propose: bool,
+    ) -> u64 {
         creator.require_auth();
 
         // Validate name length to prevent DoS
@@ -90,6 +102,8 @@ impl DaoRegistry {
             admin: creator.clone(),
             created_at: env.ledger().timestamp(),
             membership_open,
+            members_can_propose,
+            metadata_cid: None,
         };
 
         let key = Self::dao_key(dao_id);
@@ -158,6 +172,114 @@ impl DaoRegistry {
         Self::get_dao(env, dao_id).membership_open
     }
 
+    /// Check if members can create proposals (vs admin-only)
+    pub fn members_can_propose(env: Env, dao_id: u64) -> bool {
+        Self::get_dao(env, dao_id).members_can_propose
+    }
+
+    /// Set proposal mode (admin only).
+    /// If `members_can_propose` is true, any member can create proposals.
+    /// If false, only the DAO admin can create proposals.
+    pub fn set_proposal_mode(env: Env, dao_id: u64, members_can_propose: bool, admin: Address) {
+        admin.require_auth();
+
+        let key = Self::dao_key(dao_id);
+        let mut info: DaoInfo = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| panic_with_error!(&env, RegistryError::DaoNotFound));
+
+        // Only admin can change proposal mode
+        if admin != info.admin {
+            panic!("Not admin");
+        }
+
+        info.members_can_propose = members_can_propose;
+        env.storage().persistent().set(&key, &info);
+    }
+
+    /// Set membership open/closed (admin only).
+    /// If `membership_open` is true, users can join (mint SBT) themselves.
+    /// If false, only the admin can add members.
+    pub fn set_membership_open(env: Env, dao_id: u64, membership_open: bool, admin: Address) {
+        admin.require_auth();
+
+        let key = Self::dao_key(dao_id);
+        let mut info: DaoInfo = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| panic_with_error!(&env, RegistryError::DaoNotFound));
+
+        // Only admin can change membership mode
+        if admin != info.admin {
+            panic!("Not admin");
+        }
+
+        info.membership_open = membership_open;
+        env.storage().persistent().set(&key, &info);
+    }
+
+    /// Set DAO name (admin only). Max 100 characters.
+    pub fn set_name(env: Env, dao_id: u64, name: String, admin: Address) {
+        admin.require_auth();
+
+        // Validate name length
+        if name.len() > MAX_DAO_NAME_LEN {
+            panic_with_error!(&env, RegistryError::NameTooLong);
+        }
+
+        let key = Self::dao_key(dao_id);
+        let mut info: DaoInfo = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| panic_with_error!(&env, RegistryError::DaoNotFound));
+
+        // Only admin can change name
+        if admin != info.admin {
+            panic!("Not admin");
+        }
+
+        info.name = name;
+        env.storage().persistent().set(&key, &info);
+    }
+
+    /// Set DAO metadata CID (admin only).
+    /// The CID points to IPFS JSON with description, images, and links.
+    /// Pass None to clear metadata.
+    pub fn set_metadata_cid(env: Env, dao_id: u64, metadata_cid: Option<String>, admin: Address) {
+        admin.require_auth();
+
+        // Validate CID length if provided
+        if let Some(ref cid) = metadata_cid {
+            if cid.len() > MAX_METADATA_CID_LEN {
+                panic!("Metadata CID too long");
+            }
+        }
+
+        let key = Self::dao_key(dao_id);
+        let mut info: DaoInfo = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| panic_with_error!(&env, RegistryError::DaoNotFound));
+
+        // Only admin can change metadata
+        if admin != info.admin {
+            panic!("Not admin");
+        }
+
+        info.metadata_cid = metadata_cid;
+        env.storage().persistent().set(&key, &info);
+    }
+
+    /// Get DAO metadata CID
+    pub fn get_metadata_cid(env: Env, dao_id: u64) -> Option<String> {
+        Self::get_dao(env, dao_id).metadata_cid
+    }
+
     /// Create and initialize DAO without registering creator for voting.
     /// Creator must register separately using deterministic credentials.
     /// This calls:
@@ -170,6 +292,7 @@ impl DaoRegistry {
         name: String,
         creator: Address,
         membership_open: bool,
+        members_can_propose: bool,
         sbt_contract: Address,
         tree_contract: Address,
         voting_contract: Address,
@@ -191,6 +314,8 @@ impl DaoRegistry {
             admin: creator.clone(),
             created_at: env.ledger().timestamp(),
             membership_open,
+            members_can_propose,
+            metadata_cid: None,
         };
 
         let key = Self::dao_key(dao_id);
@@ -245,6 +370,7 @@ impl DaoRegistry {
         name: String,
         creator: Address,
         membership_open: bool,
+        members_can_propose: bool,
         sbt_contract: Address,
         tree_contract: Address,
         voting_contract: Address,
@@ -267,6 +393,8 @@ impl DaoRegistry {
             admin: creator.clone(),
             created_at: env.ledger().timestamp(),
             membership_open,
+            members_can_propose,
+            metadata_cid: None,
         };
 
         let key = Self::dao_key(dao_id);

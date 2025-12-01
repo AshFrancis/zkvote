@@ -53,7 +53,8 @@ DAO_ID=$(stellar contract invoke \
   -- create_dao \
   --name "$DAO_NAME" \
   --creator "$ADMIN_ADDRESS" \
-  --membership_open true 2>&1 | tr -d '"')
+  --membership_open true \
+  --members_can_propose true 2>&1 | tr -d '"')
 
 echo "✅ DAO created with ID: $DAO_ID"
 echo ""

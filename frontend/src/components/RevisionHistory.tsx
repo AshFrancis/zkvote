@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { X, Clock, Loader2 } from "lucide-react";
+import { X, Clock, Loader2, Trash2 } from "lucide-react";
 import { Button } from "./ui/Button";
 import {
   type CommentWithContent,
@@ -20,6 +20,9 @@ interface RevisionEntry {
   content: CommentMetadata | null;
   isLoading: boolean;
   isCurrent: boolean;
+  isDeleted?: boolean;
+  deletedBy?: "user" | "admin" | null;
+  deletedAt?: number;
 }
 
 export default function RevisionHistory({
@@ -30,14 +33,27 @@ export default function RevisionHistory({
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   useEffect(() => {
-    // Build list of revisions (oldest first, current last)
+    // Build list of revisions (oldest first, current/deleted last)
     const allCids = [...comment.revisionCids, comment.contentCid];
     const initialRevisions: RevisionEntry[] = allCids.map((cid, index) => ({
       cid,
       content: index === allCids.length - 1 ? comment.content : null,
       isLoading: index !== allCids.length - 1,
-      isCurrent: index === allCids.length - 1,
+      isCurrent: index === allCids.length - 1 && !comment.deleted,
     }));
+
+    // If the comment is deleted, add a "Deleted" entry at the end
+    if (comment.deleted) {
+      initialRevisions.push({
+        cid: "",
+        content: null,
+        isLoading: false,
+        isCurrent: true,
+        isDeleted: true,
+        deletedBy: comment.deletedBy,
+        deletedAt: comment.updatedAt,
+      });
+    }
 
     setRevisions(initialRevisions);
     setSelectedIndex(initialRevisions.length - 1);
@@ -98,23 +114,35 @@ export default function RevisionHistory({
           <div className="w-48 border-r border-border overflow-y-auto">
             {revisions.map((revision, index) => (
               <button
-                key={revision.cid}
+                key={revision.cid || `deleted-${index}`}
                 onClick={() => setSelectedIndex(index)}
                 className={`w-full px-4 py-3 text-left border-b border-border hover:bg-muted/50 transition-colors ${
                   selectedIndex === index ? "bg-muted" : ""
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span className="text-sm font-medium">
-                    {revision.isCurrent ? "Current" : `v${index + 1}`}
+                  {revision.isDeleted ? (
+                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                  ) : (
+                    <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                  )}
+                  <span className={`text-sm font-medium ${revision.isDeleted ? "text-destructive" : ""}`}>
+                    {revision.isDeleted
+                      ? "Deleted"
+                      : revision.isCurrent
+                      ? "Current"
+                      : `v${index + 1}`}
                   </span>
                 </div>
-                {revision.content?.createdAt && (
+                {revision.isDeleted && revision.deletedAt ? (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {new Date(revision.deletedAt * 1000).toLocaleString()}
+                  </p>
+                ) : revision.content?.createdAt ? (
                   <p className="text-xs text-muted-foreground mt-1">
                     {new Date(revision.content.createdAt).toLocaleString()}
                   </p>
-                )}
+                ) : null}
               </button>
             ))}
           </div>
@@ -124,6 +152,21 @@ export default function RevisionHistory({
             {selectedRevision?.isLoading ? (
               <div className="flex items-center justify-center h-full">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : selectedRevision?.isDeleted ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-sm text-destructive">
+                  <Trash2 className="w-4 h-4" />
+                  <span>
+                    Deleted by {selectedRevision.deletedBy === "admin" ? "admin" : "user"}
+                    {selectedRevision.deletedAt && (
+                      <> {formatRelativeTime(selectedRevision.deletedAt)}</>
+                    )}
+                  </span>
+                </div>
+                <p className="text-muted-foreground italic">
+                  This comment has been deleted. Select a previous version to view the original content.
+                </p>
               </div>
             ) : selectedRevision?.content ? (
               <div className="space-y-4">

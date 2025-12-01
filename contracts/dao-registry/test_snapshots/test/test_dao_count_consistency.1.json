@@ -24,6 +24,9 @@
                 },
                 {
                   "bool": false
+                },
+                {
+                  "bool": true
                 }
               ]
             }
@@ -50,6 +53,9 @@
                 },
                 {
                   "bool": true
+                },
+                {
+                  "bool": true
                 }
               ]
             }
@@ -73,6 +79,9 @@
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                },
+                {
+                  "bool": false
                 },
                 {
                   "bool": false
@@ -159,11 +168,25 @@
                     },
                     {
                       "key": {
+                        "symbol": "members_can_propose"
+                      },
+                      "val": {
+                        "bool": true
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "membership_open"
                       },
                       "val": {
                         "bool": false
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "metadata_cid"
+                      },
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -245,11 +268,25 @@
                     },
                     {
                       "key": {
+                        "symbol": "members_can_propose"
+                      },
+                      "val": {
+                        "bool": true
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "membership_open"
                       },
                       "val": {
                         "bool": true
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "metadata_cid"
+                      },
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -331,11 +368,25 @@
                     },
                     {
                       "key": {
+                        "symbol": "members_can_propose"
+                      },
+                      "val": {
+                        "bool": false
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "membership_open"
                       },
                       "val": {
                         "bool": false
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "metadata_cid"
+                      },
+                      "val": "void"
                     },
                     {
                       "key": {

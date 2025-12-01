@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "./ui/Button";
 import { Badge } from "./ui/Badge";
+import { ConfirmModal, AlertModal } from "./ui/ConfirmModal";
 import {
   MessageSquare,
   ChevronDown,
@@ -26,6 +27,7 @@ import {
   uploadCommentContent,
   editComment,
 } from "../lib/comments";
+import { initializeContractClients } from "../lib/contracts";
 
 interface CommentProps {
   comment: CommentWithContent;
@@ -37,6 +39,7 @@ interface CommentProps {
   isRegistered: boolean;
   eligibleRoot: bigint;
   isAdmin: boolean;
+  nullifierMap: Map<string, number>;
   depth?: number;
   onRefresh: () => void;
   onShowRevisions?: (comment: CommentWithContent) => void;
@@ -52,6 +55,7 @@ export default function Comment({
   isRegistered,
   eligibleRoot,
   isAdmin,
+  nullifierMap,
   depth = 0,
   onRefresh,
   onShowRevisions,
@@ -64,6 +68,16 @@ export default function Comment({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
+  // Modal states
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [alertModal, setAlertModal] = useState<{ title: string; message: string } | null>(null);
+
+  // Initialize contract clients when needed (memoized for performance)
+  const contractClients = useMemo(() => {
+    if (!publicKey) return null;
+    return initializeContractClients(publicKey);
+  }, [publicKey]);
+
   const isOwnComment =
     comment.author === publicKey ||
     (comment.author === null &&
@@ -74,9 +88,22 @@ export default function Comment({
   const canDelete = (isOwnComment || isAdmin) && !comment.deleted;
   const canReply = depth === 0 && hasMembership && !comment.deleted;
   const hasRevisions = comment.revisionCids.length > 0;
+  // Deleted comments should always show history if we have the original content CID
+  const canViewHistory = hasRevisions || (comment.deleted && comment.contentCid);
 
-  const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this comment?")) return;
+  const handleDeleteClick = () => {
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!kit || !contractClients) {
+      setShowDeleteConfirm(false);
+      setAlertModal({
+        title: "Wallet Required",
+        message: "Please connect your wallet to delete comments.",
+      });
+      return;
+    }
 
     setIsDeleting(true);
     try {
@@ -85,16 +112,23 @@ export default function Comment({
         proposalId,
         commentId: comment.id,
         author: publicKey,
+        commentsClient: contractClients.comments,
+        kit,
       });
 
       if (!result.success) {
         throw new Error(result.error);
       }
 
+      setShowDeleteConfirm(false);
       onRefresh();
     } catch (err) {
       console.error("Failed to delete comment:", err);
-      alert("Failed to delete comment. Please try again.");
+      setShowDeleteConfirm(false);
+      setAlertModal({
+        title: "Delete Failed",
+        message: "Failed to delete comment. Please try again.",
+      });
     } finally {
       setIsDeleting(false);
     }
@@ -102,6 +136,13 @@ export default function Comment({
 
   const handleSaveEdit = async () => {
     if (!editBody.trim()) return;
+    if (!kit || !contractClients) {
+      setAlertModal({
+        title: "Wallet Required",
+        message: "Please connect your wallet to edit comments.",
+      });
+      return;
+    }
 
     setIsSavingEdit(true);
     try {
@@ -114,6 +155,8 @@ export default function Comment({
         commentId: comment.id,
         newContentCid: cid,
         author: publicKey,
+        commentsClient: contractClients.comments,
+        kit,
       });
 
       if (!result.success) {
@@ -124,7 +167,10 @@ export default function Comment({
       onRefresh();
     } catch (err) {
       console.error("Failed to edit comment:", err);
-      alert("Failed to edit comment. Please try again.");
+      setAlertModal({
+        title: "Edit Failed",
+        message: "Failed to edit comment. Please try again.",
+      });
     } finally {
       setIsSavingEdit(false);
     }
@@ -135,7 +181,7 @@ export default function Comment({
     return (
       <p className="text-muted-foreground italic text-sm">
         Comment deleted by {deletedBy}
-        {hasRevisions && onShowRevisions && (
+        {canViewHistory && onShowRevisions && (
           <button
             onClick={() => onShowRevisions(comment)}
             className="ml-2 text-primary hover:underline"
@@ -179,7 +225,9 @@ export default function Comment({
               <>
                 <EyeOff className="w-3.5 h-3.5 text-purple-500" />
                 <span className="text-sm font-medium text-purple-600 dark:text-purple-400">
-                  Anonymous
+                  {comment.nullifier && nullifierMap.has(comment.nullifier)
+                    ? `Anon Member ${nullifierMap.get(comment.nullifier)}`
+                    : "Anonymous"}
                 </span>
               </>
             )}
@@ -256,7 +304,7 @@ export default function Comment({
                     {canDelete && (
                       <button
                         onClick={() => {
-                          handleDelete();
+                          handleDeleteClick();
                           setShowActions(false);
                         }}
                         disabled={isDeleting}
@@ -369,6 +417,7 @@ export default function Comment({
               isRegistered={isRegistered}
               eligibleRoot={eligibleRoot}
               isAdmin={isAdmin}
+              nullifierMap={nullifierMap}
               depth={depth + 1}
               onRefresh={onRefresh}
               onShowRevisions={onShowRevisions}
@@ -385,6 +434,29 @@ export default function Comment({
         >
           Show {comment.replies.length} {comment.replies.length === 1 ? "reply" : "replies"}
         </button>
+      )}
+
+      {/* Delete confirmation modal */}
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Comment"
+        message="Are you sure you want to delete this comment? This action cannot be undone."
+        confirmText="Delete"
+        variant="danger"
+        isLoading={isDeleting}
+      />
+
+      {/* Alert modal for errors */}
+      {alertModal && (
+        <AlertModal
+          isOpen={!!alertModal}
+          onClose={() => setAlertModal(null)}
+          title={alertModal.title}
+          message={alertModal.message}
+          variant="error"
+        />
       )}
     </div>
   );

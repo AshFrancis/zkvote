@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
+import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 import { initializeContractClients } from "../lib/contracts";
 import { getReadOnlyDaoRegistry, getReadOnlyMembershipSbt, getReadOnlyMembershipTree, getReadOnlyVoting } from "../lib/readOnlyContracts";
-import { LoadingSpinner, Badge } from "./ui";
-import { CheckCircle, Copy, Check, Users, UserPlus, UserMinus, Vote, FileText, Shield, Key } from "lucide-react";
+import { LoadingSpinner, Badge, Button } from "./ui";
+import { CheckCircle, Copy, Check, Users, UserPlus, UserMinus, Vote, FileText, Shield, Key, Loader2 } from "lucide-react";
 import defaultVK from "../lib/verification_key_soroban.json";
 
 // Relayer URL for fetching events
@@ -11,12 +12,14 @@ const RELAYER_URL = import.meta.env.VITE_RELAYER_URL || 'http://localhost:3001';
 interface DAOInfoPanelProps {
   daoId: number;
   publicKey: string | null;
+  kit: StellarWalletsKit | null;
 }
 
 interface DAODetails {
   name: string;
   admin: string;
   membershipOpen: boolean;
+  membersCanPropose: boolean;
   memberCount: number;
   merkleRoot: string;
   treeDepth: number;
@@ -118,7 +121,7 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-export default function DAOInfoPanel({ daoId, publicKey }: DAOInfoPanelProps) {
+export default function DAOInfoPanel({ daoId, publicKey, kit }: DAOInfoPanelProps) {
   const [details, setDetails] = useState<DAODetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -181,6 +184,10 @@ export default function DAOInfoPanel({ daoId, publicKey }: DAOInfoPanelProps) {
       // Fetch DAO info
       const daoResult = await daoRegistry.get_dao({ dao_id: BigInt(daoId) });
 
+      // Try to get members_can_propose from daoResult or default to true
+      // Note: This field may not be present in older contract clients
+      const membersCanProposeValue = (daoResult.result as { members_can_propose?: boolean })?.members_can_propose ?? true;
+
       // Fetch member count
       const memberCountResult = await membershipSbt.get_member_count({ dao_id: BigInt(daoId) });
 
@@ -242,6 +249,7 @@ export default function DAOInfoPanel({ daoId, publicKey }: DAOInfoPanelProps) {
         name: daoResult.result.name,
         admin: daoResult.result.admin,
         membershipOpen: daoResult.result.membership_open,
+        membersCanPropose: membersCanProposeValue,
         memberCount: Number(memberCountResult.result),
         merkleRoot: treeInfo.merkleRoot,
         treeDepth: treeInfo.depth,
@@ -310,6 +318,18 @@ export default function DAOInfoPanel({ daoId, publicKey }: DAOInfoPanelProps) {
           </code>
           <CopyButton text={details.admin} />
         </div>
+      </div>
+
+      {/* Proposal Mode */}
+      <div className="rounded-xl border bg-card p-4">
+        <h3 className="text-sm font-medium text-muted-foreground mb-1">Proposal Mode</h3>
+        <p className="text-sm">
+          {details.membersCanPropose ? (
+            <span className="text-green-600 dark:text-green-400">Members can create proposals</span>
+          ) : (
+            <span className="text-orange-600 dark:text-orange-400">Admin-only proposals</span>
+          )}
+        </p>
       </div>
 
       {/* Merkle Root */}

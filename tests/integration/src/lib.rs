@@ -146,7 +146,7 @@ mod tests {
         // Create DAO in registry
         let dao_id = system
             .registry_client()
-            .create_dao(&dao_name, &admin, &false);
+            .create_dao(&dao_name, &admin, &false, &true);
         assert_eq!(dao_id, 1);
 
         // Verify DAO exists and admin is correct
@@ -170,6 +170,7 @@ mod tests {
             &String::from_str(&system.env, "Test DAO"),
             &admin,
             &false,
+            &true,
         );
 
         // Admin mints SBT to member
@@ -193,6 +194,7 @@ mod tests {
             &String::from_str(&system.env, "Test DAO"),
             &admin,
             &false,
+            &true,
         );
 
         // Initialize tree
@@ -225,6 +227,7 @@ mod tests {
             &String::from_str(&system.env, "Test DAO"),
             &admin,
             &false,
+            &true,
         );
 
         // Initialize tree (required for proposal creation to snapshot root)
@@ -274,6 +277,7 @@ mod tests {
             &String::from_str(&system.env, "Voting DAO"),
             &admin,
             &false,
+            &true,
         );
 
         // 2. Initialize tree
@@ -363,6 +367,7 @@ mod tests {
             &String::from_str(&system.env, "Test DAO"),
             &admin,
             &false,
+            &true,
         );
 
         // Non-admin tries to mint SBT - should fail
@@ -383,6 +388,7 @@ mod tests {
             &String::from_str(&system.env, "Test DAO"),
             &admin,
             &false,
+            &true,
         );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
@@ -406,6 +412,7 @@ mod tests {
             &String::from_str(&system.env, "Test DAO"),
             &admin,
             &false,
+            &true,
         );
 
         let vk = system.create_test_vk();
@@ -439,6 +446,7 @@ mod tests {
             &String::from_str(&system.env, "Test DAO"),
             &admin,
             &false,
+            &true,
         );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
@@ -507,11 +515,13 @@ mod tests {
             &String::from_str(&system.env, "DAO 1"),
             &admin1,
             &false,
+            &true,
         );
         let dao2 = system.registry_client().create_dao(
             &String::from_str(&system.env, "DAO 2"),
             &admin2,
             &false,
+            &true,
         );
 
         // Initialize trees
@@ -560,6 +570,7 @@ mod tests {
             &String::from_str(&system.env, "Test DAO"),
             &admin1,
             &false,
+            &true,
         );
 
         // Transfer admin rights
@@ -583,6 +594,7 @@ mod tests {
             &String::from_str(&system.env, "Test DAO"),
             &admin,
             &false,
+            &true,
         );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
@@ -662,6 +674,7 @@ mod tests {
             &String::from_str(&system.env, "Test DAO"),
             &admin,
             &false,
+            &true,
         );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
@@ -726,6 +739,7 @@ mod tests {
             &String::from_str(&system.env, "Test DAO"),
             &admin,
             &false,
+            &true,
         );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
@@ -794,6 +808,7 @@ mod tests {
             &String::from_str(&system.env, "Test DAO"),
             &admin,
             &false,
+            &true,
         );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
@@ -867,6 +882,7 @@ mod tests {
             &String::from_str(&system.env, "Test DAO"),
             &admin,
             &false,
+            &true,
         );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
@@ -930,9 +946,12 @@ mod tests {
         let admin = Address::generate(&system.env);
         let member = Address::generate(&system.env);
 
-        let dao_id = system
-            .registry_client()
-            .create_dao(&String::from_str(&system.env, "VK DAO"), &admin, &false);
+        let dao_id = system.registry_client().create_dao(
+            &String::from_str(&system.env, "VK DAO"),
+            &admin,
+            &false,
+            &true,
+        );
 
         // Init tree, mint SBT, register commitment
         system.tree_client().init_tree(&dao_id, &5, &admin);
@@ -1018,6 +1037,7 @@ mod tests {
             &String::from_str(&system.env, "Budget DAO"),
             &admin,
             &true,
+            &true,
         );
         let cpu_after = system.env.cost_estimate().budget().cpu_instruction_cost();
         let mem_after = system.env.cost_estimate().budget().memory_bytes_cost();
@@ -1071,7 +1091,7 @@ mod tests {
             &String::from_str(&system.env, "Proposal A"),
             &String::from_str(&system.env, ""),
             &0, // no deadline
-            &admin,
+            &member, // Member has SBT, so they can create proposal
             &VoteMode::Fixed,
         );
         let cpu_after = system.env.cost_estimate().budget().cpu_instruction_cost();
@@ -1124,6 +1144,7 @@ mod tests {
             &String::from_str(&system.env, "DAO1"),
             &admin1,
             &false,
+            &true,
         );
         system.tree_client().init_tree(&dao1, &5, &admin1);
         system.sbt_client().mint(&dao1, &member, &admin1, &None);
@@ -1143,6 +1164,7 @@ mod tests {
             &String::from_str(&system.env, "DAO2"),
             &admin2,
             &false,
+            &true,
         );
         system.tree_client().init_tree(&dao2, &5, &admin2);
         system.sbt_client().mint(&dao2, &member, &admin2, &None);
@@ -1189,6 +1211,7 @@ mod tests {
             &String::from_str(&system.env, "Fuzz DAO"),
             &admin,
             &false,
+            &true,
         );
         system.tree_client().init_tree(&dao_id, &5, &admin);
         system.sbt_client().mint(&dao_id, &member, &admin, &None);

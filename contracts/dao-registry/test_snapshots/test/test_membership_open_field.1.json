@@ -23,6 +23,9 @@
                 },
                 {
                   "bool": false
+                },
+                {
+                  "bool": true
                 }
               ]
             }
@@ -46,6 +49,9 @@
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                },
+                {
+                  "bool": true
                 },
                 {
                   "bool": true
@@ -134,11 +140,25 @@
                     },
                     {
                       "key": {
+                        "symbol": "members_can_propose"
+                      },
+                      "val": {
+                        "bool": true
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "membership_open"
                       },
                       "val": {
                         "bool": false
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "metadata_cid"
+                      },
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -220,11 +240,25 @@
                     },
                     {
                       "key": {
+                        "symbol": "members_can_propose"
+                      },
+                      "val": {
+                        "bool": true
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "membership_open"
                       },
                       "val": {
                         "bool": true
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "metadata_cid"
+                      },
+                      "val": "void"
                     },
                     {
                       "key": {
