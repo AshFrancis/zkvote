@@ -59,3 +59,9 @@ trusted-setup/*.ptau
 
 # Third-party reference code
 webgl-particle-head/
+
+# Planning docs
+PLAN-*.md
+
+# Backend runtime data
+backend/data/events.json
