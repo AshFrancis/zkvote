@@ -169,7 +169,7 @@ fn test_corrupted_proof_fails() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO (dao_id = 1 to match proof)
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
     assert_eq!(dao_id, 1);
 
     // Initialize tree with depth 18
@@ -230,7 +230,7 @@ fn test_wrong_vk_fails() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -299,7 +299,7 @@ fn test_real_proof_double_vote_rejected() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO and init tree
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
     tree_client.init_tree(&dao_id, &18, &admin);
 
     // Set real VK and register member
@@ -365,8 +365,8 @@ fn test_nullifier_reusable_across_daos() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create TWO DAOs
-    let dao_id_1 = registry_client.create_dao(&String::from_str(&env, "DAO 1"), &admin, &false);
-    let dao_id_2 = registry_client.create_dao(&String::from_str(&env, "DAO 2"), &admin, &false);
+    let dao_id_1 = registry_client.create_dao(&String::from_str(&env, "DAO 1"), &admin, &false, &true, &None);
+    let dao_id_2 = registry_client.create_dao(&String::from_str(&env, "DAO 2"), &admin, &false, &true, &None);
     assert_eq!(dao_id_1, 1);
     assert_eq!(dao_id_2, 2);
 
@@ -452,8 +452,8 @@ fn test_proof_for_wrong_dao_fails() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create TWO DAOs - we'll try to use a proof for DAO 1 on DAO 2
-    let _dao_id_1 = registry_client.create_dao(&String::from_str(&env, "DAO 1"), &admin, &false);
-    let dao_id_2 = registry_client.create_dao(&String::from_str(&env, "DAO 2"), &admin, &false);
+    let _dao_id_1 = registry_client.create_dao(&String::from_str(&env, "DAO 1"), &admin, &false, &true, &None);
+    let dao_id_2 = registry_client.create_dao(&String::from_str(&env, "DAO 2"), &admin, &false, &true, &None);
 
     // Initialize tree for DAO 2
     tree_client.init_tree(&dao_id_2, &18, &admin);
@@ -512,7 +512,7 @@ fn test_proof_for_wrong_proposal_fails() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO (dao_id = 1 to match proof)
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);

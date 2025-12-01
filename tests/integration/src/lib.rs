@@ -146,7 +146,7 @@ mod tests {
         // Create DAO in registry
         let dao_id = system
             .registry_client()
-            .create_dao(&dao_name, &admin, &false, &true);
+            .create_dao(&dao_name, &admin, &false, &true, &None);
         assert_eq!(dao_id, 1);
 
         // Verify DAO exists and admin is correct
@@ -171,6 +171,7 @@ mod tests {
             &admin,
             &false,
             &true,
+            &None,
         );
 
         // Admin mints SBT to member
@@ -195,6 +196,7 @@ mod tests {
             &admin,
             &false,
             &true,
+            &None,
         );
 
         // Initialize tree
@@ -228,6 +230,7 @@ mod tests {
             &admin,
             &false,
             &true,
+            &None,
         );
 
         // Initialize tree (required for proposal creation to snapshot root)
@@ -278,6 +281,7 @@ mod tests {
             &admin,
             &false,
             &true,
+            &None,
         );
 
         // 2. Initialize tree
@@ -368,6 +372,7 @@ mod tests {
             &admin,
             &false,
             &true,
+            &None,
         );
 
         // Non-admin tries to mint SBT - should fail
@@ -389,6 +394,7 @@ mod tests {
             &admin,
             &false,
             &true,
+            &None,
         );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
@@ -413,6 +419,7 @@ mod tests {
             &admin,
             &false,
             &true,
+            &None,
         );
 
         let vk = system.create_test_vk();
@@ -447,6 +454,7 @@ mod tests {
             &admin,
             &false,
             &true,
+            &None,
         );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
@@ -516,12 +524,14 @@ mod tests {
             &admin1,
             &false,
             &true,
+            &None,
         );
         let dao2 = system.registry_client().create_dao(
             &String::from_str(&system.env, "DAO 2"),
             &admin2,
             &false,
             &true,
+            &None,
         );
 
         // Initialize trees
@@ -571,6 +581,7 @@ mod tests {
             &admin1,
             &false,
             &true,
+            &None,
         );
 
         // Transfer admin rights
@@ -595,6 +606,7 @@ mod tests {
             &admin,
             &false,
             &true,
+            &None,
         );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
@@ -675,6 +687,7 @@ mod tests {
             &admin,
             &false,
             &true,
+            &None,
         );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
@@ -740,6 +753,7 @@ mod tests {
             &admin,
             &false,
             &true,
+            &None,
         );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
@@ -809,6 +823,7 @@ mod tests {
             &admin,
             &false,
             &true,
+            &None,
         );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
@@ -883,6 +898,7 @@ mod tests {
             &admin,
             &false,
             &true,
+            &None,
         );
 
         system.tree_client().init_tree(&dao_id, &5, &admin);
@@ -951,6 +967,7 @@ mod tests {
             &admin,
             &false,
             &true,
+            &None,
         );
 
         // Init tree, mint SBT, register commitment
@@ -1038,6 +1055,7 @@ mod tests {
             &admin,
             &true,
             &true,
+            &None,
         );
         let cpu_after = system.env.cost_estimate().budget().cpu_instruction_cost();
         let mem_after = system.env.cost_estimate().budget().memory_bytes_cost();
@@ -1145,6 +1163,7 @@ mod tests {
             &admin1,
             &false,
             &true,
+            &None,
         );
         system.tree_client().init_tree(&dao1, &5, &admin1);
         system.sbt_client().mint(&dao1, &member, &admin1, &None);
@@ -1165,6 +1184,7 @@ mod tests {
             &admin2,
             &false,
             &true,
+            &None,
         );
         system.tree_client().init_tree(&dao2, &5, &admin2);
         system.sbt_client().mint(&dao2, &member, &admin2, &None);
@@ -1212,6 +1232,7 @@ mod tests {
             &admin,
             &false,
             &true,
+            &None,
         );
         system.tree_client().init_tree(&dao_id, &5, &admin);
         system.sbt_client().mint(&dao_id, &member, &admin, &None);

@@ -570,7 +570,7 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
                 {dao?.membershipOpen ? (
                   <Badge variant="success" className="gap-1"><Unlock className="w-3 h-3" /> Open</Badge>
                 ) : (
-                  <Badge variant="secondary" className="gap-1"><Lock className="w-3 h-3" /> Private</Badge>
+                  <Badge variant="secondary" className="gap-1"><Lock className="w-3 h-3" /> Closed</Badge>
                 )}
               </div>
               {dao && (

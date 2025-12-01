@@ -1,15 +1,22 @@
 import { useEffect, useState } from 'react';
 import { getAllDaos } from '../lib/readOnlyContracts';
 import { CONTRACTS } from '../config/contracts';
-import { Alert, LoadingSpinner, Badge } from './ui';
+import { Alert, LoadingSpinner } from './ui';
 import { Card, CardContent } from './ui/Card';
-import { Lock, Unlock, Users } from 'lucide-react';
+import DAOCard from './ui/DAOCard';
+import { fetchDAOMetadata, getImageUrl } from '../lib/daoMetadata';
+import type { DAOMetadata } from '../lib/daoMetadata';
 
 interface DAO {
   id: number;
   name: string;
   creator: string;
   membership_open: boolean;
+  metadata_cid?: string;
+}
+
+interface DAOWithMetadata extends DAO {
+  metadata?: DAOMetadata | null;
 }
 
 interface DAOListProps {
@@ -22,9 +29,10 @@ interface DAOListProps {
 
 // Generate cache key based on contract addresses so cache invalidates on redeployment
 const getCacheKey = () => `all_daos_${CONTRACTS.REGISTRY_ID.slice(0, 8)}`;
+const getMetadataCacheKey = () => `dao_metadata_${CONTRACTS.REGISTRY_ID.slice(0, 8)}`;
 
 export default function DAOList({ onSelectDao, selectedDaoId, isConnected, userDaoIds = [], isInitializing = false }: DAOListProps) {
-  const [daos, setDaos] = useState<DAO[]>(() => {
+  const [daos, setDaos] = useState<DAOWithMetadata[]>(() => {
     // Initialize with cached data if available
     const cached = localStorage.getItem(getCacheKey());
     return cached ? JSON.parse(cached) : [];
@@ -35,6 +43,10 @@ export default function DAOList({ onSelectDao, selectedDaoId, isConnected, userD
     return !cached;
   });
   const [error, setError] = useState<string | null>(null);
+  const [metadataCache, setMetadataCache] = useState<Record<string, DAOMetadata | null>>(() => {
+    const cached = localStorage.getItem(getMetadataCacheKey());
+    return cached ? JSON.parse(cached) : {};
+  });
 
   useEffect(() => {
     // Wait for wallet to finish initializing before loading
@@ -45,6 +57,32 @@ export default function DAOList({ onSelectDao, selectedDaoId, isConnected, userD
     console.log('[DAOList] Loading all DAOs');
     loadDaos();
   }, [isInitializing]);
+
+  // Load metadata for DAOs that have metadata_cid
+  useEffect(() => {
+    const loadMetadata = async () => {
+      const daosWithCid = daos.filter(dao => dao.metadata_cid && !metadataCache[dao.metadata_cid]);
+      if (daosWithCid.length === 0) return;
+
+      const newCache = { ...metadataCache };
+
+      await Promise.all(daosWithCid.map(async (dao) => {
+        if (!dao.metadata_cid) return;
+        try {
+          const metadata = await fetchDAOMetadata(dao.metadata_cid);
+          newCache[dao.metadata_cid] = metadata;
+        } catch (err) {
+          console.warn(`Failed to fetch metadata for DAO ${dao.id}:`, err);
+          newCache[dao.metadata_cid!] = null;
+        }
+      }));
+
+      setMetadataCache(newCache);
+      localStorage.setItem(getMetadataCacheKey(), JSON.stringify(newCache));
+    };
+
+    loadMetadata();
+  }, [daos]);
 
   const loadDaos = async () => {
     const cacheKey = getCacheKey();
@@ -71,6 +109,36 @@ export default function DAOList({ onSelectDao, selectedDaoId, isConnected, userD
     } finally {
       setLoading(false);
     }
+  };
+
+  // Get metadata for a DAO
+  const getDAOMetadata = (dao: DAOWithMetadata): DAOMetadata | null => {
+    if (!dao.metadata_cid) return null;
+    return metadataCache[dao.metadata_cid] || null;
+  };
+
+  // Get cover image URL - returns null if using default background
+  const getCoverImageUrl = (dao: DAOWithMetadata): string | null => {
+    const metadata = getDAOMetadata(dao);
+    if (metadata?.coverImageCid) {
+      return getImageUrl(metadata.coverImageCid);
+    }
+    return null; // Will use CSS background for default
+  };
+
+  // Check if DAO has a custom cover image
+  const hasCustomCover = (dao: DAOWithMetadata): boolean => {
+    const metadata = getDAOMetadata(dao);
+    return !!metadata?.coverImageCid;
+  };
+
+  // Get profile image URL
+  const getProfileImageUrl = (dao: DAOWithMetadata): string | null => {
+    const metadata = getDAOMetadata(dao);
+    if (metadata?.profileImageCid) {
+      return getImageUrl(metadata.profileImageCid);
+    }
+    return null;
   };
 
   // Filter out user's DAOs when connected and always exclude DAO #1 (Public Votes)
@@ -139,44 +207,19 @@ export default function DAOList({ onSelectDao, selectedDaoId, isConnected, userD
           {title} ({filteredDaos.length})
         </h2>
 
-        <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
           {filteredDaos.map((dao) => (
-            <button
+            <DAOCard
               key={dao.id}
+              id={dao.id}
+              name={dao.name}
+              membershipOpen={dao.membership_open}
+              isSelected={selectedDaoId === dao.id}
+              coverUrl={getCoverImageUrl(dao)}
+              profileUrl={getProfileImageUrl(dao)}
+              hasCover={hasCustomCover(dao)}
               onClick={() => onSelectDao(dao.id, dao.name)}
-              className={`text-left p-4 rounded-lg border transition-all hover:shadow-sm ${selectedDaoId === dao.id
-                  ? 'bg-primary/5 border-primary ring-1 ring-primary'
-                  : 'bg-card border-border hover:bg-accent hover:text-accent-foreground'
-                }`}
-            >
-              <div className="flex flex-col h-full justify-between gap-2">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                    <h3 className="text-sm font-semibold truncate">
-                      {dao.name}
-                    </h3>
-                  </div>
-                  {selectedDaoId === dao.id && (
-                    <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0 mt-1.5" />
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">
-                    #{dao.id}
-                  </p>
-                  {dao.membership_open ? (
-                    <Badge variant="success" className="h-5 px-1 text-[10px] gap-0.5">
-                      <Unlock className="w-2.5 h-2.5" /> Open
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary" className="h-5 px-1 text-[10px] gap-0.5">
-                      <Lock className="w-2.5 h-2.5" /> Private
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            </button>
+            />
           ))}
         </div>
       </CardContent>

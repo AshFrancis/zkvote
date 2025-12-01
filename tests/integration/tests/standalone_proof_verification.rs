@@ -172,7 +172,7 @@ fn test_real_groth16_proof_verification() {
     println!("=======================\n");
 
     let dao_name = String::from_str(&env, "Real Proof Test DAO");
-    let dao_id = registry_client.create_dao(&dao_name, &admin, &false);
+    let dao_id = registry_client.create_dao(&dao_name, &admin, &false, &true, &None);
     println!("DAO ID: {}\n", dao_id);
 
     println!("Step 3: Minting SBT for admin...");

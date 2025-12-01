@@ -99,7 +99,7 @@ fn test_root_history_eviction_behavior() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
 
     // Initialize tree with depth 6 (can hold 64 members, enough for our test)
     tree_client.init_tree(&dao_id, &6, &admin);
@@ -194,8 +194,8 @@ fn test_multiple_daos_separate_root_histories() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create TWO DAOs
-    let dao_id_1 = registry_client.create_dao(&String::from_str(&env, "DAO 1"), &admin, &false);
-    let dao_id_2 = registry_client.create_dao(&String::from_str(&env, "DAO 2"), &admin, &false);
+    let dao_id_1 = registry_client.create_dao(&String::from_str(&env, "DAO 1"), &admin, &false, &true, &None);
+    let dao_id_2 = registry_client.create_dao(&String::from_str(&env, "DAO 2"), &admin, &false, &true, &None);
 
     // Initialize trees
     tree_client.init_tree(&dao_id_1, &5, &admin);
@@ -265,7 +265,7 @@ fn test_tree_capacity_at_depth_5() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
 
     // Initialize tree with depth 5 (capacity = 2^5 = 32)
     tree_client.init_tree(&dao_id, &5, &admin);
@@ -302,7 +302,7 @@ fn test_tree_full_at_capacity() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
 
     // Initialize tree with depth 5 (capacity = 32)
     tree_client.init_tree(&dao_id, &5, &admin);
@@ -335,7 +335,7 @@ fn test_duplicate_commitment_rejected() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &5, &admin);
@@ -365,7 +365,7 @@ fn test_tree_depth_exceeds_max() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
 
     // Try to initialize tree with depth 19 (exceeds MAX_TREE_DEPTH of 18)
     tree_client.init_tree(&dao_id, &19, &admin);
@@ -384,7 +384,7 @@ fn test_tree_depth_zero_rejected() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
 
     // Try to initialize tree with depth 0
     tree_client.init_tree(&dao_id, &0, &admin);

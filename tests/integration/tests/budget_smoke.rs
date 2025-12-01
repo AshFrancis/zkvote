@@ -76,7 +76,7 @@ fn setup(
 
     let admin = Address::generate(env);
 
-    let dao_id = registry.create_dao(&String::from_str(env, "Budget DAO"), &admin, &false);
+    let dao_id = registry.create_dao(&String::from_str(env, "Budget DAO"), &admin, &false, &true, &None);
     tree.init_tree(&dao_id, &18, &admin);
 
     // Ensure admin has SBT so proposal creation passes membership check
@@ -140,7 +140,7 @@ fn budget_set_vk_within_limit() {
     let admin = Address::generate(&env);
 
     // Minimal setup: create DAO and init tree so admin check resolves
-    let dao_id = registry.create_dao(&String::from_str(&env, "Budget DAO"), &admin, &false);
+    let dao_id = registry.create_dao(&String::from_str(&env, "Budget DAO"), &admin, &false, &true, &None);
     tree.init_tree(&dao_id, &18, &admin);
 
     let vk = get_real_vk(&env);

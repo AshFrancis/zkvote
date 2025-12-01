@@ -15,7 +15,7 @@ export function Docs() {
     { id: "voting" as Section, title: "Casting a Vote" },
     { id: "comments" as Section, title: "Commenting" },
     { id: "privacy" as Section, title: "Privacy Model" },
-    { id: "technical" as Section, title: "Technical Deep Dive" },
+    { id: "technical" as Section, title: "Tech" },
   ];
 
   const activeTitle = sections.find(s => s.id === activeSection)?.title || "Getting Started";
@@ -763,7 +763,7 @@ function TechnicalDeepDive() {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight mb-3">Technical Deep Dive</h2>
+        <h2 className="text-2xl font-bold tracking-tight mb-3">Tech</h2>
         <p className="text-muted-foreground leading-relaxed">
           This section covers the cryptographic primitives and smart contract architecture powering ZKVote.
         </p>

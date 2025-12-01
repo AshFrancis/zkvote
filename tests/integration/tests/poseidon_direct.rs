@@ -86,7 +86,7 @@ fn test_empty_tree_root() {
 
     // Create DAO
     let dao_id =
-        registry_client.create_dao(&String::from_str(&env, "Empty Tree Test"), &admin, &false);
+        registry_client.create_dao(&String::from_str(&env, "Empty Tree Test"), &admin, &false, &true, &None);
 
     // Initialize empty tree with depth 20
     tree_client.init_tree(&dao_id, &18, &admin);

@@ -1,7 +1,7 @@
 # Security & Hardening Status Report
 
-**Last Updated**: 2025-11-18
-**Test Count**: 74 tests passing (up from 65)
+**Last Updated**: 2025-12-01
+**Test Count**: 93 tests passing
 
 ---
 
@@ -12,14 +12,14 @@
 
 **What Was Fixed**:
 - ✅ `MAX_DESCRIPTION_LEN = 1024` enforced in `Voting::create_proposal` (contracts/voting/src/lib.rs:182)
-- ✅ `MAX_DAO_NAME_LEN = 256` enforced in `DAORegistry::create_dao` (contracts/dao-registry/src/lib.rs:53)
+- ✅ `MAX_DAO_NAME_LEN = 24` enforced in `DAORegistry::create_dao` (contracts/dao-registry/src/lib.rs:53)
 - ✅ `EXPECTED_IC_LENGTH = 6` enforced in `Voting::set_vk` (contracts/voting/src/lib.rs:140)
 - ✅ `MAX_IC_LENGTH = 21` as secondary check (contracts/voting/src/lib.rs:145)
 - ✅ `MAX_TREE_DEPTH = 18` enforced in `MembershipTree::init_tree` (contracts/membership-tree/src/lib.rs:68)
 
 **Test Coverage** (9 new tests):
 - ✅ Voting: description length = 1024 (max valid), 1025 (panic) - 2 tests
-- ✅ DAO Registry: name length = 256 (max), 257 (panic), 5000 (panic) - 3 tests
+- ✅ DAO Registry: name length = 24 (max), 25 (panic), 5000 (panic) - 3 tests
 - ✅ Membership Tree: depth 21 (panic), 32 (panic) - 2 tests
 - ✅ VK IC: length 0 (panic), 5 (panic), 7 (panic), 22 (panic) - 4 tests
 
@@ -297,7 +297,7 @@ Comprehensive test plan created: **TEST_PLAN.md**
 - ⏳ **Phase 3**: Cross-DAO isolation, nullifier replay, snapshot eligibility (15 tests planned)
 - ⏳ **Phase 4**: Real Groth16 proofs, E2E integration (deferred until circuit compilation automated)
 
-**Target**: 126 total tests (currently at 74)
+**Target**: 126 total tests (currently at 93)
 
 ---
 
@@ -310,7 +310,7 @@ Comprehensive test plan created: **TEST_PLAN.md**
 4. ✅ PTAU alignment (pot14)
 5. ✅ Spec/code drift 100% resolved
 6. ✅ Deployment scripts with constructors
-7. ✅ 74 tests passing (unit + integration)
+7. ✅ 93 tests passing (unit + integration)
 
 ### ✅ Verified on P25 Network
 8. ✅ **Poseidon KAT** - circomlib ↔ P25 parity 100% verified on Futurenet (2025-11-18)
@@ -363,7 +363,7 @@ Comprehensive test plan created: **TEST_PLAN.md**
 **Summary** (Updated 2025-11-18):
 - **Security Core**: ✅ DoS protection, hex validation, input bounds all working
 - **Cryptography**: ✅ Poseidon KAT verified (100% compatible), ⚠️ Custom point validation removed (was broken)
-- **Testing**: ✅ 74/126 tests passing, ⚠️ **CRITICAL**: Need real Groth16 proof E2E test
+- **Testing**: ✅ 93/126 tests passing, ⚠️ **CRITICAL**: Need real Groth16 proof E2E test
 - **Production Build**: ✅ Test functions removed from production, Field arithmetic bug fixed
 - **Deployment**: ⚠️ **BLOCKED** until real proof E2E test passes
 - **Remaining Work**: Real Groth16 proof testing (critical), backend hardening, proof converter tests

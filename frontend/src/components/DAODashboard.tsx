@@ -10,7 +10,8 @@ import {
   getZKCredentials,
   storeZKCredentials,
 } from "../lib/zk";
-import { isUserRejection } from "../lib/utils";
+import { isUserRejection, extractTxHash } from "../lib/utils";
+import { notifyEvent } from "../lib/api";
 import {
   type DAOMetadata,
   fetchDAOMetadata,
@@ -45,10 +46,13 @@ const GitHubIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+type DAOTab = 'info' | 'proposals' | 'members' | 'create-proposal' | 'settings';
+
 interface DAODashboardProps {
   publicKey: string | null;
   daoId: number;
   isInitializing?: boolean;
+  initialTab?: DAOTab;
 }
 
 interface DAOInfo {
@@ -64,9 +68,21 @@ interface DAOInfo {
   metadataCid: string | null;
 }
 
-export default function DAODashboard({ publicKey, daoId, isInitializing = false }: DAODashboardProps) {
+export default function DAODashboard({ publicKey, daoId, isInitializing = false, initialTab = 'proposals' }: DAODashboardProps) {
   const { kit } = useWallet();
   const navigate = useNavigate();
+
+  // Helper to get URL path for a tab
+  const getTabPath = (tab: DAOTab) => {
+    const daoSlug = dao ? `${daoId}-${dao.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}` : String(daoId);
+    if (tab === 'proposals') return `/daos/${daoSlug}`;
+    return `/daos/${daoSlug}/${tab}`;
+  };
+
+  // Navigation function that uses URL routing
+  const navigateToTab = (tab: DAOTab) => {
+    navigate(getTabPath(tab));
+  };
   const [dao, setDao] = useState<DAOInfo | null>(() => {
     const cacheKey = `dao_info_${daoId}`;
     const cached = localStorage.getItem(cacheKey);
@@ -85,7 +101,8 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
   const [joining, setJoining] = useState(false);
   const [creatingProposal, setCreatingProposal] = useState(false);
   const [proposalKey, setProposalKey] = useState(0);
-  const [activeTab, setActiveTab] = useState<'info' | 'proposals' | 'members' | 'create-proposal' | 'settings'>('proposals');
+  // Use initialTab from URL route - no local state needed as navigation handles tab changes
+  const activeTab = initialTab;
   const [metadata, setMetadata] = useState<DAOMetadata | null>(null);
   const [showDescription, setShowDescription] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -104,6 +121,45 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
     loadDAOInfo();
     checkRegistrationStatus();
   }, [daoId, publicKey, isInitializing]);
+
+  // Update page title and meta description based on active tab
+  useEffect(() => {
+    const daoName = dao?.name || 'DAO';
+    const tabMeta: Record<DAOTab, { title: string; description: string }> = {
+      proposals: {
+        title: `${daoName} - Proposals | ZKVote`,
+        description: `View and vote on proposals for ${daoName}. Participate in decentralized governance with zero-knowledge privacy.`,
+      },
+      info: {
+        title: `${daoName} - Info | ZKVote`,
+        description: `Learn about ${daoName} DAO - membership status, voting setup, and governance details.`,
+      },
+      members: {
+        title: `${daoName} - Members | ZKVote`,
+        description: `View members of ${daoName} DAO. See who's participating in this decentralized community.`,
+      },
+      settings: {
+        title: `${daoName} - Settings | ZKVote`,
+        description: `Manage settings for ${daoName} DAO. Configure membership and proposal permissions.`,
+      },
+      'create-proposal': {
+        title: `${daoName} - New Proposal | ZKVote`,
+        description: `Create a new proposal for ${daoName} DAO. Start a vote for the community.`,
+      },
+    };
+
+    const { title, description } = tabMeta[activeTab];
+    document.title = title;
+
+    // Update meta description
+    let metaDescription = document.querySelector('meta[name="description"]');
+    if (!metaDescription) {
+      metaDescription = document.createElement('meta');
+      metaDescription.setAttribute('name', 'description');
+      document.head.appendChild(metaDescription);
+    }
+    metaDescription.setAttribute('content', description);
+  }, [activeTab, dao?.name]);
 
   const checkRegistrationStatus = async () => {
     const cached = publicKey ? getZKCredentials(daoId, publicKey) : null;
@@ -327,10 +383,12 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
       };
 
       let alreadyRegistered = false;
+      let txHash: string | null = null;
       try {
         console.log("[Registration] Calling signAndSend...");
         const result = await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
         console.log("[Registration] Step 2 complete - Transaction signed and sent:", result);
+        txHash = extractTxHash(result);
       } catch (err: any) {
         // Check if this is a CommitmentExists error - means we're already registered
         if (isCommitmentExistsError(err)) {
@@ -355,6 +413,11 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
 
       const leafIndex = Number(leafIndexResult.result);
       storeZKCredentials(daoId, publicKey || "", { secret, salt, commitment }, leafIndex);
+
+      // Notify relayer of registration event (only if we actually registered, not recovered)
+      if (txHash && !alreadyRegistered) {
+        notifyEvent(daoId, "voter_registered", txHash, { commitment, leafIndex });
+      }
 
       setIsRegistered(true);
       setHasUnregisteredCredentials(false);
@@ -391,7 +454,14 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
         encrypted_alias: undefined,
       });
 
-      await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+      const result = await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+
+      // Notify relayer of member joined event
+      const txHash = extractTxHash(result);
+      if (txHash) {
+        notifyEvent(daoId, "member_added", txHash, { member: publicKey });
+      }
+
       await loadDAOInfo();
 
       console.log("Successfully joined DAO! Click 'Register for Voting' to set up voting credentials.");
@@ -435,9 +505,15 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
         throw new Error("Wallet kit not available");
       }
 
-      await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+      const result = await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
 
-      setActiveTab('proposals');
+      // Notify relayer of proposal created event
+      const txHash = extractTxHash(result);
+      if (txHash) {
+        notifyEvent(daoId, "proposal_created", txHash, { title: data.title, contentCid: data.contentCid });
+      }
+
+      navigateToTab('proposals');
       setProposalKey(prev => prev + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create proposal");
@@ -484,7 +560,6 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
                   alt="DAO Cover"
                   className="w-full h-full object-cover"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-background/60 to-transparent" />
               </div>
               {/* Profile Image - positioned outside the overflow-hidden container */}
               {metadata?.profileImageCid && (
@@ -563,8 +638,8 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
             </div>
           )}
 
-          {/* Header Info with Navigation - flex row layout */}
-          <div className={`flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4 ${metadata?.coverImageCid && metadata?.profileImageCid ? 'mt-14' : ''}`}>
+          {/* Header Info with Navigation - flex row layout on 2xl+ */}
+          <div className={`flex flex-col 2xl:flex-row 2xl:items-start 2xl:justify-between gap-4 mb-4 ${metadata?.coverImageCid && metadata?.profileImageCid ? 'mt-14' : ''}`}>
             {/* Left: DAO name, badges, and ID */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 flex-wrap mb-2">
@@ -581,7 +656,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
                 {dao.membershipOpen ? (
                   <Badge variant="success" className="gap-1"><Unlock className="w-3 h-3" /> Open</Badge>
                 ) : (
-                  <Badge variant="secondary" className="gap-1"><Lock className="w-3 h-3" /> Private</Badge>
+                  <Badge variant="secondary" className="gap-1"><Lock className="w-3 h-3" /> Closed</Badge>
                 )}
               </div>
               <p className="text-sm text-muted-foreground flex items-center gap-2">
@@ -591,103 +666,13 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
               </p>
             </div>
 
-            {/* Right: Navigation Menu */}
-            <div className="shrink-0">
-              {/* Mobile: Dropdown Menu */}
-              <div className="md:hidden relative">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                  className="gap-2"
-                >
-                  <Menu className="w-4 h-4" />
-                  Menu
-                  <ChevronDown className={`w-4 h-4 transition-transform ${mobileMenuOpen ? 'rotate-180' : ''}`} />
-                </Button>
-                {mobileMenuOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-56 rounded-lg border bg-background shadow-lg z-50">
-                    <div className="p-2 space-y-1">
-                      <button
-                        onClick={() => { setActiveTab('proposals'); setMobileMenuOpen(false); }}
-                        className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${activeTab === 'proposals' ? 'bg-secondary text-secondary-foreground' : 'hover:bg-muted'}`}
-                      >
-                        <Home className="w-4 h-4" /> Overview
-                      </button>
-                      <button
-                        onClick={() => { setActiveTab('info'); setMobileMenuOpen(false); }}
-                        className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${activeTab === 'info' ? 'bg-secondary text-secondary-foreground' : 'hover:bg-muted'}`}
-                      >
-                        <FileText className="w-4 h-4" /> Info
-                      </button>
-                      <button
-                        onClick={() => { setActiveTab('members'); setMobileMenuOpen(false); }}
-                        className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${activeTab === 'members' ? 'bg-secondary text-secondary-foreground' : 'hover:bg-muted'}`}
-                      >
-                        <Users className="w-4 h-4" /> Members
-                      </button>
-                      {dao.isAdmin && publicKey && kit && (
-                        <button
-                          onClick={() => { setActiveTab('settings'); setMobileMenuOpen(false); }}
-                          className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${activeTab === 'settings' ? 'bg-secondary text-secondary-foreground' : 'hover:bg-muted'}`}
-                        >
-                          <Settings className="w-4 h-4" /> Settings
-                        </button>
-                      )}
-                      {(dao.isAdmin || (dao.hasMembership && dao.membersCanPropose)) && dao.vkSet && (
-                        <button
-                          onClick={() => { setActiveTab('create-proposal'); setMobileMenuOpen(false); }}
-                          className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${activeTab === 'create-proposal' ? 'bg-secondary text-secondary-foreground' : 'hover:bg-muted'}`}
-                        >
-                          <PlusCircle className="w-4 h-4" /> Add Proposal
-                        </button>
-                      )}
-                      {!dao.hasMembership && dao.membershipOpen && publicKey && (
-                        <>
-                          <div className="border-t my-2" />
-                          <button
-                            onClick={() => { handleJoinDao(); setMobileMenuOpen(false); }}
-                            disabled={joining}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-muted transition-colors"
-                          >
-                            {joining ? <LoadingSpinner size="sm" color="white" /> : <Users className="w-4 h-4" />}
-                            {joining ? "Joining..." : "Join DAO"}
-                          </button>
-                        </>
-                      )}
-                      {dao.hasMembership && !isRegistered && publicKey && (
-                        <>
-                          <div className="border-t my-2" />
-                          <button
-                            onClick={() => { handleRegisterForVoting(); setMobileMenuOpen(false); }}
-                            disabled={registering}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-muted transition-colors"
-                          >
-                            {registering ? (
-                              <>
-                                <LoadingSpinner size="sm" color="white" />
-                                {registrationStatus || "Registering..."}
-                              </>
-                            ) : (
-                              <>
-                                <CheckCircle className="w-4 h-4" />
-                                {hasUnregisteredCredentials ? "Complete Registration" : "Register to Vote"}
-                              </>
-                            )}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Desktop: Inline Buttons */}
-              <div className="hidden md:flex flex-wrap items-center gap-2">
+            {/* Right: Navigation Menu (2xl+ only - floated right of header) */}
+            <div className="shrink-0 hidden 2xl:block">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant={activeTab === 'proposals' ? 'secondary' : 'outline'}
                   size="sm"
-                  onClick={() => setActiveTab('proposals')}
+                  onClick={() => navigateToTab('proposals')}
                   className="gap-2"
                 >
                   <Home className="w-4 h-4" />
@@ -696,7 +681,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
                 <Button
                   variant={activeTab === 'info' ? 'secondary' : 'outline'}
                   size="sm"
-                  onClick={() => setActiveTab('info')}
+                  onClick={() => navigateToTab('info')}
                   className="gap-2"
                 >
                   <FileText className="w-4 h-4" /> Info
@@ -704,7 +689,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
                 <Button
                   variant={activeTab === 'members' ? 'secondary' : 'outline'}
                   size="sm"
-                  onClick={() => setActiveTab('members')}
+                  onClick={() => navigateToTab('members')}
                   className="gap-2"
                 >
                   <Users className="w-4 h-4" />
@@ -714,7 +699,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
                   <Button
                     variant={activeTab === 'settings' ? 'secondary' : 'outline'}
                     size="sm"
-                    onClick={() => setActiveTab('settings')}
+                    onClick={() => navigateToTab('settings')}
                     className="gap-2"
                   >
                     <Settings className="w-4 h-4" />
@@ -724,7 +709,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
                 {(dao.isAdmin || (dao.hasMembership && dao.membersCanPropose)) && dao.vkSet && (
                   <Button
                     variant={activeTab === 'create-proposal' ? 'secondary' : 'outline'}
-                    onClick={() => setActiveTab('create-proposal')}
+                    onClick={() => navigateToTab('create-proposal')}
                     size="sm"
                     className="gap-2"
                   >
@@ -784,7 +769,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
                   href={metadata.links.website}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                  className="p-2 rounded-lg bg-muted/30 dark:bg-muted/50 hover:bg-muted transition-colors text-foreground/70 hover:text-foreground"
                   title="Website"
                 >
                   <Globe className="w-5 h-5" />
@@ -795,7 +780,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
                   href={getTwitterUrl(metadata.links.twitter)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                  className="p-2 rounded-lg bg-muted/30 dark:bg-muted/50 hover:bg-muted transition-colors text-foreground/70 hover:text-foreground"
                   title="X (Twitter)"
                 >
                   <TwitterIcon className="w-5 h-5" />
@@ -806,7 +791,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
                   href={metadata.links.linkedin}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                  className="p-2 rounded-lg bg-muted/30 dark:bg-muted/50 hover:bg-muted transition-colors text-foreground/70 hover:text-foreground"
                   title="LinkedIn"
                 >
                   <LinkedInIcon className="w-5 h-5" />
@@ -817,7 +802,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
                   href={metadata.links.github}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                  className="p-2 rounded-lg bg-muted/30 dark:bg-muted/50 hover:bg-muted transition-colors text-foreground/70 hover:text-foreground"
                   title="GitHub"
                 >
                   <GitHubIcon className="w-5 h-5" />
@@ -825,6 +810,187 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
               )}
             </div>
           )}
+
+          {/* Mobile Navigation Menu - dropdown for < 1024px */}
+          <div className="lg:hidden mb-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="w-full justify-between"
+            >
+              <span className="flex items-center gap-2">
+                {activeTab === 'proposals' && <><Home className="w-4 h-4" /> Overview</>}
+                {activeTab === 'info' && <><FileText className="w-4 h-4" /> Info</>}
+                {activeTab === 'members' && <><Users className="w-4 h-4" /> Members</>}
+                {activeTab === 'settings' && <><Settings className="w-4 h-4" /> Settings</>}
+                {activeTab === 'create-proposal' && <><PlusCircle className="w-4 h-4" /> Add Proposal</>}
+              </span>
+              <ChevronDown className={`w-4 h-4 transition-transform ${mobileMenuOpen ? 'rotate-180' : ''}`} />
+            </Button>
+            {mobileMenuOpen && (
+              <div className="mt-2 w-full rounded-lg border bg-background shadow-lg">
+                <div className="p-2 space-y-1">
+                  <button
+                    onClick={() => { navigateToTab('proposals'); setMobileMenuOpen(false); }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${activeTab === 'proposals' ? 'bg-secondary text-secondary-foreground' : 'hover:bg-muted'}`}
+                  >
+                    <Home className="w-4 h-4" /> Overview
+                  </button>
+                  <button
+                    onClick={() => { navigateToTab('info'); setMobileMenuOpen(false); }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${activeTab === 'info' ? 'bg-secondary text-secondary-foreground' : 'hover:bg-muted'}`}
+                  >
+                    <FileText className="w-4 h-4" /> Info
+                  </button>
+                  <button
+                    onClick={() => { navigateToTab('members'); setMobileMenuOpen(false); }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${activeTab === 'members' ? 'bg-secondary text-secondary-foreground' : 'hover:bg-muted'}`}
+                  >
+                    <Users className="w-4 h-4" /> Members
+                  </button>
+                  {dao.isAdmin && publicKey && kit && (
+                    <button
+                      onClick={() => { navigateToTab('settings'); setMobileMenuOpen(false); }}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${activeTab === 'settings' ? 'bg-secondary text-secondary-foreground' : 'hover:bg-muted'}`}
+                    >
+                      <Settings className="w-4 h-4" /> Settings
+                    </button>
+                  )}
+                  {(dao.isAdmin || (dao.hasMembership && dao.membersCanPropose)) && dao.vkSet && (
+                    <button
+                      onClick={() => { navigateToTab('create-proposal'); setMobileMenuOpen(false); }}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${activeTab === 'create-proposal' ? 'bg-secondary text-secondary-foreground' : 'hover:bg-muted'}`}
+                    >
+                      <PlusCircle className="w-4 h-4" /> Add Proposal
+                    </button>
+                  )}
+                  {!dao.hasMembership && dao.membershipOpen && publicKey && (
+                    <>
+                      <div className="border-t my-2" />
+                      <button
+                        onClick={() => { handleJoinDao(); setMobileMenuOpen(false); }}
+                        disabled={joining}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-muted transition-colors"
+                      >
+                        {joining ? <LoadingSpinner size="sm" color="white" /> : <Users className="w-4 h-4" />}
+                        {joining ? "Joining..." : "Join DAO"}
+                      </button>
+                    </>
+                  )}
+                  {dao.hasMembership && !isRegistered && publicKey && (
+                    <>
+                      <div className="border-t my-2" />
+                      <button
+                        onClick={() => { handleRegisterForVoting(); setMobileMenuOpen(false); }}
+                        disabled={registering}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-muted transition-colors"
+                      >
+                        {registering ? (
+                          <>
+                            <LoadingSpinner size="sm" color="white" />
+                            {registrationStatus || "Registering..."}
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="w-4 h-4" />
+                            {hasUnregisteredCredentials ? "Complete Registration" : "Register to Vote"}
+                          </>
+                        )}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Inline Navigation Menu - shown for lg to 2xl (1024px - 1536px), above description */}
+          <div className="hidden lg:block 2xl:hidden mb-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant={activeTab === 'proposals' ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() => navigateToTab('proposals')}
+                className="gap-2"
+              >
+                <Home className="w-4 h-4" />
+                Overview
+              </Button>
+              <Button
+                variant={activeTab === 'info' ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() => navigateToTab('info')}
+                className="gap-2"
+              >
+                <FileText className="w-4 h-4" /> Info
+              </Button>
+              <Button
+                variant={activeTab === 'members' ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() => navigateToTab('members')}
+                className="gap-2"
+              >
+                <Users className="w-4 h-4" />
+                Members
+              </Button>
+              {dao.isAdmin && publicKey && kit && (
+                <Button
+                  variant={activeTab === 'settings' ? 'secondary' : 'outline'}
+                  size="sm"
+                  onClick={() => navigateToTab('settings')}
+                  className="gap-2"
+                >
+                  <Settings className="w-4 h-4" />
+                  Settings
+                </Button>
+              )}
+              {(dao.isAdmin || (dao.hasMembership && dao.membersCanPropose)) && dao.vkSet && (
+                <Button
+                  variant={activeTab === 'create-proposal' ? 'secondary' : 'outline'}
+                  onClick={() => navigateToTab('create-proposal')}
+                  size="sm"
+                  className="gap-2"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  Add Proposal
+                </Button>
+              )}
+              {!dao.hasMembership && dao.membershipOpen && publicKey && (
+                <Button
+                  variant="outline"
+                  onClick={handleJoinDao}
+                  disabled={joining}
+                  size="sm"
+                  className="gap-2"
+                >
+                  {joining && <LoadingSpinner size="sm" color="white" />}
+                  {joining ? "Joining..." : "Join DAO"}
+                </Button>
+              )}
+              {dao.hasMembership && !isRegistered && publicKey && (
+                <Button
+                  variant="outline"
+                  onClick={handleRegisterForVoting}
+                  disabled={registering}
+                  size="sm"
+                  className="gap-2"
+                >
+                  {registering ? (
+                    <>
+                      <LoadingSpinner size="sm" color="white" />
+                      {registrationStatus || "Registering..."}
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4" />
+                      {hasUnregisteredCredentials ? "Complete Registration" : "Register to Vote"}
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
 
           {/* Description (collapsible) */}
           {metadata?.description && (
@@ -893,7 +1059,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false 
             <CreateProposalForm
               onSubmit={handleCreateProposal}
               onCancel={() => {
-                setActiveTab('proposals');
+                navigateToTab('proposals');
                 setError(null);
               }}
               isSubmitting={creatingProposal}

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 import { initializeContractClients } from "../lib/contracts";
+import { extractTxHash } from "../lib/utils";
+import { notifyEvent } from "../lib/api";
 import { Button } from "./ui/Button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/Card";
 import { LoadingSpinner } from "./ui";
@@ -52,9 +54,15 @@ export default function DAOSettings({
         admin: publicKey,
       });
 
-      await tx.signAndSend({
+      const result = await tx.signAndSend({
         signTransaction: kit.signTransaction.bind(kit),
       });
+
+      // Notify relayer of membership mode change
+      const txHash = extractTxHash(result);
+      if (txHash) {
+        notifyEvent(daoId, "membership_mode_changed", txHash, { membershipOpen: newValue });
+      }
 
       onSettingsChanged();
     } catch (err) {
@@ -80,9 +88,15 @@ export default function DAOSettings({
         admin: publicKey,
       });
 
-      await tx.signAndSend({
+      const result = await tx.signAndSend({
         signTransaction: kit.signTransaction.bind(kit),
       });
+
+      // Notify relayer of proposal mode change
+      const txHash = extractTxHash(result);
+      if (txHash) {
+        notifyEvent(daoId, "proposal_mode_changed", txHash, { membersCanPropose: newValue });
+      }
 
       onSettingsChanged();
     } catch (err) {
@@ -112,7 +126,9 @@ export default function DAOSettings({
                 <Users className="w-5 h-5 text-muted-foreground" />
               </div>
               <div>
-                <h4 className="font-medium">Open Membership</h4>
+                <h4 className="font-medium">
+                  {membershipOpen ? "Open Membership" : "Closed Membership"}
+                </h4>
                 <p className="text-sm text-muted-foreground">
                   {membershipOpen
                     ? "Anyone can join the DAO"

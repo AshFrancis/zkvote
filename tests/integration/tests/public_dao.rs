@@ -105,7 +105,7 @@ fn test_public_dao_creation() {
     let registry_client = RegistryClient::new(&env, &registry_id);
 
     // Create public DAO with membership_open=true
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Public DAO"), &admin, &true);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Public DAO"), &admin, &true, &true, &None);
 
     // Verify DAO exists and has open membership
     assert!(registry_client.dao_exists(&dao_id));
@@ -127,7 +127,7 @@ fn test_self_join_public_dao() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create public DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Public DAO"), &admin, &true);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Public DAO"), &admin, &true, &true, &None);
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -152,7 +152,7 @@ fn test_self_join_private_dao_fails() {
     let sbt_client = SbtClient::new(&env, &sbt_id);
 
     // Create private DAO (membership_open=false)
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Private DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Private DAO"), &admin, &false, &true, &None);
 
     // Random user tries to self-join - should fail
     let user = Address::generate(&env);
@@ -171,7 +171,7 @@ fn test_self_register_public_dao() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create public DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Public DAO"), &admin, &true);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Public DAO"), &admin, &true, &true, &None);
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -202,7 +202,7 @@ fn test_self_register_private_dao_fails() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create private DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Private DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Private DAO"), &admin, &false, &true, &None);
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -216,8 +216,9 @@ fn test_self_register_private_dao_fails() {
     tree_client.self_register(&dao_id, &commitment, &user);
 }
 
+/// Test: In a public DAO with members_can_propose=true, any member can create proposals
 #[test]
-fn test_non_member_creates_proposal_in_public_dao() {
+fn test_member_creates_proposal_in_public_dao() {
     let env = Env::default();
     env.mock_all_auths();
     env.cost_estimate().budget().reset_unlimited();
@@ -228,8 +229,8 @@ fn test_non_member_creates_proposal_in_public_dao() {
     let voting_client = VotingClient::new(&env, &voting_id);
     let sbt_client = SbtClient::new(&env, &sbt_id);
 
-    // Create public DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Public DAO"), &admin, &true);
+    // Create public DAO with members_can_propose=true (any member can create proposals)
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Public DAO"), &admin, &true, &true, &None);
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -238,11 +239,12 @@ fn test_non_member_creates_proposal_in_public_dao() {
     let vk = create_test_vk(&env);
     voting_client.set_vk(&dao_id, &vk, &admin);
 
-    // Random user (no SBT) creates proposal
+    // User self-joins the public DAO (gets SBT)
     let user = Address::generate(&env);
+    sbt_client.self_join(&dao_id, &user, &None);
 
-    // First verify user has no SBT
-    assert!(!sbt_client.has(&dao_id, &user));
+    // Verify user now has SBT
+    assert!(sbt_client.has(&dao_id, &user));
 
     let current_time = env.ledger().timestamp();
     let end_time = current_time + 3600;
@@ -273,7 +275,7 @@ fn test_non_member_cannot_create_proposal_in_private_dao() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create private DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Private DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Private DAO"), &admin, &false, &true, &None);
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -298,6 +300,94 @@ fn test_non_member_cannot_create_proposal_in_private_dao() {
     );
 }
 
+/// Test: When members_can_propose=false, only admin can create proposals (even if member has SBT)
+#[test]
+#[should_panic]
+fn test_member_cannot_propose_when_admin_only_mode() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.cost_estimate().budget().reset_unlimited();
+
+    let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
+    let registry_client = RegistryClient::new(&env, &registry_id);
+    let sbt_client = SbtClient::new(&env, &sbt_id);
+    let tree_client = TreeClient::new(&env, &tree_id);
+    let voting_client = VotingClient::new(&env, &voting_id);
+
+    // Create public DAO with members_can_propose=FALSE (admin-only proposal mode)
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Admin Only DAO"), &admin, &true, &false, &None);
+
+    // Initialize tree
+    tree_client.init_tree(&dao_id, &18, &admin);
+
+    // Set VK
+    let vk = create_test_vk(&env);
+    voting_client.set_vk(&dao_id, &vk, &admin);
+
+    // User self-joins (since membership is open) and gets SBT
+    let user = Address::generate(&env);
+    sbt_client.self_join(&dao_id, &user, &None);
+
+    // Verify user has SBT
+    assert!(sbt_client.has(&dao_id, &user));
+
+    let current_time = env.ledger().timestamp();
+    let end_time = current_time + 3600;
+
+    // User tries to create proposal - should fail with AdminOnlyPropose error
+    // because members_can_propose=false
+    voting_client.create_proposal(
+        &dao_id,
+        &String::from_str(&env, "User Proposal"),
+        &String::from_str(&env, ""),
+        &end_time,
+        &user,
+        &voting::VoteMode::Trailing,
+    );
+}
+
+/// Test: When members_can_propose=false, admin CAN still create proposals
+#[test]
+fn test_admin_can_propose_in_admin_only_mode() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.cost_estimate().budget().reset_unlimited();
+
+    let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
+    let registry_client = RegistryClient::new(&env, &registry_id);
+    let sbt_client = SbtClient::new(&env, &sbt_id);
+    let tree_client = TreeClient::new(&env, &tree_id);
+    let voting_client = VotingClient::new(&env, &voting_id);
+
+    // Create DAO with members_can_propose=FALSE (admin-only proposal mode)
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Admin Only DAO"), &admin, &false, &false, &None);
+
+    // Initialize tree
+    tree_client.init_tree(&dao_id, &18, &admin);
+
+    // Admin needs SBT to create proposals (still required)
+    sbt_client.mint(&dao_id, &admin, &admin, &None);
+
+    // Set VK
+    let vk = create_test_vk(&env);
+    voting_client.set_vk(&dao_id, &vk, &admin);
+
+    let current_time = env.ledger().timestamp();
+    let end_time = current_time + 3600;
+
+    // Admin creates proposal successfully
+    let proposal_id = voting_client.create_proposal(
+        &dao_id,
+        &String::from_str(&env, "Admin Proposal"),
+        &String::from_str(&env, ""),
+        &end_time,
+        &admin,
+        &voting::VoteMode::Fixed,
+    );
+
+    assert_eq!(proposal_id, 1);
+}
+
 #[test]
 fn test_full_public_dao_flow() {
     let env = Env::default();
@@ -310,8 +400,8 @@ fn test_full_public_dao_flow() {
     let tree_client = TreeClient::new(&env, &tree_id);
     let voting_client = VotingClient::new(&env, &voting_id);
 
-    // Create public DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Public DAO"), &admin, &true);
+    // Create public DAO with members_can_propose=true (any member can create proposals)
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Public DAO"), &admin, &true, &true, &None);
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -332,8 +422,10 @@ fn test_full_public_dao_flow() {
     let commitment2 = U256::from_u32(&env, 222);
     tree_client.self_register(&dao_id, &commitment2, &user2);
 
-    // User 3: Creates proposal without joining
+    // User 3: Self-joins and creates proposal (any member can propose in this DAO)
     let user3 = Address::generate(&env);
+    sbt_client.self_join(&dao_id, &user3, &None);
+
     let current_time = env.ledger().timestamp();
     let end_time = current_time + 3600;
 

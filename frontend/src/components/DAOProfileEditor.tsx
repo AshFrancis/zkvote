@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 import { initializeContractClients } from "../lib/contracts";
+import { extractTxHash } from "../lib/utils";
+import { notifyEvent } from "../lib/api";
 import {
   type DAOMetadata,
   uploadDAOMetadata,
@@ -83,6 +85,18 @@ export default function DAOProfileEditor({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  // Track original values for change detection
+  const [originalName, setOriginalName] = useState(daoName);
+  const [originalProfile, setOriginalProfile] = useState<{
+    description: string;
+    coverImageCid: string | null;
+    profileImageCid: string | null;
+    website: string;
+    twitter: string;
+    linkedin: string;
+    github: string;
+  } | null>(null);
+
   // File input refs
   const coverInputRef = useRef<HTMLInputElement>(null);
   const profileInputRef = useRef<HTMLInputElement>(null);
@@ -94,17 +108,39 @@ export default function DAOProfileEditor({
         try {
           const metadata = await fetchDAOMetadata(metadataCid);
           if (metadata) {
-            setDescription(metadata.description || "");
-            setCoverImageCid(metadata.coverImageCid || null);
-            setProfileImageCid(metadata.profileImageCid || null);
-            setWebsite(metadata.links?.website || "");
-            setTwitter(metadata.links?.twitter || "");
-            setLinkedin(metadata.links?.linkedin || "");
-            setGithub(metadata.links?.github || "");
+            const loadedProfile = {
+              description: metadata.description || "",
+              coverImageCid: metadata.coverImageCid || null,
+              profileImageCid: metadata.profileImageCid || null,
+              website: metadata.links?.website || "",
+              twitter: metadata.links?.twitter || "",
+              linkedin: metadata.links?.linkedin || "",
+              github: metadata.links?.github || "",
+            };
+            setDescription(loadedProfile.description);
+            setCoverImageCid(loadedProfile.coverImageCid);
+            setProfileImageCid(loadedProfile.profileImageCid);
+            setWebsite(loadedProfile.website);
+            setTwitter(loadedProfile.twitter);
+            setLinkedin(loadedProfile.linkedin);
+            setGithub(loadedProfile.github);
+            // Store original for change tracking
+            setOriginalProfile(loadedProfile);
           }
         } catch (err) {
           console.error("Failed to load metadata:", err);
         }
+      } else {
+        // No existing metadata - store empty original
+        setOriginalProfile({
+          description: "",
+          coverImageCid: null,
+          profileImageCid: null,
+          website: "",
+          twitter: "",
+          linkedin: "",
+          github: "",
+        });
       }
       setIsLoading(false);
     }
@@ -151,55 +187,143 @@ export default function DAOProfileEditor({
     try {
       const clients = initializeContractClients(publicKey);
 
-      // Build metadata object
-      const metadata: Omit<DAOMetadata, "version" | "updatedAt"> = {
-        description: description.trim(),
-        coverImageCid: coverImageCid || undefined,
-        profileImageCid: profileImageCid || undefined,
-        links: {
-          website: website.trim() || undefined,
-          twitter: twitter.trim() ? normalizeTwitterHandle(twitter.trim()) : undefined,
-          linkedin: linkedin.trim() || undefined,
-          github: github.trim() || undefined,
-        },
-      };
+      // Check what changed
+      const nameChanged = name.trim() !== daoName;
+      const metadataContentChanged =
+        description.trim() !== (originalProfile?.description || "") ||
+        coverImageCid !== originalProfile?.coverImageCid ||
+        profileImageCid !== originalProfile?.profileImageCid ||
+        website.trim() !== (originalProfile?.website || "") ||
+        (twitter.trim() ? normalizeTwitterHandle(twitter.trim()) : "") !== (originalProfile?.twitter || "") ||
+        linkedin.trim() !== (originalProfile?.linkedin || "") ||
+        github.trim() !== (originalProfile?.github || "");
 
-      // Remove empty links object if all fields are empty
-      if (
-        !metadata.links?.website &&
-        !metadata.links?.twitter &&
-        !metadata.links?.linkedin &&
-        !metadata.links?.github
-      ) {
-        delete metadata.links;
+      // If nothing changed, show success and return
+      if (!nameChanged && !metadataContentChanged) {
+        setSuccess(true);
+        setTimeout(() => {
+          onSaved();
+        }, 1500);
+        return;
       }
 
-      // Upload metadata to IPFS
-      const { cid: newMetadataCid } = await uploadDAOMetadata(metadata);
+      let newMetadataCid: string | null = metadataCid;
+      let result: any;
+
+      // Only upload metadata if content actually changed
+      if (metadataContentChanged) {
+        // Build metadata object
+        const metadata: Omit<DAOMetadata, "version" | "updatedAt"> = {
+          description: description.trim(),
+          coverImageCid: coverImageCid || undefined,
+          profileImageCid: profileImageCid || undefined,
+          links: {
+            website: website.trim() || undefined,
+            twitter: twitter.trim() ? normalizeTwitterHandle(twitter.trim()) : undefined,
+            linkedin: linkedin.trim() || undefined,
+            github: github.trim() || undefined,
+          },
+        };
+
+        // Remove empty links object if all fields are empty
+        if (
+          !metadata.links?.website &&
+          !metadata.links?.twitter &&
+          !metadata.links?.linkedin &&
+          !metadata.links?.github
+        ) {
+          delete metadata.links;
+        }
+
+        // Upload metadata to IPFS
+        const uploadResult = await uploadDAOMetadata(metadata);
+        newMetadataCid = uploadResult.cid;
+      }
 
       // Update name on-chain if changed
-      if (name.trim() !== daoName) {
+      if (nameChanged) {
         const nameTx = await clients.daoRegistry.set_name({
           dao_id: BigInt(daoId),
           name: name.trim(),
           admin: publicKey,
         });
 
-        await nameTx.signAndSend({
+        result = await nameTx.signAndSend({
           signTransaction: kit.signTransaction.bind(kit),
         });
       }
 
-      // Update metadata CID on-chain
-      const metadataTx = await clients.daoRegistry.set_metadata_cid({
-        dao_id: BigInt(daoId),
-        metadata_cid: newMetadataCid,
-        admin: publicKey,
-      });
+      // Update metadata CID on-chain if changed
+      if (metadataContentChanged && newMetadataCid) {
+        const metadataTx = await clients.daoRegistry.set_metadata_cid({
+          dao_id: BigInt(daoId),
+          metadata_cid: newMetadataCid,
+          admin: publicKey,
+        });
 
-      await metadataTx.signAndSend({
-        signTransaction: kit.signTransaction.bind(kit),
-      });
+        result = await metadataTx.signAndSend({
+          signTransaction: kit.signTransaction.bind(kit),
+        });
+      }
+
+      // Notify relayer of profile updated event with old and new values
+      const txHash = extractTxHash(result);
+      if (txHash) {
+        const newProfile = {
+          name: name.trim(),
+          description: description.trim(),
+          coverImageCid: coverImageCid || null,
+          profileImageCid: profileImageCid || null,
+          website: website.trim() || null,
+          twitter: twitter.trim() ? normalizeTwitterHandle(twitter.trim()) : null,
+          linkedin: linkedin.trim() || null,
+          github: github.trim() || null,
+        };
+
+        const oldProfile = {
+          name: originalName,
+          description: originalProfile?.description || "",
+          coverImageCid: originalProfile?.coverImageCid || null,
+          profileImageCid: originalProfile?.profileImageCid || null,
+          website: originalProfile?.website || null,
+          twitter: originalProfile?.twitter || null,
+          linkedin: originalProfile?.linkedin || null,
+          github: originalProfile?.github || null,
+        };
+
+        // Calculate what changed
+        const changes: Record<string, { old: string | null; new: string | null }> = {};
+        if (oldProfile.name !== newProfile.name) {
+          changes.name = { old: oldProfile.name, new: newProfile.name };
+        }
+        if (oldProfile.description !== newProfile.description) {
+          changes.description = { old: oldProfile.description || null, new: newProfile.description || null };
+        }
+        if (oldProfile.coverImageCid !== newProfile.coverImageCid) {
+          changes.coverImageCid = { old: oldProfile.coverImageCid, new: newProfile.coverImageCid };
+        }
+        if (oldProfile.profileImageCid !== newProfile.profileImageCid) {
+          changes.profileImageCid = { old: oldProfile.profileImageCid, new: newProfile.profileImageCid };
+        }
+        if (oldProfile.website !== newProfile.website) {
+          changes.website = { old: oldProfile.website, new: newProfile.website };
+        }
+        if (oldProfile.twitter !== newProfile.twitter) {
+          changes.twitter = { old: oldProfile.twitter, new: newProfile.twitter };
+        }
+        if (oldProfile.linkedin !== newProfile.linkedin) {
+          changes.linkedin = { old: oldProfile.linkedin, new: newProfile.linkedin };
+        }
+        if (oldProfile.github !== newProfile.github) {
+          changes.github = { old: oldProfile.github, new: newProfile.github };
+        }
+
+        notifyEvent(daoId, "profile_updated", txHash, {
+          metadataCid: newMetadataCid,
+          oldMetadataCid: metadataCid,
+          changes,
+        });
+      }
 
       setSuccess(true);
       setTimeout(() => {

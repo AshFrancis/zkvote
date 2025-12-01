@@ -66,7 +66,7 @@ fn test_poseidon_kat_single_commitment() {
 
     // Create test DAO
     let dao_id =
-        registry_client.create_dao(&String::from_str(&env, "Poseidon KAT Test"), &admin, &false);
+        registry_client.create_dao(&String::from_str(&env, "Poseidon KAT Test"), &admin, &false, &true, &None);
 
     // Initialize tree with depth 18
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -143,6 +143,8 @@ fn test_poseidon_kat_multiple_commitments() {
         &String::from_str(&env, "Poseidon KAT Multi"),
         &admin,
         &false,
+        &true,
+        &None,
     );
 
     // Initialize tree with depth 18
@@ -226,6 +228,8 @@ fn test_poseidon_zero_leaf_consistency() {
         &String::from_str(&env, "Poseidon Zero Leaf Test"),
         &admin,
         &false,
+        &true,
+        &None,
     );
 
     // Initialize tree with depth 18

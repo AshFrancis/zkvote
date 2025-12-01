@@ -44,7 +44,7 @@ fn stress_many_proposals_and_members() {
     let voting = VotingClient::new(&env, &voting_id);
 
     let admin = Address::generate(&env);
-    let dao_id = registry.create_dao(&String::from_str(&env, "Stress DAO"), &admin, &false, &true);
+    let dao_id = registry.create_dao(&String::from_str(&env, "Stress DAO"), &admin, &false, &true, &None);
     tree.init_tree(&dao_id, &20, &admin);
     voting.set_vk(&dao_id, &crate::test::create_dummy_vk(&env), &admin);
 

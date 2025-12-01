@@ -30,8 +30,11 @@ import { uploadDAOMetadata, uploadImage, MAX_DESCRIPTION_LENGTH } from "./lib/da
 import { ChevronDown, ChevronUp, Image as ImageIcon, Link2, Globe, Twitter, Linkedin, Github, X } from "lucide-react";
 // ZK credentials will be generated deterministically after DAO creation
 
+// Tab types for DAO pages
+type DAOTab = 'info' | 'proposals' | 'members' | 'create-proposal' | 'settings';
+
 // Component for DAO detail page
-function DAODetailPage({ publicKey, isInitializing }: { publicKey: string | null; isInitializing: boolean }) {
+function DAODetailPage({ publicKey, isInitializing, tab = 'proposals' }: { publicKey: string | null; isInitializing: boolean; tab?: DAOTab }) {
   const { daoSlug } = useParams<{ daoSlug: string }>();
   const navigate = useNavigate();
   const selectedDaoId = daoSlug ? parseIdFromSlug(daoSlug) : null;
@@ -152,7 +155,7 @@ function DAODetailPage({ publicKey, isInitializing }: { publicKey: string | null
 
       {/* DAO Dashboard */}
       {selectedDaoId !== null && (
-        <DAODashboard publicKey={publicKey} daoId={selectedDaoId} isInitializing={isInitializing} />
+        <DAODashboard publicKey={publicKey} daoId={selectedDaoId} isInitializing={isInitializing} initialTab={tab} />
       )}
     </div>
   );
@@ -519,38 +522,10 @@ function App() {
         ic: verificationKey.ic.map((ic: string) => Buffer.from(ic, 'hex')),
       };
 
-      // Single transaction: Create and initialize DAO (without creator registration)
-      // Creator will register with deterministic credentials after creation
-      console.log("Creating and initializing DAO...");
-
-      const createAndInitTx = await clients.daoRegistry.create_and_init_dao_no_reg(
-        {
-          name: newDaoName,
-          creator: publicKey,
-          membership_open: membershipOpen,
-          members_can_propose: membersCanPropose,
-          sbt_contract: CONTRACTS.SBT_ID,
-          tree_contract: CONTRACTS.TREE_ID,
-          voting_contract: CONTRACTS.VOTING_ID,
-          tree_depth: 18,
-          vk,
-        },
-        {
-          // Increase budget for this complex transaction (5 steps including Merkle tree ops)
-          fee: "10000000", // 10 XLM max fee
-        }
-      );
-
-      const result = await sendWithRetry(createAndInitTx);
-
-      // Show creating message only after transaction is signed and sent
-      setSuccess("Creating DAO (minting SBT, initializing tree, and setting verification key)...");
-
-      const newDaoId = Number(result.result);
-      console.log(`DAO created and fully initialized with ID: ${newDaoId}`);
-
-      // Upload profile metadata if any profile fields were provided
+      // Upload profile metadata BEFORE creating DAO (so we can include it in single transaction)
       const hasProfileData = description || coverImageFile || profileImageFile || website || twitter || linkedin || github;
+      let metadataCid: string | undefined;
+
       if (hasProfileData) {
         try {
           setSuccess("Uploading DAO profile to IPFS...");
@@ -596,25 +571,46 @@ function App() {
           }
 
           // Upload metadata to IPFS
-          const { cid: metadataCid } = await uploadDAOMetadata(metadataToUpload);
+          const uploadResult = await uploadDAOMetadata(metadataToUpload);
+          metadataCid = uploadResult.cid;
           console.log("Metadata uploaded to IPFS:", metadataCid);
-
-          // Set metadata CID on-chain
-          setSuccess("Saving profile to blockchain...");
-          const setMetadataTx = await clients.daoRegistry.set_metadata_cid({
-            dao_id: BigInt(newDaoId),
-            metadata_cid: metadataCid,
-            admin: publicKey,
-          });
-
-          await sendWithRetry(setMetadataTx);
-          console.log("Metadata CID set on-chain:", metadataCid);
         } catch (metadataErr) {
-          // Log the error but don't fail the whole operation - DAO is already created
+          // Log the error but continue with DAO creation without metadata
           console.error("Failed to upload profile metadata:", metadataErr);
-          setError("DAO created but failed to save profile. You can add it later from Settings.");
+          setError("Failed to upload profile. Continuing without profile metadata...");
+          // Clear the error after a moment so user sees the creation progress
+          setTimeout(() => setError(null), 3000);
         }
       }
+
+      // Single transaction: Create and initialize DAO with metadata (without creator registration)
+      // Creator will register with deterministic credentials after creation
+      console.log("Creating and initializing DAO...");
+      setSuccess("Creating DAO (minting SBT, initializing tree, and setting verification key)...");
+
+      const createAndInitTx = await clients.daoRegistry.create_and_init_dao_no_reg(
+        {
+          name: newDaoName,
+          creator: publicKey,
+          membership_open: membershipOpen,
+          members_can_propose: membersCanPropose,
+          metadata_cid: metadataCid || undefined, // Pass metadata CID if available
+          sbt_contract: CONTRACTS.SBT_ID,
+          tree_contract: CONTRACTS.TREE_ID,
+          voting_contract: CONTRACTS.VOTING_ID,
+          tree_depth: 18,
+          vk,
+        },
+        {
+          // Increase budget for this complex transaction (5 steps including Merkle tree ops)
+          fee: "10000000", // 10 XLM max fee
+        }
+      );
+
+      const result = await sendWithRetry(createAndInitTx);
+
+      const newDaoId = Number(result.result);
+      console.log(`DAO created and fully initialized with ID: ${newDaoId}${metadataCid ? ` with metadata CID: ${metadataCid}` : ''}`);
 
       setSuccess(
         `DAO "${newDaoName}" created successfully! Redirecting...`
@@ -672,7 +668,7 @@ function App() {
           <Route path="/daos/" element={
             <div className="space-y-8 animate-fade-in">
               {/* Page Header */}
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                   <h1 className="text-3xl font-bold tracking-tight">
                     Decentralized Organizations
@@ -954,14 +950,29 @@ function App() {
             <PublicVotes publicKey={publicKey} isConnected={isConnected} isInitializing={isInitializing} tab="create-proposal" />
           } />
 
-          {/* DAO Detail Route */}
+          {/* DAO Detail Route - defaults to proposals tab */}
           <Route path="/daos/:daoSlug" element={
-            <DAODetailPage publicKey={publicKey} isInitializing={isInitializing} />
+            <DAODetailPage publicKey={publicKey} isInitializing={isInitializing} tab="proposals" />
           } />
 
-          {/* Manage/View Members Route */}
+          {/* DAO Info Route */}
+          <Route path="/daos/:daoSlug/info" element={
+            <DAODetailPage publicKey={publicKey} isInitializing={isInitializing} tab="info" />
+          } />
+
+          {/* DAO Members Route */}
           <Route path="/daos/:daoSlug/members" element={
-            <ManageMembersPage publicKey={publicKey} isInitializing={isInitializing} />
+            <DAODetailPage publicKey={publicKey} isInitializing={isInitializing} tab="members" />
+          } />
+
+          {/* DAO Settings Route */}
+          <Route path="/daos/:daoSlug/settings" element={
+            <DAODetailPage publicKey={publicKey} isInitializing={isInitializing} tab="settings" />
+          } />
+
+          {/* Create Proposal Route */}
+          <Route path="/daos/:daoSlug/create-proposal" element={
+            <DAODetailPage publicKey={publicKey} isInitializing={isInitializing} tab="create-proposal" />
           } />
 
           {/* Proposal Detail Route */}

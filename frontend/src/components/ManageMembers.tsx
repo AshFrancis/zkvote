@@ -9,6 +9,8 @@ import {
 } from '../lib/encryption';
 import { Alert, LoadingSpinner, Badge } from './ui';
 import { ConfirmModal } from './ui/ConfirmModal';
+import { truncateAddress, extractTxHash } from '../lib/utils';
+import { notifyEvent } from '../lib/api';
 
 interface ManageMembersProps {
   publicKey: string | null;
@@ -388,7 +390,13 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
         throw new Error("Wallet kit not available");
       }
 
-      await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+      const result = await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+
+      // Notify relayer of member added event
+      const txHash = extractTxHash(result);
+      if (txHash) {
+        notifyEvent(daoId, "member_added", txHash, { member: mintAddress, alias: memberAlias || undefined });
+      }
 
       setSuccess(`Successfully minted SBT to ${mintAddress.substring(0, 8)}...${memberAlias ? ` (${memberAlias})` : ''}`);
 
@@ -500,8 +508,14 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
         admin: publicKey,
       });
 
-      await removeTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+      const removeResult = await removeTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
       console.log('[handleRemoveMember] Member removed from tree');
+
+      // Notify relayer of member revoked event
+      const txHash = extractTxHash(removeResult);
+      if (txHash) {
+        notifyEvent(daoId, "member_revoked", txHash, { member: address });
+      }
 
       // Update local state
       const updatedMembers = members.filter(m => m.address !== address);
@@ -545,7 +559,13 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
         throw new Error("Wallet kit not available");
       }
 
-      await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+      const result = await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+
+      // Notify relayer of member left event
+      const txHash = extractTxHash(result);
+      if (txHash) {
+        notifyEvent(daoId, "member_left", txHash, { member: publicKey });
+      }
 
       setSuccess(`You have left the DAO`);
 
@@ -775,7 +795,9 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
                         )
                       )}
                       <p className="font-mono text-xs text-muted-foreground">
-                        {member.address}
+                        {/* Truncated on mobile, full on md+ */}
+                        <span className="md:hidden">{truncateAddress(member.address, 5, 5)}</span>
+                        <span className="hidden md:inline">{member.address}</span>
                       </p>
                     </div>
                     {member.isAdmin && (
@@ -869,7 +891,9 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
                 className="p-3 bg-destructive/10 rounded-lg"
               >
                 <p className="font-mono text-sm text-foreground">
-                  {address}
+                  {/* Truncated on mobile, full on md+ */}
+                  <span className="md:hidden">{truncateAddress(address, 5, 5)}</span>
+                  <span className="hidden md:inline">{address}</span>
                 </p>
               </div>
             ))}

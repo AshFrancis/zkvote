@@ -116,3 +116,30 @@ export function parseIdFromSlug(idSlug: string): number | null {
   const match = idSlug.match(/^(\d+)/);
   return match ? parseInt(match[1], 10) : null;
 }
+
+/**
+ * Extract transaction hash from a Stellar SDK transaction result
+ * The result can be a sendResult or assembled transaction
+ */
+export function extractTxHash(result: unknown): string | null {
+  if (!result || typeof result !== 'object') return null;
+
+  const res = result as Record<string, unknown>;
+
+  // Direct hash property
+  if (typeof res.hash === 'string') return res.hash;
+
+  // From sendTransaction result
+  if (res.sendTransactionResponse && typeof res.sendTransactionResponse === 'object') {
+    const sendRes = res.sendTransactionResponse as Record<string, unknown>;
+    if (typeof sendRes.hash === 'string') return sendRes.hash;
+  }
+
+  // From getTransaction result
+  if (res.getTransactionResponse && typeof res.getTransactionResponse === 'object') {
+    const getRes = res.getTransactionResponse as Record<string, unknown>;
+    if (typeof getRes.txHash === 'string') return getRes.txHash;
+  }
+
+  return null;
+}

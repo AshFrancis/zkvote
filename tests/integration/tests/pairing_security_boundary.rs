@@ -132,7 +132,7 @@ fn test_pairing_security_boundary() {
 
     println!("Creating DAO...\n");
     let dao_name = String::from_str(&env, "Security Test DAO");
-    let dao_id = registry_client.create_dao(&dao_name, &admin, &false);
+    let dao_id = registry_client.create_dao(&dao_name, &admin, &false, &true, &None);
 
     println!("Minting SBT...\n");
     sbt_client.mint(&dao_id, &admin, &admin, &None);

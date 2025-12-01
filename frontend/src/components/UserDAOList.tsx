@@ -1,13 +1,18 @@
 import { useEffect, useState } from 'react';
 import { getUserDaos } from '../lib/readOnlyContracts';
 import { CONTRACTS } from '../config/contracts';
-import { Alert, LoadingSpinner, Badge } from './ui';
+import { Alert, LoadingSpinner } from './ui';
+import DAOCard from './ui/DAOCard';
+import { fetchDAOMetadata, getImageUrl } from '../lib/daoMetadata';
+import type { DAOMetadata } from '../lib/daoMetadata';
 
 interface UserDAO {
   id: number;
   name: string;
   creator: string;
   role: 'admin' | 'member';
+  membership_open: boolean;
+  metadata_cid?: string;
 }
 
 interface UserDAOListProps {
@@ -20,6 +25,7 @@ interface UserDAOListProps {
 
 // Generate cache key based on user address and contract deployment so cache invalidates on redeployment
 const getCacheKey = (userAddress: string) => `user_daos_${userAddress}_${CONTRACTS.REGISTRY_ID.slice(0, 8)}`;
+const getMetadataCacheKey = () => `dao_metadata_${CONTRACTS.REGISTRY_ID.slice(0, 8)}`;
 
 export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, onDaosLoaded, isInitializing = false }: UserDAOListProps) {
   const [daos, setDaos] = useState<UserDAO[]>(() => {
@@ -39,6 +45,10 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
     return !cached;
   });
   const [error, setError] = useState<string | null>(null);
+  const [metadataCache, setMetadataCache] = useState<Record<string, DAOMetadata | null>>(() => {
+    const cached = localStorage.getItem(getMetadataCacheKey());
+    return cached ? JSON.parse(cached) : {};
+  });
 
   // Notify parent of cached DAOs on mount
   useEffect(() => {
@@ -56,6 +66,32 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
     console.log('[UserDAOList] Loading user DAOs for:', userAddress);
     loadUserDaos();
   }, [userAddress, isInitializing]);
+
+  // Load metadata for DAOs that have metadata_cid
+  useEffect(() => {
+    const loadMetadata = async () => {
+      const daosWithCid = daos.filter(dao => dao.metadata_cid && !metadataCache[dao.metadata_cid]);
+      if (daosWithCid.length === 0) return;
+
+      const newCache = { ...metadataCache };
+
+      await Promise.all(daosWithCid.map(async (dao) => {
+        if (!dao.metadata_cid) return;
+        try {
+          const metadata = await fetchDAOMetadata(dao.metadata_cid);
+          newCache[dao.metadata_cid] = metadata;
+        } catch (err) {
+          console.warn(`Failed to fetch metadata for DAO ${dao.id}:`, err);
+          newCache[dao.metadata_cid!] = null;
+        }
+      }));
+
+      setMetadataCache(newCache);
+      localStorage.setItem(getMetadataCacheKey(), JSON.stringify(newCache));
+    };
+
+    loadMetadata();
+  }, [daos]);
 
   const loadUserDaos = async () => {
     const cacheKey = getCacheKey(userAddress);
@@ -90,6 +126,36 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
     } finally {
       setLoading(false);
     }
+  };
+
+  // Get metadata for a DAO
+  const getDAOMetadata = (dao: UserDAO): DAOMetadata | null => {
+    if (!dao.metadata_cid) return null;
+    return metadataCache[dao.metadata_cid] || null;
+  };
+
+  // Get cover image URL - returns null if using default background
+  const getCoverImageUrl = (dao: UserDAO): string | null => {
+    const metadata = getDAOMetadata(dao);
+    if (metadata?.coverImageCid) {
+      return getImageUrl(metadata.coverImageCid);
+    }
+    return null; // Will use CSS background for default
+  };
+
+  // Check if DAO has a custom cover image
+  const hasCustomCover = (dao: UserDAO): boolean => {
+    const metadata = getDAOMetadata(dao);
+    return !!metadata?.coverImageCid;
+  };
+
+  // Get profile image URL
+  const getProfileImageUrl = (dao: UserDAO): string | null => {
+    const metadata = getDAOMetadata(dao);
+    if (metadata?.profileImageCid) {
+      return getImageUrl(metadata.profileImageCid);
+    }
+    return null;
   };
 
   if (loading && daos.length === 0) {
@@ -147,46 +213,20 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
         Your DAOs ({filteredDaos.length})
       </h2>
 
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
         {filteredDaos.map((dao) => (
-          <button
+          <DAOCard
             key={dao.id}
+            id={dao.id}
+            name={dao.name}
+            membershipOpen={dao.membership_open}
+            isSelected={selectedDaoId === dao.id}
+            coverUrl={getCoverImageUrl(dao)}
+            profileUrl={getProfileImageUrl(dao)}
+            hasCover={hasCustomCover(dao)}
             onClick={() => onSelectDao(dao.id, dao.name)}
-            className={`text-left p-4 rounded-lg border transition-colors ${
-              selectedDaoId === dao.id
-                ? 'bg-primary/10 border-primary/50'
-                : 'bg-muted/50 border-border hover:bg-muted'
-            }`}
-          >
-            <div className="flex flex-col">
-              <div className="flex items-start justify-between mb-2">
-                <h3 className="text-sm font-semibold text-foreground truncate flex-1">
-                  {dao.name}
-                </h3>
-                {selectedDaoId === dao.id && (
-                  <svg
-                    className="w-4 h-4 text-primary flex-shrink-0 ml-1"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <p className="text-xs text-muted-foreground">
-                  DAO #{dao.id}
-                </p>
-                <Badge variant={dao.role === 'admin' ? 'blue' : 'success'}>
-                  {dao.role}
-                </Badge>
-              </div>
-            </div>
-          </button>
+            role={dao.role}
+          />
         ))}
       </div>
     </div>

@@ -101,7 +101,7 @@ fn test_admin_can_revoke_member() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -145,7 +145,7 @@ fn test_admin_can_reinstate_member() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
 
     tree_client.init_tree(&dao_id, &18, &admin);
 
@@ -194,7 +194,7 @@ fn test_multiple_revoke_reinstate_cycles() {
     let sbt_client = SbtClient::new(&env, &sbt_id);
     let tree_client = TreeClient::new(&env, &tree_id);
 
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
 
     tree_client.init_tree(&dao_id, &18, &admin);
 
@@ -244,7 +244,7 @@ fn test_only_admin_can_remove_member() {
     let non_admin = Address::generate(&env);
     let member = Address::generate(&env);
 
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
 
     tree_client.init_tree(&dao_id, &18, &admin);
 
@@ -273,7 +273,7 @@ fn test_only_admin_can_reinstate_member() {
     let non_admin = Address::generate(&env);
     let member = Address::generate(&env);
 
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
 
     tree_client.init_tree(&dao_id, &18, &admin);
 
@@ -304,7 +304,7 @@ fn test_revoked_member_cannot_vote_mid_proposal() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO and init tree
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Revocation DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Revocation DAO"), &admin, &false, &true, &None);
     tree_client.init_tree(&dao_id, &18, &admin);
 
     // Member setup
@@ -361,7 +361,7 @@ fn test_revoked_then_reinstated_only_new_proposals_accept_vote() {
     let tree_client = TreeClient::new(&env, &tree_id);
     let voting_client = VotingClient::new(&env, &voting_id);
 
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Churn DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Churn DAO"), &admin, &false, &true, &None);
     tree_client.init_tree(&dao_id, &18, &admin);
 
     let member = Address::generate(&env);

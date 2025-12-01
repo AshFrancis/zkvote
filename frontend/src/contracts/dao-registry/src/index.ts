@@ -34,7 +34,7 @@ if (typeof window !== 'undefined') {
 export const networks = {
   futurenet: {
     networkPassphrase: "Test SDF Future Network ; October 2022",
-    contractId: "CCEOH2VJEWCELRK3XFCHHVVL4TFBAZYH6WY57VW4JHVL4BHZXWGLHSKM",
+    contractId: "CAKK4O5EQSVKUW2OW5XQYMAVS4TU7VGQJWWAK2ADV65OI2DIAV2JYBKP",
   }
 } as const
 
@@ -112,8 +112,9 @@ export interface Client {
    * Creator automatically becomes the admin.
    * Cannot create DAOs for other people - you can only create your own DAO.
    * - `members_can_propose`: if true, any member can create proposals; if false, only admin
+   * - `metadata_cid`: optional IPFS CID for extended metadata (description, images, links)
    */
-  create_dao: ({name, creator, membership_open, members_can_propose}: {name: string, creator: string, membership_open: boolean, members_can_propose: boolean}, options?: MethodOptions) => Promise<AssembledTransaction<u64>>
+  create_dao: ({name, creator, membership_open, members_can_propose, metadata_cid}: {name: string, creator: string, membership_open: boolean, members_can_propose: boolean, metadata_cid: Option<string>}, options?: MethodOptions) => Promise<AssembledTransaction<u64>>
 
   /**
    * Construct and simulate a dao_exists transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -164,6 +165,7 @@ export interface Client {
    * 3. membership_tree.init_tree (initializes Merkle tree)
    * 4. membership_tree.register_from_registry (registers creator's commitment)
    * 5. voting.set_vk (sets verification key)
+   * Note: metadata_cid must be set separately via set_metadata_cid (10-param limit)
    */
   create_and_init_dao: ({name, creator, membership_open, members_can_propose, sbt_contract, tree_contract, voting_contract, tree_depth, creator_commitment, vk}: {name: string, creator: string, membership_open: boolean, members_can_propose: boolean, sbt_contract: string, tree_contract: string, voting_contract: string, tree_depth: u32, creator_commitment: u256, vk: VerificationKey}, options?: MethodOptions) => Promise<AssembledTransaction<u64>>
 
@@ -191,7 +193,7 @@ export interface Client {
    * 3. membership_tree.init_tree (initializes Merkle tree)
    * 4. voting.set_vk (sets verification key)
    */
-  create_and_init_dao_no_reg: ({name, creator, membership_open, members_can_propose, sbt_contract, tree_contract, voting_contract, tree_depth, vk}: {name: string, creator: string, membership_open: boolean, members_can_propose: boolean, sbt_contract: string, tree_contract: string, voting_contract: string, tree_depth: u32, vk: VerificationKey}, options?: MethodOptions) => Promise<AssembledTransaction<u64>>
+  create_and_init_dao_no_reg: ({name, creator, membership_open, members_can_propose, metadata_cid, sbt_contract, tree_contract, voting_contract, tree_depth, vk}: {name: string, creator: string, membership_open: boolean, members_can_propose: boolean, metadata_cid: Option<string>, sbt_contract: string, tree_contract: string, voting_contract: string, tree_depth: u32, vk: VerificationKey}, options?: MethodOptions) => Promise<AssembledTransaction<u64>>
 
 }
 export class Client extends ContractClient {
@@ -218,7 +220,7 @@ export class Client extends ContractClient {
         "AAAABAAAAAAAAAAAAAAADVJlZ2lzdHJ5RXJyb3IAAAAAAAACAAAAAAAAAAtOYW1lVG9vTG9uZwAAAAABAAAAAAAAAAtEYW9Ob3RGb3VuZAAAAAAC",
         "AAAAAAAAACBHZXQgdG90YWwgbnVtYmVyIG9mIERBT3MgY3JlYXRlZAAAAAlkYW9fY291bnQAAAAAAAAAAAAAAQAAAAY=",
         "AAAAAAAAABJHZXQgYWRtaW4gb2YgYSBEQU8AAAAAAAlnZXRfYWRtaW4AAAAAAAABAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAEw==",
-        "AAAAAAAAAOtDcmVhdGUgYSBuZXcgREFPIChwZXJtaXNzaW9ubGVzcykuCkNyZWF0b3IgYXV0b21hdGljYWxseSBiZWNvbWVzIHRoZSBhZG1pbi4KQ2Fubm90IGNyZWF0ZSBEQU9zIGZvciBvdGhlciBwZW9wbGUgLSB5b3UgY2FuIG9ubHkgY3JlYXRlIHlvdXIgb3duIERBTy4KLSBgbWVtYmVyc19jYW5fcHJvcG9zZWA6IGlmIHRydWUsIGFueSBtZW1iZXIgY2FuIGNyZWF0ZSBwcm9wb3NhbHM7IGlmIGZhbHNlLCBvbmx5IGFkbWluAAAAAApjcmVhdGVfZGFvAAAAAAAEAAAAAAAAAARuYW1lAAAAEAAAAAAAAAAHY3JlYXRvcgAAAAATAAAAAAAAAA9tZW1iZXJzaGlwX29wZW4AAAAAAQAAAAAAAAATbWVtYmVyc19jYW5fcHJvcG9zZQAAAAABAAAAAQAAAAY=",
+        "AAAAAAAAAUJDcmVhdGUgYSBuZXcgREFPIChwZXJtaXNzaW9ubGVzcykuCkNyZWF0b3IgYXV0b21hdGljYWxseSBiZWNvbWVzIHRoZSBhZG1pbi4KQ2Fubm90IGNyZWF0ZSBEQU9zIGZvciBvdGhlciBwZW9wbGUgLSB5b3UgY2FuIG9ubHkgY3JlYXRlIHlvdXIgb3duIERBTy4KLSBgbWVtYmVyc19jYW5fcHJvcG9zZWA6IGlmIHRydWUsIGFueSBtZW1iZXIgY2FuIGNyZWF0ZSBwcm9wb3NhbHM7IGlmIGZhbHNlLCBvbmx5IGFkbWluCi0gYG1ldGFkYXRhX2NpZGA6IG9wdGlvbmFsIElQRlMgQ0lEIGZvciBleHRlbmRlZCBtZXRhZGF0YSAoZGVzY3JpcHRpb24sIGltYWdlcywgbGlua3MpAAAAAAAKY3JlYXRlX2RhbwAAAAAABQAAAAAAAAAEbmFtZQAAABAAAAAAAAAAB2NyZWF0b3IAAAAAEwAAAAAAAAAPbWVtYmVyc2hpcF9vcGVuAAAAAAEAAAAAAAAAE21lbWJlcnNfY2FuX3Byb3Bvc2UAAAAAAQAAAAAAAAAMbWV0YWRhdGFfY2lkAAAD6AAAABAAAAABAAAABg==",
         "AAAAAAAAABNDaGVjayBpZiBEQU8gZXhpc3RzAAAAAApkYW9fZXhpc3RzAAAAAAABAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAQ==",
         "AAAABQAAAAAAAAAAAAAADkFkbWluWGZlckV2ZW50AAAAAAABAAAAEGFkbWluX3hmZXJfZXZlbnQAAAADAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAAAAAAlvbGRfYWRtaW4AAAAAAAATAAAAAAAAAAAAAAAJbmV3X2FkbWluAAAAAAAAEwAAAAAAAAAC",
         "AAAABQAAAAAAAAAAAAAADkRhb0NyZWF0ZUV2ZW50AAAAAAABAAAAEGRhb19jcmVhdGVfZXZlbnQAAAADAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAAAAAAVhZG1pbgAAAAAAABMAAAAAAAAAAAAAAARuYW1lAAAAEAAAAAAAAAAC",
@@ -229,10 +231,10 @@ export class Client extends ContractClient {
         "AAAAAAAAAIBTZXQgREFPIG1ldGFkYXRhIENJRCAoYWRtaW4gb25seSkuClRoZSBDSUQgcG9pbnRzIHRvIElQRlMgSlNPTiB3aXRoIGRlc2NyaXB0aW9uLCBpbWFnZXMsIGFuZCBsaW5rcy4KUGFzcyBOb25lIHRvIGNsZWFyIG1ldGFkYXRhLgAAABBzZXRfbWV0YWRhdGFfY2lkAAAAAwAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAxtZXRhZGF0YV9jaWQAAAPoAAAAEAAAAAAAAAAFYWRtaW4AAAAAAAATAAAAAA==",
         "AAAAAAAAAJVTZXQgcHJvcG9zYWwgbW9kZSAoYWRtaW4gb25seSkuCklmIGBtZW1iZXJzX2Nhbl9wcm9wb3NlYCBpcyB0cnVlLCBhbnkgbWVtYmVyIGNhbiBjcmVhdGUgcHJvcG9zYWxzLgpJZiBmYWxzZSwgb25seSB0aGUgREFPIGFkbWluIGNhbiBjcmVhdGUgcHJvcG9zYWxzLgAAAAAAABFzZXRfcHJvcG9zYWxfbW9kZQAAAAAAAAMAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAATbWVtYmVyc19jYW5fcHJvcG9zZQAAAAABAAAAAAAAAAVhZG1pbgAAAAAAABMAAAAA",
         "AAAAAAAAACJDaGVjayBpZiBhIERBTyBoYXMgb3BlbiBtZW1iZXJzaGlwAAAAAAASaXNfbWVtYmVyc2hpcF9vcGVuAAAAAAABAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAQ==",
-        "AAAAAAAAAUZDcmVhdGUgYW5kIGZ1bGx5IGluaXRpYWxpemUgYSBEQU8gaW4gYSBzaW5nbGUgdHJhbnNhY3Rpb24uClRoaXMgY2FsbHM6CjEuIGNyZWF0ZV9kYW8gKGNyZWF0ZXMgcmVnaXN0cnkgZW50cnkpCjIuIG1lbWJlcnNoaXBfc2J0Lm1pbnQgKG1pbnRzIFNCVCB0byBjcmVhdG9yKQozLiBtZW1iZXJzaGlwX3RyZWUuaW5pdF90cmVlIChpbml0aWFsaXplcyBNZXJrbGUgdHJlZSkKNC4gbWVtYmVyc2hpcF90cmVlLnJlZ2lzdGVyX2Zyb21fcmVnaXN0cnkgKHJlZ2lzdGVycyBjcmVhdG9yJ3MgY29tbWl0bWVudCkKNS4gdm90aW5nLnNldF92ayAoc2V0cyB2ZXJpZmljYXRpb24ga2V5KQAAAAAAE2NyZWF0ZV9hbmRfaW5pdF9kYW8AAAAACgAAAAAAAAAEbmFtZQAAABAAAAAAAAAAB2NyZWF0b3IAAAAAEwAAAAAAAAAPbWVtYmVyc2hpcF9vcGVuAAAAAAEAAAAAAAAAE21lbWJlcnNfY2FuX3Byb3Bvc2UAAAAAAQAAAAAAAAAMc2J0X2NvbnRyYWN0AAAAEwAAAAAAAAANdHJlZV9jb250cmFjdAAAAAAAABMAAAAAAAAAD3ZvdGluZ19jb250cmFjdAAAAAATAAAAAAAAAAp0cmVlX2RlcHRoAAAAAAAEAAAAAAAAABJjcmVhdG9yX2NvbW1pdG1lbnQAAAAAAAwAAAAAAAAAAnZrAAAAAAfQAAAAD1ZlcmlmaWNhdGlvbktleQAAAAABAAAABg==",
+        "AAAAAAAAAZZDcmVhdGUgYW5kIGZ1bGx5IGluaXRpYWxpemUgYSBEQU8gaW4gYSBzaW5nbGUgdHJhbnNhY3Rpb24uClRoaXMgY2FsbHM6CjEuIGNyZWF0ZV9kYW8gKGNyZWF0ZXMgcmVnaXN0cnkgZW50cnkpCjIuIG1lbWJlcnNoaXBfc2J0Lm1pbnQgKG1pbnRzIFNCVCB0byBjcmVhdG9yKQozLiBtZW1iZXJzaGlwX3RyZWUuaW5pdF90cmVlIChpbml0aWFsaXplcyBNZXJrbGUgdHJlZSkKNC4gbWVtYmVyc2hpcF90cmVlLnJlZ2lzdGVyX2Zyb21fcmVnaXN0cnkgKHJlZ2lzdGVycyBjcmVhdG9yJ3MgY29tbWl0bWVudCkKNS4gdm90aW5nLnNldF92ayAoc2V0cyB2ZXJpZmljYXRpb24ga2V5KQpOb3RlOiBtZXRhZGF0YV9jaWQgbXVzdCBiZSBzZXQgc2VwYXJhdGVseSB2aWEgc2V0X21ldGFkYXRhX2NpZCAoMTAtcGFyYW0gbGltaXQpAAAAAAATY3JlYXRlX2FuZF9pbml0X2RhbwAAAAAKAAAAAAAAAARuYW1lAAAAEAAAAAAAAAAHY3JlYXRvcgAAAAATAAAAAAAAAA9tZW1iZXJzaGlwX29wZW4AAAAAAQAAAAAAAAATbWVtYmVyc19jYW5fcHJvcG9zZQAAAAABAAAAAAAAAAxzYnRfY29udHJhY3QAAAATAAAAAAAAAA10cmVlX2NvbnRyYWN0AAAAAAAAEwAAAAAAAAAPdm90aW5nX2NvbnRyYWN0AAAAABMAAAAAAAAACnRyZWVfZGVwdGgAAAAAAAQAAAAAAAAAEmNyZWF0b3JfY29tbWl0bWVudAAAAAAADAAAAAAAAAACdmsAAAAAB9AAAAAPVmVyaWZpY2F0aW9uS2V5AAAAAAEAAAAG",
         "AAAAAAAAADVDaGVjayBpZiBtZW1iZXJzIGNhbiBjcmVhdGUgcHJvcG9zYWxzICh2cyBhZG1pbi1vbmx5KQAAAAAAABNtZW1iZXJzX2Nhbl9wcm9wb3NlAAAAAAEAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAAB",
         "AAAAAAAAAJZTZXQgbWVtYmVyc2hpcCBvcGVuL2Nsb3NlZCAoYWRtaW4gb25seSkuCklmIGBtZW1iZXJzaGlwX29wZW5gIGlzIHRydWUsIHVzZXJzIGNhbiBqb2luIChtaW50IFNCVCkgdGhlbXNlbHZlcy4KSWYgZmFsc2UsIG9ubHkgdGhlIGFkbWluIGNhbiBhZGQgbWVtYmVycy4AAAAAABNzZXRfbWVtYmVyc2hpcF9vcGVuAAAAAAMAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAAPbWVtYmVyc2hpcF9vcGVuAAAAAAEAAAAAAAAABWFkbWluAAAAAAAAEwAAAAA=",
-        "AAAAAAAAAURDcmVhdGUgYW5kIGluaXRpYWxpemUgREFPIHdpdGhvdXQgcmVnaXN0ZXJpbmcgY3JlYXRvciBmb3Igdm90aW5nLgpDcmVhdG9yIG11c3QgcmVnaXN0ZXIgc2VwYXJhdGVseSB1c2luZyBkZXRlcm1pbmlzdGljIGNyZWRlbnRpYWxzLgpUaGlzIGNhbGxzOgoxLiBjcmVhdGVfZGFvIChjcmVhdGVzIHJlZ2lzdHJ5IGVudHJ5KQoyLiBtZW1iZXJzaGlwX3NidC5taW50IChtaW50cyBTQlQgdG8gY3JlYXRvcikKMy4gbWVtYmVyc2hpcF90cmVlLmluaXRfdHJlZSAoaW5pdGlhbGl6ZXMgTWVya2xlIHRyZWUpCjQuIHZvdGluZy5zZXRfdmsgKHNldHMgdmVyaWZpY2F0aW9uIGtleSkAAAAaY3JlYXRlX2FuZF9pbml0X2Rhb19ub19yZWcAAAAAAAkAAAAAAAAABG5hbWUAAAAQAAAAAAAAAAdjcmVhdG9yAAAAABMAAAAAAAAAD21lbWJlcnNoaXBfb3BlbgAAAAABAAAAAAAAABNtZW1iZXJzX2Nhbl9wcm9wb3NlAAAAAAEAAAAAAAAADHNidF9jb250cmFjdAAAABMAAAAAAAAADXRyZWVfY29udHJhY3QAAAAAAAATAAAAAAAAAA92b3RpbmdfY29udHJhY3QAAAAAEwAAAAAAAAAKdHJlZV9kZXB0aAAAAAAABAAAAAAAAAACdmsAAAAAB9AAAAAPVmVyaWZpY2F0aW9uS2V5AAAAAAEAAAAG" ]),
+        "AAAAAAAAAURDcmVhdGUgYW5kIGluaXRpYWxpemUgREFPIHdpdGhvdXQgcmVnaXN0ZXJpbmcgY3JlYXRvciBmb3Igdm90aW5nLgpDcmVhdG9yIG11c3QgcmVnaXN0ZXIgc2VwYXJhdGVseSB1c2luZyBkZXRlcm1pbmlzdGljIGNyZWRlbnRpYWxzLgpUaGlzIGNhbGxzOgoxLiBjcmVhdGVfZGFvIChjcmVhdGVzIHJlZ2lzdHJ5IGVudHJ5KQoyLiBtZW1iZXJzaGlwX3NidC5taW50IChtaW50cyBTQlQgdG8gY3JlYXRvcikKMy4gbWVtYmVyc2hpcF90cmVlLmluaXRfdHJlZSAoaW5pdGlhbGl6ZXMgTWVya2xlIHRyZWUpCjQuIHZvdGluZy5zZXRfdmsgKHNldHMgdmVyaWZpY2F0aW9uIGtleSkAAAAaY3JlYXRlX2FuZF9pbml0X2Rhb19ub19yZWcAAAAAAAoAAAAAAAAABG5hbWUAAAAQAAAAAAAAAAdjcmVhdG9yAAAAABMAAAAAAAAAD21lbWJlcnNoaXBfb3BlbgAAAAABAAAAAAAAABNtZW1iZXJzX2Nhbl9wcm9wb3NlAAAAAAEAAAAAAAAADG1ldGFkYXRhX2NpZAAAA+gAAAAQAAAAAAAAAAxzYnRfY29udHJhY3QAAAATAAAAAAAAAA10cmVlX2NvbnRyYWN0AAAAAAAAEwAAAAAAAAAPdm90aW5nX2NvbnRyYWN0AAAAABMAAAAAAAAACnRyZWVfZGVwdGgAAAAAAAQAAAAAAAAAAnZrAAAAAAfQAAAAD1ZlcmlmaWNhdGlvbktleQAAAAABAAAABg==" ]),
       options
     )
   }

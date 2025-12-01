@@ -79,18 +79,27 @@ impl DaoRegistry {
     /// Creator automatically becomes the admin.
     /// Cannot create DAOs for other people - you can only create your own DAO.
     /// - `members_can_propose`: if true, any member can create proposals; if false, only admin
+    /// - `metadata_cid`: optional IPFS CID for extended metadata (description, images, links)
     pub fn create_dao(
         env: Env,
         name: String,
         creator: Address,
         membership_open: bool,
         members_can_propose: bool,
+        metadata_cid: Option<String>,
     ) -> u64 {
         creator.require_auth();
 
         // Validate name length to prevent DoS
         if name.len() > MAX_DAO_NAME_LEN {
             panic_with_error!(&env, RegistryError::NameTooLong);
+        }
+
+        // Validate metadata CID length if provided
+        if let Some(ref cid) = metadata_cid {
+            if cid.len() > MAX_METADATA_CID_LEN {
+                panic!("Metadata CID too long");
+            }
         }
 
         let dao_id = Self::next_dao_id(&env);
@@ -103,7 +112,7 @@ impl DaoRegistry {
             created_at: env.ledger().timestamp(),
             membership_open,
             members_can_propose,
-            metadata_cid: None,
+            metadata_cid,
         };
 
         let key = Self::dao_key(dao_id);
@@ -293,6 +302,7 @@ impl DaoRegistry {
         creator: Address,
         membership_open: bool,
         members_can_propose: bool,
+        metadata_cid: Option<String>,
         sbt_contract: Address,
         tree_contract: Address,
         voting_contract: Address,
@@ -306,6 +316,13 @@ impl DaoRegistry {
             panic_with_error!(&env, RegistryError::NameTooLong);
         }
 
+        // Validate metadata CID length if provided
+        if let Some(ref cid) = metadata_cid {
+            if cid.len() > MAX_METADATA_CID_LEN {
+                panic!("Metadata CID too long");
+            }
+        }
+
         // Step 1: Create DAO registry entry
         let dao_id = Self::next_dao_id(&env);
         let info = DaoInfo {
@@ -315,7 +332,7 @@ impl DaoRegistry {
             created_at: env.ledger().timestamp(),
             membership_open,
             members_can_propose,
-            metadata_cid: None,
+            metadata_cid,
         };
 
         let key = Self::dao_key(dao_id);
@@ -365,6 +382,7 @@ impl DaoRegistry {
     /// 3. membership_tree.init_tree (initializes Merkle tree)
     /// 4. membership_tree.register_from_registry (registers creator's commitment)
     /// 5. voting.set_vk (sets verification key)
+    /// Note: metadata_cid must be set separately via set_metadata_cid (10-param limit)
     pub fn create_and_init_dao(
         env: Env,
         name: String,

@@ -7,7 +7,8 @@ import ProposalList from "./ProposalList";
 import ManageMembers from "./ManageMembers";
 import DAOInfoPanel from "./DAOInfoPanel";
 import { getZKCredentials, storeZKCredentials, generateDeterministicZKCredentials } from "../lib/zk";
-import { isUserRejection } from "../lib/utils";
+import { isUserRejection, extractTxHash } from "../lib/utils";
+import { notifyEvent } from "../lib/api";
 import { Alert, LoadingSpinner, CreateProposalForm } from "./ui";
 import { Button } from "./ui/Button";
 import { FileText, Users, PlusCircle, Home } from "lucide-react";
@@ -254,7 +255,14 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
         encrypted_alias: undefined,
       });
 
-      await joinTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+      const result = await joinTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+
+      // Notify relayer of member joined event
+      const txHash = extractTxHash(result);
+      if (txHash) {
+        notifyEvent(dao.id, "member_added", txHash, { member: publicKey });
+      }
+
       await loadPublicDAO();
     } catch (err: any) {
       if (isUserRejection(err)) {
@@ -311,10 +319,12 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
       };
 
       let alreadyRegistered = false;
+      let registerTxHash: string | null = null;
       try {
         console.log("[Registration] Calling signAndSend...");
         const result = await registerTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
         console.log("[Registration] Step 2 complete - Transaction signed and sent:", result);
+        registerTxHash = extractTxHash(result);
       } catch (err: any) {
         // Check if this is a CommitmentExists error - means we're already registered
         if (isCommitmentExistsError(err)) {
@@ -335,6 +345,11 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
 
       const leafIndex = Number(leafIndexResult.result);
       storeZKCredentials(dao.id, publicKey, { secret, salt, commitment }, leafIndex);
+
+      // Notify relayer of voter registered event (only if we actually registered, not recovered)
+      if (registerTxHash && !alreadyRegistered) {
+        notifyEvent(dao.id, "voter_registered", registerTxHash, { commitment, leafIndex });
+      }
 
       console.log(alreadyRegistered ? "[Registration] Credentials recovered! Leaf index:" : "[Registration] Registration successful! Leaf index:", leafIndex);
       await loadPublicDAO();
@@ -384,7 +399,13 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
         vote_mode: { tag: data.voteMode === "fixed" ? "Fixed" : "Trailing", values: undefined },
       });
 
-      await createProposalTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+      const result = await createProposalTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+
+      // Notify relayer of proposal created event
+      const txHash = extractTxHash(result);
+      if (txHash) {
+        notifyEvent(dao.id, "proposal_created", txHash, { title: data.title, contentCid: data.contentCid });
+      }
 
       navigate('/public-votes/');
       setProposalKey(prev => prev + 1);

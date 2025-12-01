@@ -204,7 +204,7 @@ export function Homepage() {
                 Multi-contract design for modularity
               </h2>
               <p className="text-muted-foreground leading-relaxed">
-                Four specialized Soroban contracts work together: DAORegistry for organization management, MembershipSBT for soulbound tokens, MembershipTree for Poseidon Merkle proofs, and Voting for Groth16 verification.
+                Five specialized Soroban contracts work together: DAORegistry for organization management, MembershipSBT for soulbound tokens, MembershipTree for Poseidon Merkle proofs, Voting for Groth16 verification, and Comments for proposal discussions.
               </p>
               <div className="pt-4">
                 <Button variant="outline" onClick={() => navigate('/daos/')}>
@@ -251,6 +251,16 @@ export function Homepage() {
                   <div className="flex-1 h-12 rounded-lg border border-border/50 bg-background/50 flex items-center px-4">
                     <span className="text-sm font-mono">Voting</span>
                     <span className="ml-auto text-xs text-muted-foreground">vote(proof)</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 pl-6">
+                  <div className="w-px h-8 bg-border"></div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                  <div className="flex-1 h-12 rounded-lg border border-border/50 bg-background/50 flex items-center px-4">
+                    <span className="text-sm font-mono">Comments</span>
+                    <span className="ml-auto text-xs text-muted-foreground">add_comment()</span>
                   </div>
                 </div>
               </div>

@@ -104,7 +104,7 @@ fn test_vote_with_wrong_root_fails() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
 
     tree_client.init_tree(&dao_id, &18, &admin);
 
@@ -248,7 +248,7 @@ fn test_vote_with_correct_root_succeeds() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false);
+    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
 
     tree_client.init_tree(&dao_id, &18, &admin);
 

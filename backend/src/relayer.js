@@ -13,6 +13,7 @@ import {
   getIndexedDaos,
   getIndexerStatus,
   addManualEvent,
+  notifyEvent,
 } from './indexer.js';
 import {
   initPinata,
@@ -675,6 +676,29 @@ app.post('/events', authGuard, (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to add event' });
+  }
+});
+
+// Frontend notification endpoint - notifies relayer of an event with txHash
+// The event is stored as pending and verified against the chain
+app.post('/events/notify', queryLimiter, (req, res) => {
+  const { daoId, type, data, txHash } = req.body;
+
+  if (!daoId || !type || !txHash) {
+    return res.status(400).json({ error: 'daoId, type, and txHash are required' });
+  }
+
+  // Validate txHash format (64 hex chars)
+  if (!/^[0-9a-fA-F]{64}$/.test(txHash)) {
+    return res.status(400).json({ error: 'Invalid txHash format' });
+  }
+
+  try {
+    notifyEvent(Number(daoId), type, data || {}, txHash);
+    res.json({ success: true, message: 'Event queued for verification' });
+  } catch (err) {
+    log('error', 'notify_event_failed', { daoId, type, error: err.message });
+    res.status(500).json({ error: 'Failed to notify event' });
   }
 });
 
@@ -1574,6 +1598,7 @@ if (process.env.RELAYER_TEST_MODE !== 'true') {
     console.log('  GET  /proposal/:dao/:prop - Get vote results');
     console.log('  GET  /root/:dao           - Get current Merkle root');
     console.log('  GET  /events/:daoId       - Get events for a DAO');
+    console.log('  POST /events/notify       - Notify relayer of event (with txHash)');
     console.log('  GET  /indexer/status      - Get indexer status');
     console.log('\nComment Endpoints:');
     console.log('  POST /comment/anonymous   - Submit anonymous comment (ZK)');

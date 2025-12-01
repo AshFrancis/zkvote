@@ -66,7 +66,7 @@ fn stress_many_members_and_proposals() {
     let voting = VotingClient::new(&env, &voting_id);
 
     let admin = Address::generate(&env);
-    let dao_id = registry.create_dao(&String::from_str(&env, "Stress DAO"), &admin, &false);
+    let dao_id = registry.create_dao(&String::from_str(&env, "Stress DAO"), &admin, &false, &true, &None);
     // Use depth 18 to stay within tested bounds
     tree.init_tree(&dao_id, &18, &admin);
     sbt.mint(&dao_id, &admin, &admin, &None);

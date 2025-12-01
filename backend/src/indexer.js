@@ -1,14 +1,14 @@
 /**
  * Event Indexer for DaoVote
  *
- * Polls Soroban RPC for contract events and stores them in memory.
- * Events are indexed by DAO ID for efficient querying.
+ * Stores events in SQLite for persistence.
+ * Supports frontend notifications with on-chain verification.
  */
 
 import * as StellarSdk from '@stellar/stellar-sdk';
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import * as db from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,15 +35,9 @@ const EVENT_TYPES = {
   VoteEvent: 'vote_cast',
 };
 
-// In-memory event store indexed by DAO ID
-// Structure: { [daoId]: Event[] }
-let eventStore = {};
-let lastLedger = 0;
 let isPolling = false;
-
-// Persistence file path
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const EVENTS_FILE = path.join(DATA_DIR, 'events.json');
+let rpcServer = null;
+let contractIds = [];
 
 // Logger
 const log = (level, event, meta = {}) => {
@@ -51,62 +45,21 @@ const log = (level, event, meta = {}) => {
 };
 
 /**
- * Load events from disk on startup
- */
-export function loadEvents() {
-  try {
-    if (fs.existsSync(EVENTS_FILE)) {
-      const data = JSON.parse(fs.readFileSync(EVENTS_FILE, 'utf-8'));
-      eventStore = data.events || {};
-      lastLedger = data.lastLedger || 0;
-      log('info', 'events_loaded', {
-        daoCount: Object.keys(eventStore).length,
-        lastLedger
-      });
-    }
-  } catch (err) {
-    log('warn', 'events_load_failed', { error: err.message });
-  }
-}
-
-/**
- * Save events to disk
- */
-function saveEvents() {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-    fs.writeFileSync(EVENTS_FILE, JSON.stringify({
-      events: eventStore,
-      lastLedger,
-      savedAt: new Date().toISOString()
-    }, null, 2));
-  } catch (err) {
-    log('warn', 'events_save_failed', { error: err.message });
-  }
-}
-
-/**
  * Parse contract event data
  */
 function parseEventData(event) {
   try {
-    // Event topic contains event type
     const topics = event.topic || [];
     const data = event.value;
 
-    // Try to identify event type from topic
     let eventType = 'unknown';
     let daoId = null;
     let parsed = {};
 
-    // Topics are usually: [event_name, ...indexed_fields]
     if (topics.length > 0) {
       const eventName = StellarSdk.scValToNative(topics[0]);
       eventType = EVENT_TYPES[eventName] || eventName;
 
-      // Extract DAO ID from first indexed field if present
       if (topics.length > 1) {
         try {
           daoId = Number(StellarSdk.scValToNative(topics[1]));
@@ -116,7 +69,6 @@ function parseEventData(event) {
       }
     }
 
-    // Parse event data
     if (data) {
       try {
         parsed = StellarSdk.scValToNative(data);
@@ -131,7 +83,7 @@ function parseEventData(event) {
       data: parsed,
       ledger: event.ledger,
       txHash: event.txHash,
-      timestamp: event.timestamp || null,
+      timestamp: new Date().toISOString(),
     };
   } catch (err) {
     log('warn', 'event_parse_failed', { error: err.message });
@@ -140,40 +92,10 @@ function parseEventData(event) {
 }
 
 /**
- * Add event to store
- */
-function addEvent(event) {
-  if (!event || event.daoId === null) return;
-
-  const daoId = String(event.daoId);
-  if (!eventStore[daoId]) {
-    eventStore[daoId] = [];
-  }
-
-  // Check for duplicates (by ledger + txHash + type)
-  const isDuplicate = eventStore[daoId].some(e =>
-    e.ledger === event.ledger &&
-    e.txHash === event.txHash &&
-    e.type === event.type
-  );
-
-  if (!isDuplicate) {
-    eventStore[daoId].push(event);
-    // Keep events sorted by ledger (newest first)
-    eventStore[daoId].sort((a, b) => b.ledger - a.ledger);
-    // Limit to 1000 events per DAO
-    if (eventStore[daoId].length > 1000) {
-      eventStore[daoId] = eventStore[daoId].slice(0, 1000);
-    }
-  }
-}
-
-/**
  * Poll for new events from Soroban RPC
  */
-async function pollEvents(server, contractIds, startLedger) {
+async function pollEvents(server, contracts, startLedger) {
   try {
-    // Get latest ledger
     const latestLedger = await server.getLatestLedger();
     const currentLedger = latestLedger.sequence;
 
@@ -181,8 +103,7 @@ async function pollEvents(server, contractIds, startLedger) {
       return startLedger;
     }
 
-    // Query events for each contract
-    for (const contractId of contractIds) {
+    for (const contractId of contracts) {
       try {
         const events = await server.getEvents({
           startLedger: startLedger + 1,
@@ -194,20 +115,26 @@ async function pollEvents(server, contractIds, startLedger) {
         });
 
         if (events.events && events.events.length > 0) {
+          let addedCount = 0;
           for (const event of events.events) {
             const parsed = parseEventData(event);
-            if (parsed) {
-              addEvent(parsed);
+            if (parsed && parsed.daoId !== null) {
+              const added = db.addEvent({
+                ...parsed,
+                verified: true, // Events from RPC are verified
+              });
+              if (added) addedCount++;
             }
           }
-          log('info', 'events_indexed', {
-            contract: contractId.slice(0, 8) + '...',
-            count: events.events.length,
-            latestLedger: currentLedger
-          });
+          if (addedCount > 0) {
+            log('info', 'events_indexed', {
+              contract: contractId.slice(0, 8) + '...',
+              count: addedCount,
+              latestLedger: currentLedger
+            });
+          }
         }
       } catch (err) {
-        // getEvents may fail if contract doesn't exist yet or no events
         if (!err.message.includes('not found')) {
           log('warn', 'poll_contract_failed', {
             contract: contractId.slice(0, 8) + '...',
@@ -225,37 +152,88 @@ async function pollEvents(server, contractIds, startLedger) {
 }
 
 /**
+ * Verify a pending event against the chain
+ * Returns true if verified, false if should be deleted
+ */
+async function verifyEventOnChain(event) {
+  if (!rpcServer || !event.tx_hash) return false;
+
+  try {
+    // Try to get the transaction
+    const txResult = await rpcServer.getTransaction(event.tx_hash);
+
+    if (txResult.status === 'SUCCESS') {
+      // Transaction confirmed - mark as verified
+      db.verifyEvent(event.tx_hash, txResult.ledger);
+      log('info', 'event_verified', { txHash: event.tx_hash, ledger: txResult.ledger });
+      return true;
+    } else if (txResult.status === 'FAILED') {
+      // Transaction failed - delete the event
+      db.deleteUnverifiedEvent(event.tx_hash);
+      log('warn', 'event_verification_failed', { txHash: event.tx_hash, status: txResult.status });
+      return false;
+    }
+    // NOT_FOUND - keep pending for now
+    return false;
+  } catch (err) {
+    log('warn', 'event_verify_error', { txHash: event.tx_hash, error: err.message });
+    return false;
+  }
+}
+
+/**
+ * Background job to verify pending events
+ */
+async function verifyPendingEvents() {
+  const unverified = db.getUnverifiedEvents(10);
+  for (const event of unverified) {
+    await verifyEventOnChain(event);
+  }
+}
+
+/**
  * Start the event indexer
  */
-export async function startIndexer(server, contractIds, pollIntervalMs = 5000) {
+export async function startIndexer(server, contracts, pollIntervalMs = 5000) {
   if (isPolling) {
     log('warn', 'indexer_already_running');
     return;
   }
 
   isPolling = true;
-  loadEvents();
+  rpcServer = server;
+  contractIds = contracts;
+
+  // Initialize database and migrate from JSON if exists
+  db.initDb();
+  const jsonPath = path.join(__dirname, '..', 'data', 'events.json');
+  db.migrateFromJson(jsonPath);
+
+  let lastLedger = db.getMetadata('lastLedger') || 0;
 
   log('info', 'indexer_started', {
-    contracts: contractIds.length,
+    contracts: contracts.length,
     pollInterval: pollIntervalMs,
     startLedger: lastLedger
   });
 
   // Initial poll
-  lastLedger = await pollEvents(server, contractIds, lastLedger);
-  saveEvents();
+  lastLedger = await pollEvents(server, contracts, lastLedger);
+  db.setMetadata('lastLedger', lastLedger);
 
   // Periodic polling
   const poll = async () => {
     if (!isPolling) return;
 
     try {
-      const newLedger = await pollEvents(server, contractIds, lastLedger);
+      const newLedger = await pollEvents(server, contracts, lastLedger);
       if (newLedger > lastLedger) {
         lastLedger = newLedger;
-        saveEvents();
+        db.setMetadata('lastLedger', lastLedger);
       }
+
+      // Also verify any pending events
+      await verifyPendingEvents();
     } catch (err) {
       log('error', 'poll_failed', { error: err.message });
     }
@@ -271,7 +249,7 @@ export async function startIndexer(server, contractIds, pollIntervalMs = 5000) {
  */
 export function stopIndexer() {
   isPolling = false;
-  saveEvents();
+  db.closeDb();
   log('info', 'indexer_stopped');
 }
 
@@ -279,54 +257,59 @@ export function stopIndexer() {
  * Get events for a specific DAO
  */
 export function getEventsForDao(daoId, options = {}) {
-  const { limit = 50, offset = 0, types = null } = options;
-  const daoEvents = eventStore[String(daoId)] || [];
-
-  let filtered = daoEvents;
-  if (types && Array.isArray(types)) {
-    filtered = daoEvents.filter(e => types.includes(e.type));
-  }
-
-  return {
-    events: filtered.slice(offset, offset + limit),
-    total: filtered.length,
-    daoId,
-  };
+  db.initDb(); // Ensure DB is initialized
+  return db.getEventsForDao(daoId, options);
 }
 
 /**
  * Get all indexed DAOs
  */
 export function getIndexedDaos() {
-  return Object.keys(eventStore).map(id => ({
-    daoId: Number(id),
-    eventCount: eventStore[id].length,
-  }));
+  db.initDb();
+  return db.getIndexedDaos();
 }
 
 /**
  * Get indexer status
  */
 export function getIndexerStatus() {
+  db.initDb();
+  const status = db.getDbStatus();
   return {
     isRunning: isPolling,
-    lastLedger,
-    daoCount: Object.keys(eventStore).length,
-    totalEvents: Object.values(eventStore).reduce((sum, events) => sum + events.length, 0),
+    ...status,
   };
 }
 
 /**
- * Manually add an event (useful for testing or manual indexing)
+ * Manually add an event (useful for testing)
  */
 export function addManualEvent(daoId, type, data, ledger = 0) {
-  addEvent({
-    type,
+  db.initDb();
+  db.addEvent({
     daoId: Number(daoId),
+    type,
     data,
     ledger,
     txHash: 'manual-' + Date.now(),
     timestamp: new Date().toISOString(),
+    verified: true,
   });
-  saveEvents();
+}
+
+/**
+ * Notify the indexer of an event from the frontend
+ * The event is stored as pending and verified against the chain
+ */
+export function notifyEvent(daoId, type, data, txHash) {
+  db.initDb();
+  db.addPendingEvent(daoId, type, data, txHash);
+  log('info', 'event_notified', { daoId, type, txHash });
+}
+
+/**
+ * Get the RPC server instance (for on-chain verification)
+ */
+export function getRpcServer() {
+  return rpcServer;
 }

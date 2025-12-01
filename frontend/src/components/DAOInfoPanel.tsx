@@ -3,8 +3,9 @@ import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 import { initializeContractClients } from "../lib/contracts";
 import { getReadOnlyDaoRegistry, getReadOnlyMembershipSbt, getReadOnlyMembershipTree, getReadOnlyVoting } from "../lib/readOnlyContracts";
 import { LoadingSpinner, Badge, Button } from "./ui";
-import { CheckCircle, Copy, Check, Users, UserPlus, UserMinus, Vote, FileText, Shield, Key, Loader2 } from "lucide-react";
+import { CheckCircle, Copy, Check, Users, UserPlus, UserMinus, Vote, FileText, Shield, Key, Loader2, Edit } from "lucide-react";
 import defaultVK from "../lib/verification_key_soroban.json";
+import ProfileChangesModal from "./ProfileChangesModal";
 
 // Relayer URL for fetching events
 const RELAYER_URL = import.meta.env.VITE_RELAYER_URL || 'http://localhost:3001';
@@ -58,6 +59,7 @@ const EVENT_DISPLAY: Record<string, { label: string; icon: React.ElementType; co
   proposal_closed: { label: 'Proposal Closed', icon: FileText, color: 'text-gray-500' },
   proposal_archived: { label: 'Proposal Archived', icon: FileText, color: 'text-gray-400' },
   vote_cast: { label: 'Vote Cast', icon: Vote, color: 'text-green-500' },
+  profile_updated: { label: 'Profile Updated', icon: Edit, color: 'text-indigo-500' },
 };
 
 // Compare VK with default ZKVote VK
@@ -129,6 +131,7 @@ export default function DAOInfoPanel({ daoId, publicKey, kit }: DAOInfoPanelProp
   const [events, setEvents] = useState<DAOEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [eventsError, setEventsError] = useState<string | null>(null);
+  const [selectedProfileEvent, setSelectedProfileEvent] = useState<DAOEvent | null>(null);
 
   useEffect(() => {
     loadDAODetails();
@@ -464,6 +467,8 @@ export default function DAOInfoPanel({ daoId, publicKey, kit }: DAOInfoPanelProp
               };
               const Icon = display.icon;
 
+              const hasChanges = event.type === 'profile_updated' && event.data?.changes && Object.keys(event.data.changes).length > 0;
+
               return (
                 <div
                   key={`${event.txHash}-${index}`}
@@ -474,10 +479,18 @@ export default function DAOInfoPanel({ daoId, publicKey, kit }: DAOInfoPanelProp
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{display.label}</p>
-                    {event.data && Object.keys(event.data).length > 0 && (
+                    {event.data && Object.keys(event.data).length > 0 && !hasChanges && (
                       <p className="text-xs text-muted-foreground truncate">
                         {formatEventData(event.data)}
                       </p>
+                    )}
+                    {hasChanges && (
+                      <button
+                        onClick={() => setSelectedProfileEvent(event)}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        View {Object.keys(event.data.changes).length} change{Object.keys(event.data.changes).length !== 1 ? 's' : ''}
+                      </button>
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground text-right">
@@ -494,6 +507,15 @@ export default function DAOInfoPanel({ daoId, publicKey, kit }: DAOInfoPanelProp
           </div>
         )}
       </div>
+
+      {/* Profile Changes Modal */}
+      {selectedProfileEvent && selectedProfileEvent.data?.changes && (
+        <ProfileChangesModal
+          changes={selectedProfileEvent.data.changes}
+          timestamp={selectedProfileEvent.timestamp}
+          onClose={() => setSelectedProfileEvent(null)}
+        />
+      )}
     </div>
   );
 }

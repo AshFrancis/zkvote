@@ -153,3 +153,49 @@ export function forceReconnect(): void {
 
 // Export the base URL for direct use if needed
 export { RELAYER_URL };
+
+// Event types for notification
+export type EventType =
+  | "proposal_created"
+  | "vote_cast"
+  | "member_added"
+  | "member_revoked"
+  | "member_left"
+  | "voter_registered"
+  | "voter_removed"
+  | "vk_updated"
+  | "tree_init"
+  | "dao_create"
+  | "admin_transfer"
+  | "membership_mode_changed"
+  | "proposal_mode_changed"
+  | "profile_updated";
+
+/**
+ * Notify the relayer of an event from the frontend.
+ * The relayer will verify the event on-chain before trusting it.
+ * This is fire-and-forget - we don't wait for verification.
+ */
+export async function notifyEvent(
+  daoId: number,
+  type: EventType,
+  txHash: string,
+  data?: Record<string, unknown>
+): Promise<void> {
+  try {
+    await relayerFetch("/events/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        daoId,
+        type,
+        txHash,
+        data: data || {},
+      }),
+      maxRetries: 1, // Don't retry aggressively - it's just a notification
+    });
+  } catch (error) {
+    // Log but don't throw - this is best-effort
+    console.warn("Failed to notify relayer of event:", error);
+  }
+}
