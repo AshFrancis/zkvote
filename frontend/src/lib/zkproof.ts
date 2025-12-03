@@ -11,7 +11,7 @@ export interface VoteProofInput {
   daoId: string;
   proposalId: string;
   voteChoice: string; // "0" for no, "1" for yes
-  commitment: string; // Identity commitment for revocation checks
+  commitment: string; // Identity commitment - private input, computed internally in circuit
   pathElements: string[];
   pathIndices: number[];
 }
@@ -24,7 +24,7 @@ export interface CommentProofInput {
   daoId: string;
   proposalId: string;
   commentNonce: string; // Nonce for multiple comments (0, 1, 2, ...)
-  commitment: string; // Identity commitment for revocation checks
+  commitment: string; // Identity commitment - private input (still public for comments)
   pathElements: string[];
   pathIndices: number[];
 }
@@ -51,6 +51,8 @@ export async function generateVoteProof(
 ): Promise<GeneratedProof> {
   try {
     // Format input for circuit - matches vote.circom signal names
+    // Public signals: [root, nullifier, daoId, proposalId, voteChoice]
+    // Note: commitment is a PRIVATE input (computed in circuit) for improved vote unlinkability
     const circuitInput = {
       // Public signals (verified on-chain)
       root: input.root,
@@ -58,8 +60,8 @@ export async function generateVoteProof(
       daoId: input.daoId,
       proposalId: input.proposalId,
       voteChoice: input.voteChoice,
-      commitment: input.commitment,
       // Private signals (hidden in ZK proof)
+      commitment: input.commitment, // Now private for improved privacy
       secret: input.secret,
       salt: input.salt,
       pathElements: input.pathElements,

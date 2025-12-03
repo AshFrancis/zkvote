@@ -4,6 +4,7 @@ import Alert from "./ui/Alert";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "./ui/Card";
 import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 import { initializeContractClients } from "../lib/contracts";
+import { relayerFetch } from "../lib/api";
 import {
   generateVoteProof,
   formatProofForSoroban,
@@ -145,7 +146,7 @@ export default function VoteModal({
         daoId: daoId.toString(),
         proposalId: proposalId.toString(),
         voteChoice: choice ? "1" : "0",
-        commitment: commitment.toString(), // NEW: allows revocation checks
+        commitment: commitment.toString(), // Private input - computed in circuit, not exposed publicly
         // Note: vkVersion is NOT a circuit signal - it's checked on-chain only
         // Private signals
         secret: secret.toString(),
@@ -201,7 +202,8 @@ export default function VoteModal({
       };
 
       // Submit to relay server (provides anonymity by hiding voter's public key)
-      const response = await fetch("http://localhost:3001/vote", {
+      // Note: commitment is NOT sent - it's now a private circuit input for improved privacy
+      const response = await relayerFetch("/vote", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -212,7 +214,6 @@ export default function VoteModal({
           choice: choice,
           nullifier: toHexBE(nullifier),
           root: toHexBE(root),
-          commitment: toHexBE(commitment), // NEW: for revocation checks
           proof: {
             a: proof_a,
             b: proof_b,

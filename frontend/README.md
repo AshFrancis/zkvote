@@ -1,4 +1,4 @@
-# DaoVote Frontend
+# ZKVote Frontend
 
 React + TypeScript + Vite app (logic-only guardrails; no UX changes here).
 

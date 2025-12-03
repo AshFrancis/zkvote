@@ -35,7 +35,7 @@ export interface AnonymousCommentRecord {
   nullifier: string;
 }
 
-const ANON_COMMENTS_KEY = "daovote_anonymous_comments";
+const ANON_COMMENTS_KEY = "zkvote_anonymous_comments";
 
 export function saveAnonymousComment(record: AnonymousCommentRecord): void {
   const existing = getAnonymousCommentsAll();

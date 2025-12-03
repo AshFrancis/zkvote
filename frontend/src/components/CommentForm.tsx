@@ -22,8 +22,7 @@ import {
 } from "../lib/zkproof";
 import { getMerklePath } from "../lib/merkletree";
 import { initializeContractClients } from "../lib/contracts";
-
-const RELAYER_URL = import.meta.env.VITE_RELAYER_URL || "http://localhost:3001";
+import { relayerFetch } from "../lib/api";
 
 interface CommentFormProps {
   daoId: number;
@@ -169,9 +168,11 @@ export default function CommentForm({
 
         // Submit anonymous comment via relayer
         setProgress("Submitting comment...");
-        const response = await fetch(`${RELAYER_URL}/comment/anonymous`, {
+        const response = await relayerFetch("/comment/anonymous", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({
             daoId,
             proposalId,

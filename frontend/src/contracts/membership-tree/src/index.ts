@@ -34,11 +34,11 @@ if (typeof window !== 'undefined') {
 export const networks = {
   futurenet: {
     networkPassphrase: "Test SDF Future Network ; October 2022",
-    contractId: "CC5E2WNM5GIY34JVW667Y7QHPN4B6SWD2ZMMWHQOFOFRHSHDMD6NMW6H",
+    contractId: "CDDOVPNV7YXSC3AU6KJ5WTSZABGJHKO2PJGN27VOL5TFYPMJGZVEYEWP",
   }
 } as const
 
-export type DataKey = {tag: "TreeDepth", values: readonly [u64]} | {tag: "NextLeafIndex", values: readonly [u64]} | {tag: "FilledSubtrees", values: readonly [u64]} | {tag: "Roots", values: readonly [u64]} | {tag: "LeafIndex", values: readonly [u64, u256]} | {tag: "MemberLeafIndex", values: readonly [u64, string]} | {tag: "LeafValue", values: readonly [u64, u32]} | {tag: "NextRootIndex", values: readonly [u64]} | {tag: "RootIndex", values: readonly [u64, u256]} | {tag: "RevokedAt", values: readonly [u64, u256]} | {tag: "ReinstatedAt", values: readonly [u64, u256]};
+export type DataKey = {tag: "TreeDepth", values: readonly [u64]} | {tag: "NextLeafIndex", values: readonly [u64]} | {tag: "FilledSubtrees", values: readonly [u64]} | {tag: "Roots", values: readonly [u64]} | {tag: "LeafIndex", values: readonly [u64, u256]} | {tag: "MemberLeafIndex", values: readonly [u64, string]} | {tag: "LeafValue", values: readonly [u64, u32]} | {tag: "NextRootIndex", values: readonly [u64]} | {tag: "RootIndex", values: readonly [u64, u256]} | {tag: "RevokedAt", values: readonly [u64, u256]} | {tag: "ReinstatedAt", values: readonly [u64, u256]} | {tag: "NodeHash", values: readonly [u64, u32, u32]} | {tag: "MinValidRootIdx", values: readonly [u64]};
 
 export const TreeError = {
   1: {message:"NotAdmin"},
@@ -54,7 +54,8 @@ export const TreeError = {
   11: {message:"MemberRemoved"},
   12: {message:"MemberNotInTree"},
   13: {message:"RootNotFound"},
-  14: {message:"AlreadyInitialized"}
+  14: {message:"AlreadyInitialized"},
+  15: {message:"MemberNotRevoked"}
 }
 
 
@@ -86,6 +87,14 @@ export interface Client {
    * Get current root (short alias for cross-contract calls)
    */
   get_root: ({dao_id}: {dao_id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<u256>>
+
+  /**
+   * Construct and simulate a min_root transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Get the minimum valid root index for a DAO
+   * Roots with index < min_valid_root_index are invalid for Trailing mode proposals
+   * Returns 0 if no members have been removed
+   */
+  min_root: ({dao_id}: {dao_id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<u32>>
 
   /**
    * Construct and simulate a revok_at transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -136,8 +145,7 @@ export interface Client {
    * Construct and simulate a remove_member transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Remove a member by zeroing their leaf and recomputing the root
    * Only callable by DAO admin
-   * Remove member by recording revocation timestamp (cheap, no tree update)
-   * This prevents the member from voting on proposals created after this timestamp
+   * This zeros the leaf in the Merkle tree, preventing proofs against new roots
    */
   remove_member: ({dao_id, member, admin}: {dao_id: u64, member: string, admin: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
@@ -160,6 +168,9 @@ export interface Client {
    * Returns (pathElements, pathIndices) where:
    * - pathElements[i] is the sibling hash at level i
    * - pathIndices[i] is 0 if leaf is left child, 1 if right child
+   * 
+   * This optimized version reads stored node hashes directly (O(depth) reads)
+   * instead of reconstructing subtrees (which was O(n * log n) hashes).
    */
   get_merkle_path: ({dao_id, leaf_index}: {dao_id: u64, leaf_index: u32}, options?: MethodOptions) => Promise<AssembledTransaction<readonly [Array<u256>, Array<u32>]>>
 
@@ -173,7 +184,8 @@ export interface Client {
   /**
    * Construct and simulate a reinstate_member transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Reinstate a previously removed member
-   * Records the reinstatement timestamp, allowing them to vote on future proposals
+   * Clears their leaf index mapping so they can re-register with a new commitment
+   * The admin should also re-mint their SBT via the membership-sbt contract
    */
   reinstate_member: ({dao_id, member, admin}: {dao_id: u64, member: string, admin: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
@@ -220,8 +232,8 @@ export class Client extends ContractClient {
   }
   constructor(public readonly options: ContractClientOptions) {
     super(
-      new ContractSpec([ "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAACwAAAAEAAAAAAAAACVRyZWVEZXB0aAAAAAAAAAEAAAAGAAAAAQAAAAAAAAANTmV4dExlYWZJbmRleAAAAAAAAAEAAAAGAAAAAQAAAAAAAAAORmlsbGVkU3VidHJlZXMAAAAAAAEAAAAGAAAAAQAAAAAAAAAFUm9vdHMAAAAAAAABAAAABgAAAAEAAAAAAAAACUxlYWZJbmRleAAAAAAAAAIAAAAGAAAADAAAAAEAAAAAAAAAD01lbWJlckxlYWZJbmRleAAAAAACAAAABgAAABMAAAABAAAAAAAAAAlMZWFmVmFsdWUAAAAAAAACAAAABgAAAAQAAAABAAAAAAAAAA1OZXh0Um9vdEluZGV4AAAAAAAAAQAAAAYAAAABAAAAAAAAAAlSb290SW5kZXgAAAAAAAACAAAABgAAAAwAAAABAAAAAAAAAAlSZXZva2VkQXQAAAAAAAACAAAABgAAAAwAAAABAAAAAAAAAAxSZWluc3RhdGVkQXQAAAACAAAABgAAAAw=",
-        "AAAABAAAAAAAAAAAAAAACVRyZWVFcnJvcgAAAAAAAA4AAAAAAAAACE5vdEFkbWluAAAAAQAAAAAAAAAMSW52YWxpZERlcHRoAAAAAgAAAAAAAAAPVHJlZUluaXRpYWxpemVkAAAAAAMAAAAAAAAAElRyZWVOb3RJbml0aWFsaXplZAAAAAAABAAAAAAAAAAQQ29tbWl0bWVudEV4aXN0cwAAAAUAAAAAAAAADE1lbWJlckV4aXN0cwAAAAYAAAAAAAAACFRyZWVGdWxsAAAABwAAAAAAAAAFTm9TYnQAAAAAAAAIAAAAAAAAABFOb3RPcGVuTWVtYmVyc2hpcAAAAAAAAAkAAAAAAAAAD0xlYWZPdXRPZkJvdW5kcwAAAAAKAAAAAAAAAA1NZW1iZXJSZW1vdmVkAAAAAAAACwAAAAAAAAAPTWVtYmVyTm90SW5UcmVlAAAAAAwAAAAAAAAADFJvb3ROb3RGb3VuZAAAAA0AAAAAAAAAEkFscmVhZHlJbml0aWFsaXplZAAAAAAADg==",
+      new ContractSpec([ "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAADQAAAAEAAAAAAAAACVRyZWVEZXB0aAAAAAAAAAEAAAAGAAAAAQAAAAAAAAANTmV4dExlYWZJbmRleAAAAAAAAAEAAAAGAAAAAQAAAAAAAAAORmlsbGVkU3VidHJlZXMAAAAAAAEAAAAGAAAAAQAAAAAAAAAFUm9vdHMAAAAAAAABAAAABgAAAAEAAAAAAAAACUxlYWZJbmRleAAAAAAAAAIAAAAGAAAADAAAAAEAAAAAAAAAD01lbWJlckxlYWZJbmRleAAAAAACAAAABgAAABMAAAABAAAAAAAAAAlMZWFmVmFsdWUAAAAAAAACAAAABgAAAAQAAAABAAAAAAAAAA1OZXh0Um9vdEluZGV4AAAAAAAAAQAAAAYAAAABAAAAAAAAAAlSb290SW5kZXgAAAAAAAACAAAABgAAAAwAAAABAAAAAAAAAAlSZXZva2VkQXQAAAAAAAACAAAABgAAAAwAAAABAAAAAAAAAAxSZWluc3RhdGVkQXQAAAACAAAABgAAAAwAAAABAAAAAAAAAAhOb2RlSGFzaAAAAAMAAAAGAAAABAAAAAQAAAABAAAAAAAAAA9NaW5WYWxpZFJvb3RJZHgAAAAAAQAAAAY=",
+        "AAAABAAAAAAAAAAAAAAACVRyZWVFcnJvcgAAAAAAAA8AAAAAAAAACE5vdEFkbWluAAAAAQAAAAAAAAAMSW52YWxpZERlcHRoAAAAAgAAAAAAAAAPVHJlZUluaXRpYWxpemVkAAAAAAMAAAAAAAAAElRyZWVOb3RJbml0aWFsaXplZAAAAAAABAAAAAAAAAAQQ29tbWl0bWVudEV4aXN0cwAAAAUAAAAAAAAADE1lbWJlckV4aXN0cwAAAAYAAAAAAAAACFRyZWVGdWxsAAAABwAAAAAAAAAFTm9TYnQAAAAAAAAIAAAAAAAAABFOb3RPcGVuTWVtYmVyc2hpcAAAAAAAAAkAAAAAAAAAD0xlYWZPdXRPZkJvdW5kcwAAAAAKAAAAAAAAAA1NZW1iZXJSZW1vdmVkAAAAAAAACwAAAAAAAAAPTWVtYmVyTm90SW5UcmVlAAAAAAwAAAAAAAAADFJvb3ROb3RGb3VuZAAAAA0AAAAAAAAAEkFscmVhZHlJbml0aWFsaXplZAAAAAAADgAAAAAAAAAQTWVtYmVyTm90UmV2b2tlZAAAAA8=",
         "AAAABQAAAAAAAAAAAAAAC0NvbW1pdEV2ZW50AAAAAAEAAAAMY29tbWl0X2V2ZW50AAAABQAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAQAAAAAAAAAKY29tbWl0bWVudAAAAAAADAAAAAAAAAAAAAAABWluZGV4AAAAAAAABAAAAAAAAAAAAAAACG5ld19yb290AAAADAAAAAAAAAAAAAAACnJvb3RfaW5kZXgAAAAAAAQAAAAAAAAAAg==",
         "AAAABQAAAAAAAAAAAAAADFJlbW92YWxFdmVudAAAAAEAAAANcmVtb3ZhbF9ldmVudAAAAAAAAAUAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAAAAAAABm1lbWJlcgAAAAAAEwAAAAEAAAAAAAAABWluZGV4AAAAAAAABAAAAAAAAAAAAAAACG5ld19yb290AAAADAAAAAAAAAAAAAAACnJvb3RfaW5kZXgAAAAAAAQAAAAAAAAAAg==",
         "AAAABQAAAAAAAAAAAAAADVRyZWVJbml0RXZlbnQAAAAAAAABAAAAD3RyZWVfaW5pdF9ldmVudAAAAAAEAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAAAAAAVkZXB0aAAAAAAAAAQAAAAAAAAAAAAAAAplbXB0eV9yb290AAAAAAAMAAAAAAAAAAAAAAAKcm9vdF9pbmRleAAAAAAABAAAAAAAAAAC",
@@ -229,6 +241,7 @@ export class Client extends ContractClient {
         "AAAAAAAAACZDb250cmFjdCB2ZXJzaW9uIGZvciB1cGdyYWRlIHRyYWNraW5nLgAAAAAAB3ZlcnNpb24AAAAAAAAAAAEAAAAE",
         "AAAAAAAAAC5HZXQgY3VycmVudCByb290IGluZGV4IChmb3IgcHJvcG9zYWwgY3JlYXRpb24pAAAAAAAIY3Vycl9pZHgAAAABAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAABA==",
         "AAAAAAAAADdHZXQgY3VycmVudCByb290IChzaG9ydCBhbGlhcyBmb3IgY3Jvc3MtY29udHJhY3QgY2FsbHMpAAAAAAhnZXRfcm9vdAAAAAEAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAAM",
+        "AAAAAAAAAKRHZXQgdGhlIG1pbmltdW0gdmFsaWQgcm9vdCBpbmRleCBmb3IgYSBEQU8KUm9vdHMgd2l0aCBpbmRleCA8IG1pbl92YWxpZF9yb290X2luZGV4IGFyZSBpbnZhbGlkIGZvciBUcmFpbGluZyBtb2RlIHByb3Bvc2FscwpSZXR1cm5zIDAgaWYgbm8gbWVtYmVycyBoYXZlIGJlZW4gcmVtb3ZlZAAAAAhtaW5fcm9vdAAAAAEAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAAE",
         "AAAAAAAAAIBHZXQgcmV2b2NhdGlvbiB0aW1lc3RhbXAgZm9yIGEgY29tbWl0bWVudCAocmV0dXJucyBOb25lIGlmIG5ldmVyIHJldm9rZWQpClVzZWQgYnkgdm90aW5nIGNvbnRyYWN0IHRvIGNoZWNrIGlmIG1lbWJlciB3YXMgcmV2b2tlZAAAAAhyZXZva19hdAAAAAIAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAAKY29tbWl0bWVudAAAAAAADAAAAAEAAAPoAAAABg==",
         "AAAAAAAAAD1HZXQgcm9vdCBpbmRleCBmb3IgYSBzcGVjaWZpYyByb290IChmb3Igdm90ZSBtb2RlIHZhbGlkYXRpb24pAAAAAAAACHJvb3RfaWR4AAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAARyb290AAAADAAAAAEAAAAE",
         "AAAAAAAAAGtJbml0aWFsaXplIGEgdHJlZSBmb3IgYSBzcGVjaWZpYyBEQU8KT25seSBEQU8gYWRtaW4gY2FuIGluaXRpYWxpemUgKHZpYSBTQlQgY29udHJhY3Qgd2hpY2ggY2hlY2tzIHJlZ2lzdHJ5KQAAAAAJaW5pdF90cmVlAAAAAAAAAwAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAVkZXB0aAAAAAAAAAQAAAAAAAAABWFkbWluAAAAAAAAEwAAAAA=",
@@ -239,12 +252,12 @@ export class Client extends ContractClient {
         "AAAAAAAAABpHZXQgY3VycmVudCByb290IGZvciBhIERBTwAAAAAADGN1cnJlbnRfcm9vdAAAAAEAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAAM",
         "AAAAAAAAAJRDb25zdHJ1Y3RvcjogSW5pdGlhbGl6ZSBjb250cmFjdCB3aXRoIFNCVCBjb250cmFjdCBhZGRyZXNzCkFsc28gcHJlLWNvbXB1dGVzIHplcm9zIGNhY2hlIHRvIGF2b2lkIGV4cGVuc2l2ZSBpbml0aWFsaXphdGlvbiBkdXJpbmcgZmlyc3QgREFPIGNyZWF0aW9uAAAADV9fY29uc3RydWN0b3IAAAAAAAABAAAAAAAAAAxzYnRfY29udHJhY3QAAAATAAAAAA==",
         "AAAAAAAAABdHZXQgdHJlZSBpbmZvIGZvciBhIERBTwAAAAANZ2V0X3RyZWVfaW5mbwAAAAAAAAEAAAAAAAAABmRhb19pZAAAAAAABgAAAAEAAAPtAAAAAwAAAAQAAAAEAAAADA==",
-        "AAAAAAAAAPBSZW1vdmUgYSBtZW1iZXIgYnkgemVyb2luZyB0aGVpciBsZWFmIGFuZCByZWNvbXB1dGluZyB0aGUgcm9vdApPbmx5IGNhbGxhYmxlIGJ5IERBTyBhZG1pbgpSZW1vdmUgbWVtYmVyIGJ5IHJlY29yZGluZyByZXZvY2F0aW9uIHRpbWVzdGFtcCAoY2hlYXAsIG5vIHRyZWUgdXBkYXRlKQpUaGlzIHByZXZlbnRzIHRoZSBtZW1iZXIgZnJvbSB2b3Rpbmcgb24gcHJvcG9zYWxzIGNyZWF0ZWQgYWZ0ZXIgdGhpcyB0aW1lc3RhbXAAAAANcmVtb3ZlX21lbWJlcgAAAAAAAAMAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAAGbWVtYmVyAAAAAAATAAAAAAAAAAVhZG1pbgAAAAAAABMAAAAA",
+        "AAAAAAAAAKVSZW1vdmUgYSBtZW1iZXIgYnkgemVyb2luZyB0aGVpciBsZWFmIGFuZCByZWNvbXB1dGluZyB0aGUgcm9vdApPbmx5IGNhbGxhYmxlIGJ5IERBTyBhZG1pbgpUaGlzIHplcm9zIHRoZSBsZWFmIGluIHRoZSBNZXJrbGUgdHJlZSwgcHJldmVudGluZyBwcm9vZnMgYWdhaW5zdCBuZXcgcm9vdHMAAAAAAAANcmVtb3ZlX21lbWJlcgAAAAAAAAMAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAAGbWVtYmVyAAAAAAATAAAAAAAAAAVhZG1pbgAAAAAAABMAAAAA",
         "AAAAAAAAAIZTZWxmLXJlZ2lzdGVyIGEgY29tbWl0bWVudCBpbiBhIHB1YmxpYyBEQU8gKHJlcXVpcmVzIFNCVCBtZW1iZXJzaGlwKQpGb3IgcHVibGljIERBT3MsIGFueW9uZSB3aXRoIGFuIFNCVCBjYW4gcmVnaXN0ZXIgdGhlaXIgY29tbWl0bWVudAAAAAAADXNlbGZfcmVnaXN0ZXIAAAAAAAADAAAAAAAAAAZkYW9faWQAAAAAAAYAAAAAAAAACmNvbW1pdG1lbnQAAAAAAAwAAAAAAAAABm1lbWJlcgAAAAAAEwAAAAA=",
         "AAAAAAAAAB9HZXQgbGVhZiBpbmRleCBmb3IgYSBjb21taXRtZW50AAAAAA5nZXRfbGVhZl9pbmRleAAAAAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAApjb21taXRtZW50AAAAAAAMAAAAAQAAAAQ=",
-        "AAAAAAAAAMNHZXQgTWVya2xlIHBhdGggZm9yIGEgc3BlY2lmaWMgbGVhZiBpbmRleApSZXR1cm5zIChwYXRoRWxlbWVudHMsIHBhdGhJbmRpY2VzKSB3aGVyZToKLSBwYXRoRWxlbWVudHNbaV0gaXMgdGhlIHNpYmxpbmcgaGFzaCBhdCBsZXZlbCBpCi0gcGF0aEluZGljZXNbaV0gaXMgMCBpZiBsZWFmIGlzIGxlZnQgY2hpbGQsIDEgaWYgcmlnaHQgY2hpbGQAAAAAD2dldF9tZXJrbGVfcGF0aAAAAAACAAAAAAAAAAZkYW9faWQAAAAAAAYAAAAAAAAACmxlYWZfaW5kZXgAAAAAAAQAAAABAAAD7QAAAAIAAAPqAAAADAAAA+oAAAAE",
+        "AAAAAAAAAVJHZXQgTWVya2xlIHBhdGggZm9yIGEgc3BlY2lmaWMgbGVhZiBpbmRleApSZXR1cm5zIChwYXRoRWxlbWVudHMsIHBhdGhJbmRpY2VzKSB3aGVyZToKLSBwYXRoRWxlbWVudHNbaV0gaXMgdGhlIHNpYmxpbmcgaGFzaCBhdCBsZXZlbCBpCi0gcGF0aEluZGljZXNbaV0gaXMgMCBpZiBsZWFmIGlzIGxlZnQgY2hpbGQsIDEgaWYgcmlnaHQgY2hpbGQKClRoaXMgb3B0aW1pemVkIHZlcnNpb24gcmVhZHMgc3RvcmVkIG5vZGUgaGFzaGVzIGRpcmVjdGx5IChPKGRlcHRoKSByZWFkcykKaW5zdGVhZCBvZiByZWNvbnN0cnVjdGluZyBzdWJ0cmVlcyAod2hpY2ggd2FzIE8obiAqIGxvZyBuKSBoYXNoZXMpLgAAAAAAD2dldF9tZXJrbGVfcGF0aAAAAAACAAAAAAAAAAZkYW9faWQAAAAAAAYAAAAAAAAACmxlYWZfaW5kZXgAAAAAAAQAAAABAAAD7QAAAAIAAAPqAAAADAAAA+oAAAAE",
         "AAAAAAAAAKpQcmUtaW5pdGlhbGl6ZSB0aGUgemVyb3MgY2FjaGUgdG8gYXZvaWQgYnVkZ2V0IGlzc3VlcyBkdXJpbmcgZmlyc3QgdHJlZSBvcGVyYXRpb25zLgpUaGlzIHNob3VsZCBiZSBjYWxsZWQgb25jZSBkdXJpbmcgZGVwbG95bWVudCB0byBwcmVjb21wdXRlIHplcm8gdmFsdWVzIGZvciBhbGwgbGV2ZWxzLgAAAAAAEGluaXRfemVyb3NfY2FjaGUAAAAAAAAAAA==",
-        "AAAAAAAAAHRSZWluc3RhdGUgYSBwcmV2aW91c2x5IHJlbW92ZWQgbWVtYmVyClJlY29yZHMgdGhlIHJlaW5zdGF0ZW1lbnQgdGltZXN0YW1wLCBhbGxvd2luZyB0aGVtIHRvIHZvdGUgb24gZnV0dXJlIHByb3Bvc2FscwAAABByZWluc3RhdGVfbWVtYmVyAAAAAwAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAZtZW1iZXIAAAAAABMAAAAAAAAABWFkbWluAAAAAAAAEwAAAAA=",
+        "AAAAAAAAALtSZWluc3RhdGUgYSBwcmV2aW91c2x5IHJlbW92ZWQgbWVtYmVyCkNsZWFycyB0aGVpciBsZWFmIGluZGV4IG1hcHBpbmcgc28gdGhleSBjYW4gcmUtcmVnaXN0ZXIgd2l0aCBhIG5ldyBjb21taXRtZW50ClRoZSBhZG1pbiBzaG91bGQgYWxzbyByZS1taW50IHRoZWlyIFNCVCB2aWEgdGhlIG1lbWJlcnNoaXAtc2J0IGNvbnRyYWN0AAAAABByZWluc3RhdGVfbWVtYmVyAAAAAwAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAZtZW1iZXIAAAAAABMAAAAAAAAABWFkbWluAAAAAAAAEwAAAAA=",
         "AAAAAAAAAERSZWdpc3RlciBhIGNvbW1pdG1lbnQgd2l0aCBleHBsaWNpdCBjYWxsZXIgKHJlcXVpcmVzIFNCVCBtZW1iZXJzaGlwKQAAABRyZWdpc3Rlcl93aXRoX2NhbGxlcgAAAAMAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAAKY29tbWl0bWVudAAAAAAADAAAAAAAAAAGY2FsbGVyAAAAAAATAAAAAA==",
         "AAAAAAAAAP1SZWdpc3RlciBhIGNvbW1pdG1lbnQgZnJvbSByZWdpc3RyeSBkdXJpbmcgREFPIGluaXRpYWxpemF0aW9uClRoaXMgZnVuY3Rpb24gaXMgY2FsbGVkIGJ5IHRoZSByZWdpc3RyeSBjb250cmFjdCBkdXJpbmcgY3JlYXRlX2FuZF9pbml0X2Rhbwp0byBhdXRvbWF0aWNhbGx5IHJlZ2lzdGVyIHRoZSBjcmVhdG9yJ3MgY29tbWl0bWVudC4KVGhlIHJlZ2lzdHJ5IGlzIHRydXN0ZWQgdG8gaGF2ZSBhbHJlYWR5IHZlcmlmaWVkIFNCVCBvd25lcnNoaXAuAAAAAAAAFnJlZ2lzdGVyX2Zyb21fcmVnaXN0cnkAAAAAAAMAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAAKY29tbWl0bWVudAAAAAAADAAAAAAAAAAGbWVtYmVyAAAAAAATAAAAAA==",
         "AAAAAAAAAMtJbml0aWFsaXplIHRyZWUgZnJvbSByZWdpc3RyeSBkdXJpbmcgREFPIGluaXRpYWxpemF0aW9uClRoaXMgZnVuY3Rpb24gaXMgY2FsbGVkIGJ5IHRoZSByZWdpc3RyeSBjb250cmFjdCBkdXJpbmcgY3JlYXRlX2FuZF9pbml0X2Rhbwp0byBhdm9pZCByZS1lbnRyYW5jeSBpc3N1ZXMuIFRoZSByZWdpc3RyeSBpcyBhIHRydXN0ZWQgc3lzdGVtIGNvbnRyYWN0LgAAAAAXaW5pdF90cmVlX2Zyb21fcmVnaXN0cnkAAAAAAgAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAVkZXB0aAAAAAAAAAQAAAAA" ]),
@@ -256,6 +269,7 @@ export class Client extends ContractClient {
         version: this.txFromJSON<u32>,
         curr_idx: this.txFromJSON<u32>,
         get_root: this.txFromJSON<u256>,
+        min_root: this.txFromJSON<u32>,
         revok_at: this.txFromJSON<Option<u64>>,
         root_idx: this.txFromJSON<u32>,
         init_tree: this.txFromJSON<null>,

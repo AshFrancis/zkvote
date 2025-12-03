@@ -12,6 +12,7 @@ import {
   storeZKCredentials,
 } from "../lib/zk";
 import { parseIdFromSlug, toIdSlug, isUserRejection } from "../lib/utils";
+import { relayerFetch, RELAYER_URL } from "../lib/api";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
 import { Card, CardContent } from "./ui/Card";
@@ -19,8 +20,6 @@ import { LoadingSpinner, MediaSlider } from "./ui";
 import VoteModal from "./VoteModal";
 import CommentSection from "./CommentSection";
 import { Clock, CheckCircle, XCircle, AlertCircle, ExternalLink, ArrowLeft, Shield, Users, Lock, Unlock, Home, FileText, Vote, UserPlus, KeyRound } from "lucide-react";
-
-const RELAYER_URL = import.meta.env.VITE_RELAYER_URL || "http://localhost:3001";
 
 interface ProposalMetadata {
   version: number;
@@ -86,6 +85,7 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
   const [dao, setDao] = useState<DAOInfo | null>(() => numericDaoId ? getCachedDaoInfo(numericDaoId) : null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [metadata, setMetadata] = useState<ProposalMetadata | null>(null);
+  const [metadataFailed, setMetadataFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMetadata, setLoadingMetadata] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,12 +136,12 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
     }
   }, [numericDaoId, numericProposalId, publicKey]);
 
-  // Load metadata when proposal is loaded
+  // Load metadata when proposal is loaded (only once - don't retry on failure)
   useEffect(() => {
-    if (proposal && hasRichContent && !metadata && !loadingMetadata) {
+    if (proposal && hasRichContent && !metadata && !loadingMetadata && !metadataFailed) {
       loadMetadata();
     }
-  }, [proposal, hasRichContent, metadata, loadingMetadata]);
+  }, [proposal, hasRichContent, metadata, loadingMetadata, metadataFailed]);
 
   const loadDaoInfo = async () => {
     if (!numericDaoId) return;
@@ -313,12 +313,13 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
 
     setLoadingMetadata(true);
     try {
-      const res = await fetch(`${RELAYER_URL}/ipfs/${proposal.contentCid}`);
+      const res = await relayerFetch(`/ipfs/${proposal.contentCid}`);
       if (!res.ok) throw new Error("Failed to fetch metadata");
       const data = await res.json();
       setMetadata(data);
     } catch (err) {
       console.error("Failed to load metadata:", err);
+      setMetadataFailed(true); // Mark as failed to prevent retry loop
     } finally {
       setLoadingMetadata(false);
     }

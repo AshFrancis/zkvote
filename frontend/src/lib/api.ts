@@ -1,6 +1,7 @@
 // API utilities with exponential backoff and relayer status tracking
 
 const RELAYER_URL = import.meta.env.VITE_RELAYER_URL || "http://localhost:3001";
+const RELAYER_AUTH_TOKEN = import.meta.env.VITE_RELAYER_AUTH_TOKEN || "";
 
 // Relayer connection state
 interface RelayerState {
@@ -89,7 +90,8 @@ export async function relayerFetch(
   // Check if we're in backoff period
   if (!skipBackoff && isInBackoff()) {
     const error = new Error("Relayer temporarily unavailable (backing off)");
-    (error as Error & { isBackoff: boolean }).isBackoff = true;
+    (error as Error & { isBackoff: boolean; isRateLimited: boolean }).isBackoff = true;
+    (error as Error & { isBackoff: boolean; isRateLimited: boolean }).isRateLimited = false;
     throw error;
   }
 
@@ -97,10 +99,37 @@ export async function relayerFetch(
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
+      // Add auth header if token is configured
+      const headers = new Headers(fetchOptions.headers);
+      if (RELAYER_AUTH_TOKEN) {
+        headers.set("X-Relayer-Auth", RELAYER_AUTH_TOKEN);
+      }
+
       const response = await fetch(url, {
         ...fetchOptions,
+        headers,
         signal: fetchOptions.signal || AbortSignal.timeout(15000),
       });
+
+      // Check for rate limiting (429) - treat as failure with backoff
+      if (response.status === 429) {
+        markFailure();
+
+        // On last attempt, throw an error
+        if (attempt >= maxRetries - 1) {
+          const error = new Error("Rate limited (429) - too many requests");
+          (error as Error & { isRateLimited: boolean }).isRateLimited = true;
+          throw error;
+        }
+
+        // Wait longer for rate limits - use Retry-After header if present
+        const retryAfter = response.headers.get("Retry-After");
+        const delay = retryAfter
+          ? Math.min(parseInt(retryAfter, 10) * 1000, 30000)
+          : Math.min(1000 * Math.pow(2, attempt + 1), 30000);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        continue;
+      }
 
       // Success - reset failure count
       markSuccess();
@@ -110,6 +139,11 @@ export async function relayerFetch(
 
       // Don't retry on abort
       if (lastError.name === "AbortError") {
+        throw lastError;
+      }
+
+      // Don't retry on rate limit errors (already handled max retries)
+      if ((lastError as Error & { isRateLimited?: boolean }).isRateLimited) {
         throw lastError;
       }
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getUserDaos } from '../lib/readOnlyContracts';
+import { relayerFetch } from '../lib/api';
 import { CONTRACTS } from '../config/contracts';
 import { Alert, LoadingSpinner } from './ui';
 import DAOCard from './ui/DAOCard';
@@ -23,39 +23,18 @@ interface UserDAOListProps {
   isInitializing?: boolean;
 }
 
-// Generate cache key based on user address and contract deployment so cache invalidates on redeployment
-const getCacheKey = (userAddress: string) => `user_daos_${userAddress}_${CONTRACTS.REGISTRY_ID.slice(0, 8)}`;
+// Cache key for metadata (still needed for IPFS images)
 const getMetadataCacheKey = () => `dao_metadata_${CONTRACTS.REGISTRY_ID.slice(0, 8)}`;
 
 export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, onDaosLoaded, isInitializing = false }: UserDAOListProps) {
-  const [daos, setDaos] = useState<UserDAO[]>(() => {
-    // Initialize with cached data if available
-    const cacheKey = getCacheKey(userAddress);
-    const cached = localStorage.getItem(cacheKey);
-    if (cached) {
-      const cachedData = JSON.parse(cached);
-      return cachedData;
-    }
-    return [];
-  });
-  const [loading, setLoading] = useState(() => {
-    // Only show loading indicator if no cache exists
-    const cacheKey = getCacheKey(userAddress);
-    const cached = localStorage.getItem(cacheKey);
-    return !cached;
-  });
+  const [daos, setDaos] = useState<UserDAO[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Metadata cache is still useful for IPFS images (fetched separately)
   const [metadataCache, setMetadataCache] = useState<Record<string, DAOMetadata | null>>(() => {
     const cached = localStorage.getItem(getMetadataCacheKey());
     return cached ? JSON.parse(cached) : {};
   });
-
-  // Notify parent of cached DAOs on mount
-  useEffect(() => {
-    if (daos.length > 0 && onDaosLoaded) {
-      onDaosLoaded(daos.map(dao => dao.id));
-    }
-  }, []); // Run only once on mount
 
   useEffect(() => {
     // Wait for wallet to finish initializing before loading
@@ -94,27 +73,34 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
   }, [daos]);
 
   const loadUserDaos = async () => {
-    const cacheKey = getCacheKey(userAddress);
-
     try {
-      // Load from cache first
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        const cachedData = JSON.parse(cached);
-        setDaos(cachedData);
-        setLoading(false);
-        if (onDaosLoaded) {
-          onDaosLoaded(cachedData.map((dao: UserDAO) => dao.id));
-        }
+      setError(null);
+
+      // Fetch user DAOs from relayer (checks membership server-side)
+      const response = await relayerFetch(`/user/${userAddress}/daos`);
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch user DAOs: ${response.status}`);
       }
 
-      // Fetch fresh data
-      setError(null);
-      const fetchedDaos = await getUserDaos(userAddress);
-      setDaos(fetchedDaos);
+      const data = await response.json();
+      const fetchedDaos: UserDAO[] = data.daos.map((dao: {
+        id: number;
+        name: string;
+        creator: string;
+        membership_open: boolean;
+        metadata_cid?: string;
+        role: 'admin' | 'member';
+      }) => ({
+        id: dao.id,
+        name: dao.name,
+        creator: dao.creator,
+        role: dao.role,
+        membership_open: dao.membership_open,
+        metadata_cid: dao.metadata_cid,
+      }));
 
-      // Update cache
-      localStorage.setItem(cacheKey, JSON.stringify(fetchedDaos));
+      setDaos(fetchedDaos);
 
       // Notify parent component of loaded DAO IDs
       if (onDaosLoaded) {
@@ -232,4 +218,3 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
     </div>
   );
 }
-/* eslint-disable react-hooks/exhaustive-deps */

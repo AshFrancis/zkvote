@@ -74,7 +74,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
 
   // Helper to get URL path for a tab
   const getTabPath = (tab: DAOTab) => {
-    const daoSlug = dao ? `${daoId}-${dao.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}` : String(daoId);
+    const daoSlug = dao?.name ? `${daoId}-${dao.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}` : String(daoId);
     if (tab === 'proposals') return `/daos/${daoSlug}`;
     return `/daos/${daoSlug}/${tab}`;
   };
@@ -118,8 +118,8 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
     if (isInitializing) {
       return;
     }
-    loadDAOInfo();
-    checkRegistrationStatus();
+    // Run both loads in parallel
+    Promise.all([loadDAOInfo(), checkRegistrationStatus()]);
   }, [daoId, publicKey, isInitializing]);
 
   // Update page title and meta description based on active tab
@@ -206,6 +206,15 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
         const cachedDao = JSON.parse(cached);
         setDao(cachedDao);
         setLoading(false);
+
+        // Load cached metadata immediately for instant image display
+        if (cachedDao.metadataCid) {
+          const metadataCacheKey = `dao_metadata_${cachedDao.metadataCid}`;
+          const cachedMetadata = localStorage.getItem(metadataCacheKey);
+          if (cachedMetadata) {
+            setMetadata(JSON.parse(cachedMetadata));
+          }
+        }
       }
 
       setError(null);
@@ -237,8 +246,11 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
         });
       }
 
-      const hasSBT = !useReadOnly && publicKey ? await checkMembership() : false;
-      const treeInitialized = await checkTreeInitialized();
+      // Run membership and tree checks in parallel to reduce RPC calls latency
+      const [hasSBT, treeInitialized] = await Promise.all([
+        !useReadOnly && publicKey ? checkMembership() : Promise.resolve(false),
+        checkTreeInitialized(),
+      ]);
       const vkSet = await checkVKSet();
       const isAdmin = !useReadOnly && publicKey ? (daoResult.result.admin === publicKey) : false;
 
@@ -260,10 +272,15 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
       setDao(daoInfo);
       localStorage.setItem(cacheKey, JSON.stringify(daoInfo));
 
-      // Load metadata from IPFS if available
+      // Load metadata from IPFS if available (and cache it)
       if (metadataCid) {
         fetchDAOMetadata(metadataCid).then((meta) => {
-          if (meta) setMetadata(meta);
+          if (meta) {
+            setMetadata(meta);
+            // Cache metadata for instant loading on next visit
+            const metadataCacheKey = `dao_metadata_${metadataCid}`;
+            localStorage.setItem(metadataCacheKey, JSON.stringify(meta));
+          }
         });
       } else {
         setMetadata(null);
@@ -462,6 +479,19 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
         notifyEvent(daoId, "member_added", txHash, { member: publicKey });
       }
 
+      // Immediately update local state to reflect membership
+      setDao(prev => prev ? { ...prev, hasMembership: true } : prev);
+
+      // Also update cache
+      const cacheKey = `dao_info_${daoId}`;
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const cachedDao = JSON.parse(cached);
+        cachedDao.hasMembership = true;
+        localStorage.setItem(cacheKey, JSON.stringify(cachedDao));
+      }
+
+      // Reload to get any other updates
       await loadDAOInfo();
 
       console.log("Successfully joined DAO! Click 'Register for Voting' to set up voting credentials.");
@@ -662,7 +692,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
               <p className="text-sm text-muted-foreground flex items-center gap-2">
                 <span className="font-mono text-xs bg-muted/50 px-1.5 py-0.5 rounded">ID: {dao.id}</span>
                 <span>•</span>
-                <span>Created by {dao.creator.slice(0, 4)}...{dao.creator.slice(-4)}</span>
+                <span>Created by {dao.creator?.slice(0, 4) ?? '...'}...{dao.creator?.slice(-4) ?? '...'}</span>
               </p>
             </div>
 

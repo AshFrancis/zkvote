@@ -20,7 +20,7 @@ function deriveKeyFromSignature(signature: string, daoId: number): Uint8Array {
 
   // Use SHA-256 hash as poor man's HKDF (browser-compatible)
   // Mix signature with DAO ID for context
-  const context = new TextEncoder().encode(`daovote-aliases-${daoId}`);
+  const context = new TextEncoder().encode(`zkvote-aliases-${daoId}`);
   const combined = new Uint8Array(sigBytes.length + context.length);
   combined.set(sigBytes);
   combined.set(context, sigBytes.length);
@@ -90,7 +90,7 @@ async function deriveKeyFromSignatureAsync(
     throw new Error(`Invalid signature format - type: ${typeof signature}`);
   }
 
-  const context = new TextEncoder().encode(`daovote-aliases-${daoId}`);
+  const context = new TextEncoder().encode(`zkvote-aliases-${daoId}`);
   const combined = new Uint8Array(sigBytes.length + context.length);
   combined.set(sigBytes);
   combined.set(context, sigBytes.length);

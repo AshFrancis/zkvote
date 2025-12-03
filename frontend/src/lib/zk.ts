@@ -10,7 +10,7 @@ export interface ZKCredentials {
 }
 
 const CREDENTIAL_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
-const STORAGE_PREFIX = `daovote_${NETWORK_CONFIG.networkName}_${CONTRACTS.VOTING_ID.slice(0, 6)}`;
+const STORAGE_PREFIX = `zkvote_${NETWORK_CONFIG.networkName}_${CONTRACTS.VOTING_ID.slice(0, 6)}`;
 
 function credentialKey(daoId: number, publicKey: string) {
   return `${STORAGE_PREFIX}_voting_registration_${daoId}_${publicKey}`;

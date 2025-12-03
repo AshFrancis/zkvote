@@ -383,7 +383,7 @@ export function Homepage() {
             <Button
               variant="outline"
               size="lg"
-              onClick={() => window.open('https://github.com/ashtron/daovote', '_blank')}
+              onClick={() => window.open('https://github.com/ashtron/zkvote', '_blank')}
               className="h-12 px-8"
             >
               View on GitHub

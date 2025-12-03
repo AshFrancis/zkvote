@@ -8,8 +8,7 @@ import { Input } from "./Input";
 import { Label } from "./Label";
 import { Upload } from "lucide-react";
 import { useTheme } from "../../hooks/useTheme";
-
-const RELAYER_URL = import.meta.env.VITE_RELAYER_URL || "http://localhost:3001";
+import { relayerFetch } from "../../lib/api";
 
 interface ProposalMetadata {
   version: number;
@@ -106,7 +105,7 @@ export default function CreateProposalForm({
     const formData = new FormData();
     formData.append("image", file);
 
-    const response = await fetch(`${RELAYER_URL}/ipfs/image`, {
+    const response = await relayerFetch("/ipfs/image", {
       method: "POST",
       body: formData,
     });
@@ -125,7 +124,7 @@ export default function CreateProposalForm({
   };
 
   const uploadMetadata = async (metadata: ProposalMetadata): Promise<string> => {
-    const response = await fetch(`${RELAYER_URL}/ipfs/metadata`, {
+    const response = await relayerFetch("/ipfs/metadata", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -249,28 +249,60 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
 
       const clients = initializeContractClients(publicKey);
 
+      console.log("[JoinDAO] Starting join for DAO:", dao.id);
       const joinTx = await clients.membershipSbt.self_join({
         dao_id: BigInt(dao.id),
         member: publicKey,
         encrypted_alias: undefined,
       });
 
+      console.log("[JoinDAO] Transaction prepared, waiting for signature...");
       const result = await joinTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+      console.log("[JoinDAO] signAndSend completed:", result);
 
       // Notify relayer of member joined event
       const txHash = extractTxHash(result);
+      console.log("[JoinDAO] Transaction hash:", txHash);
       if (txHash) {
         notifyEvent(dao.id, "member_added", txHash, { member: publicKey });
       }
 
+      // Verify membership was actually created on-chain BEFORE updating cache/UI
+      // Add a small delay and retry to handle RPC propagation delay
+      console.log("[JoinDAO] Verifying membership on-chain...");
+      let membershipConfirmed = false;
+      for (let attempt = 0; attempt < 6; attempt++) {
+        if (attempt > 0) {
+          console.log(`[JoinDAO] Retrying membership check (attempt ${attempt + 1}/6)...`);
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds between retries
+        }
+        const membershipCheck = await clients.membershipSbt.has({
+          dao_id: BigInt(dao.id),
+          of: publicKey,
+        });
+        console.log(`[JoinDAO] Membership check result (attempt ${attempt + 1}):`, membershipCheck.result);
+        if (membershipCheck.result) {
+          membershipConfirmed = true;
+          break;
+        }
+      }
+
+      if (!membershipConfirmed) {
+        throw new Error("Join transaction may have failed. Please check your transaction history and try again.");
+      }
+
+      // Clear cache and reload only after confirming membership
+      console.log("[JoinDAO] Membership confirmed, updating UI...");
+      localStorage.removeItem(PUBLIC_DAO_CACHE_KEY);
       await loadPublicDAO();
+      console.log("[JoinDAO] Join completed successfully");
     } catch (err: any) {
       if (isUserRejection(err)) {
-        console.log("User cancelled joining DAO");
+        console.log("[JoinDAO] User cancelled joining DAO");
       } else {
         const errorMessage = err instanceof Error ? err.message : String(err);
         setError(errorMessage);
-        console.error("Failed to join DAO:", err);
+        console.error("[JoinDAO] Failed to join DAO:", err);
       }
     } finally {
       setJoining(false);
@@ -306,44 +338,105 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
       console.log("[Registration] Step 2: Registering commitment in Merkle tree...");
       const clients = initializeContractClients(publicKey);
 
-      const registerTx = await clients.membershipTree.self_register({
-        dao_id: BigInt(dao.id),
-        commitment: BigInt(commitment),
-        member: publicKey,
-      });
-
       // Helper to check if error is CommitmentExists (error #5 from tree contract)
-      const isCommitmentExistsError = (err: any): boolean => {
-        const errStr = err?.message || err?.toString() || '';
+      const isCommitmentExistsError = (err: unknown): boolean => {
+        const errStr = (err as { message?: string })?.message || String(err);
         return errStr.includes('#5') || errStr.includes('Error(Contract, #5)');
+      };
+
+      // Helper to check if error is txBadSeq (stale sequence number)
+      const isBadSeqError = (err: unknown): boolean => {
+        const errStr = (err as { message?: string })?.message || String(err);
+        return errStr.includes('txBadSeq') || errStr.includes('bad_seq');
       };
 
       let alreadyRegistered = false;
       let registerTxHash: string | null = null;
-      try {
-        console.log("[Registration] Calling signAndSend...");
-        const result = await registerTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
-        console.log("[Registration] Step 2 complete - Transaction signed and sent:", result);
-        registerTxHash = extractTxHash(result);
-      } catch (err: any) {
-        // Check if this is a CommitmentExists error - means we're already registered
-        if (isCommitmentExistsError(err)) {
-          console.log("[Registration] Commitment already exists on-chain - recovering credentials");
-          alreadyRegistered = true;
-        } else {
+
+      // Retry loop for txBadSeq errors (stale sequence number)
+      const maxRetries = 3;
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          if (attempt > 0) {
+            console.log(`[Registration] Retrying transaction (attempt ${attempt + 1}/${maxRetries})...`);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait before retry
+          }
+
+          // Create fresh transaction for each attempt (gets latest sequence number)
+          const registerTx = await clients.membershipTree.self_register({
+            dao_id: BigInt(dao.id),
+            commitment: BigInt(commitment),
+            member: publicKey,
+          });
+
+          console.log("[Registration] Calling signAndSend...");
+          const result = await registerTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+          console.log("[Registration] Step 2 complete - Transaction signed and sent:", result);
+          registerTxHash = extractTxHash(result);
+          break; // Success, exit retry loop
+        } catch (err: unknown) {
+          // Check if this is a CommitmentExists error - means we're already registered
+          if (isCommitmentExistsError(err)) {
+            console.log("[Registration] Commitment already exists on-chain - recovering credentials");
+            alreadyRegistered = true;
+            break; // Not an error, exit retry loop
+          }
+
+          // Check if this is a txBadSeq error - can be retried
+          if (isBadSeqError(err) && attempt < maxRetries - 1) {
+            console.log("[Registration] Got txBadSeq error (stale sequence number), will retry...");
+            continue; // Retry with fresh transaction
+          }
+
+          // Other errors or final retry failed
           console.error("[Registration] Step 2 (signAndSend) failed:", err);
-          const enhancedError = new Error(`Transaction signing failed: ${err?.message || 'Unknown error'}`);
-          (enhancedError as any).originalError = err;
+          const enhancedError = new Error(`Transaction signing failed: ${(err as { message?: string })?.message || 'Unknown error'}`);
+          (enhancedError as { originalError: unknown }).originalError = err;
           throw enhancedError;
         }
       }
 
-      const leafIndexResult = await clients.membershipTree.get_leaf_index({
-        dao_id: BigInt(dao.id),
-        commitment: BigInt(commitment),
-      });
+      // Retry get_leaf_index with delays to handle RPC propagation
+      console.log("[Registration] Verifying registration on-chain...");
+      let leafIndex: number = NaN;
+      for (let attempt = 0; attempt < 6; attempt++) {
+        if (attempt > 0) {
+          console.log(`[Registration] Retrying get_leaf_index (attempt ${attempt + 1}/6)...`);
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds between retries
+        }
 
-      const leafIndex = Number(leafIndexResult.result);
+        try {
+          const leafIndexResult = await clients.membershipTree.get_leaf_index({
+            dao_id: BigInt(dao.id),
+            commitment: BigInt(commitment),
+          });
+
+          console.log(`[Registration] get_leaf_index result (attempt ${attempt + 1}):`, leafIndexResult.result);
+
+          // Check if result is an error object (Err variant from Rust Result)
+          const rawResult = leafIndexResult.result;
+          if (rawResult && typeof rawResult === 'object' && 'error' in rawResult) {
+            console.log(`[Registration] Got error response, will retry...`);
+            continue;
+          }
+
+          // The result could be a BigInt or number - handle both
+          const parsedIndex = typeof rawResult === 'bigint' ? Number(rawResult) : Number(rawResult);
+
+          if (!isNaN(parsedIndex)) {
+            leafIndex = parsedIndex;
+            console.log(`[Registration] Got valid leaf index: ${leafIndex}`);
+            break;
+          }
+        } catch (queryErr) {
+          console.log(`[Registration] Query error on attempt ${attempt + 1}:`, queryErr);
+        }
+      }
+
+      if (isNaN(leafIndex)) {
+        throw new Error("Registration may have failed - could not verify commitment in tree after multiple attempts. Please try again.");
+      }
+
       storeZKCredentials(dao.id, publicKey, { secret, salt, commitment }, leafIndex);
 
       // Notify relayer of voter registered event (only if we actually registered, not recovered)

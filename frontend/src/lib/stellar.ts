@@ -8,7 +8,6 @@ import {
   Address,
 } from "@stellar/stellar-sdk";
 import { NETWORK_CONFIG } from "../config/contracts";
-import axios from "axios";
 
 // Initialize Soroban RPC server
 // allowHttp: true is required for local development on http://localhost
@@ -25,10 +24,11 @@ export async function checkRelayerReady(relayerUrl: string, authToken?: string) 
   if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
   try {
     // Use /health endpoint - /ready is stricter and may return degraded when RPC is slow
-    const res = await axios.get(`${relayerUrl}/health`, { headers });
-    return { ok: res.data?.status === "ok", details: res.data };
-  } catch (err: any) {
-    return { ok: false, error: err?.message || "health check failed" };
+    const res = await fetch(`${relayerUrl}/health`, { headers });
+    const data = await res.json();
+    return { ok: data?.status === "ok", details: data };
+  } catch (err: unknown) {
+    return { ok: false, error: err instanceof Error ? err.message : "health check failed" };
   }
 }
 
@@ -43,8 +43,11 @@ export type RelayerConfig = {
 export async function fetchRelayerConfig(relayerUrl: string, authToken?: string): Promise<RelayerConfig> {
   const headers: Record<string, string> = {};
   if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
-  const res = await axios.get(`${relayerUrl}/config`, { headers });
-  return res.data as RelayerConfig;
+  const res = await fetch(`${relayerUrl}/config`, { headers });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch relayer config: ${res.status}`);
+  }
+  return res.json() as Promise<RelayerConfig>;
 }
 
 /**

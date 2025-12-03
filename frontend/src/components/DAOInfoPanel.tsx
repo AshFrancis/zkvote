@@ -44,9 +44,10 @@ interface DAOEvent {
   timestamp: string | null;
 }
 
-// Event type to display info mapping
+// Event type to display info mapping (includes both with and without _event suffix)
 const EVENT_DISPLAY: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   dao_create: { label: 'DAO Created', icon: Shield, color: 'text-blue-500' },
+  dao_create_event: { label: 'DAO Created', icon: Shield, color: 'text-blue-500' },
   admin_transfer: { label: 'Admin Transferred', icon: Shield, color: 'text-yellow-500' },
   member_added: { label: 'Member Added', icon: UserPlus, color: 'text-green-500' },
   member_revoked: { label: 'Member Revoked', icon: UserMinus, color: 'text-red-500' },
@@ -55,6 +56,8 @@ const EVENT_DISPLAY: Record<string, { label: string; icon: React.ElementType; co
   voter_removed: { label: 'Voter Removed', icon: UserMinus, color: 'text-red-500' },
   voter_reinstated: { label: 'Voter Reinstated', icon: UserPlus, color: 'text-blue-500' },
   vk_updated: { label: 'VK Updated', icon: Key, color: 'text-purple-500' },
+  vk_set_event: { label: 'VK Set', icon: Key, color: 'text-purple-500' },
+  sbt_mint_event: { label: 'Member Added', icon: UserPlus, color: 'text-green-500' },
   proposal_created: { label: 'Proposal Created', icon: FileText, color: 'text-blue-500' },
   proposal_closed: { label: 'Proposal Closed', icon: FileText, color: 'text-gray-500' },
   proposal_archived: { label: 'Proposal Archived', icon: FileText, color: 'text-gray-400' },
@@ -149,7 +152,17 @@ export default function DAOInfoPanel({ daoId, publicKey, kit }: DAOInfoPanelProp
       }
 
       const data = await response.json();
-      setEvents(data.events || []);
+      // Sort events: dao_create always at the end (bottom of activity log)
+      const sortedEvents = (data.events || []).sort((a: DAOEvent, b: DAOEvent) => {
+        // dao_create/dao_create_event should always be last
+        const aIsCreate = a.type === 'dao_create' || a.type === 'dao_create_event';
+        const bIsCreate = b.type === 'dao_create' || b.type === 'dao_create_event';
+        if (aIsCreate && !bIsCreate) return 1;
+        if (bIsCreate && !aIsCreate) return -1;
+        // Otherwise maintain timestamp DESC order (newest first)
+        return 0;
+      });
+      setEvents(sortedEvents);
     } catch (err) {
       console.error('Failed to load events:', err);
       setEventsError('Events unavailable - relayer may be offline');
@@ -494,7 +507,7 @@ export default function DAOInfoPanel({ daoId, publicKey, kit }: DAOInfoPanelProp
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground text-right">
-                    <p>Ledger {event.ledger}</p>
+                    <p>Ledger {typeof event.ledger === 'number' && !isNaN(event.ledger) ? event.ledger : 'N/A'}</p>
                     {event.txHash && (
                       <p className="font-mono truncate max-w-[80px]">
                         {event.txHash.slice(0, 8)}...

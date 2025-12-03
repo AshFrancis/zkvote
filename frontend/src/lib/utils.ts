@@ -88,7 +88,8 @@ export function isAccountNotFoundError(err: unknown): boolean {
  * Convert a string to a URL-safe slug
  * @param text Text to convert to slug
  */
-export function toSlug(text: string): string {
+export function toSlug(text: string | undefined | null): string {
+  if (!text) return '';
   return text
     .toLowerCase()
     .trim()
