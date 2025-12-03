@@ -7,6 +7,11 @@
 
 import { PinataSDK } from "pinata";
 
+// Structured logger
+const log = (level, event, meta = {}) => {
+  console.log(JSON.stringify({ level, event, ts: new Date().toISOString(), ...meta }));
+};
+
 let pinata = null;
 let gatewayUrl = null;
 let isDedicatedGateway = false;
@@ -151,7 +156,7 @@ export function initPinata(jwt, gateway) {
     pinataGateway: gatewayUrl
   });
 
-  console.log("Pinata client initialized" + (isDedicatedGateway ? " (dedicated gateway)" : ""));
+  log('info', 'pinata_initialized', { dedicatedGateway: isDedicatedGateway });
 }
 
 /**
@@ -175,7 +180,7 @@ async function propagateToPublicGateways(cid) {
       clearTimeout(timeout);
 
       if (response.ok) {
-        console.log(`[IPFS] Content propagated to ${gateway}/${cid}`);
+        log('debug', 'ipfs_propagated', { gateway, cid });
       }
     } catch (err) {
       // Ignore errors - this is best-effort propagation
@@ -186,7 +191,7 @@ async function propagateToPublicGateways(cid) {
   // Don't wait for all - just fire and forget
   Promise.allSettled(propagationPromises).then((results) => {
     const successful = results.filter(r => r.status === "fulfilled").length;
-    console.log(`[IPFS] Propagation complete: ${successful}/${PUBLIC_GATEWAYS.length} gateways reached for ${cid}`);
+    log('info', 'ipfs_propagation_complete', { cid, successful, total: PUBLIC_GATEWAYS.length });
   });
 }
 
@@ -196,7 +201,7 @@ async function propagateToPublicGateways(cid) {
  * @param {string} name - Optional name for the pin
  * @returns {Promise<{cid: string, size: number, publicUrl: string}>}
  */
-export async function pinJSON(data, name = "daovote-metadata") {
+export async function pinJSON(data, name = "zkvote-metadata") {
   if (!pinata) {
     throw new Error("Pinata client not initialized");
   }
@@ -205,7 +210,7 @@ export async function pinJSON(data, name = "daovote-metadata") {
   const result = await pinata.upload.public.json(data)
     .name(name)
     .keyvalues({
-      app: "daovote",
+      app: "zkvote",
       type: "proposal-metadata"
     });
 
@@ -238,7 +243,7 @@ export async function pinFile(buffer, filename, mimeType) {
   const result = await pinata.upload.public.file(file)
     .name(filename)
     .keyvalues({
-      app: "daovote",
+      app: "zkvote",
       type: "proposal-image"
     });
 
@@ -393,7 +398,7 @@ export async function isHealthy() {
     await pinata.files.public.list().limit(1);
     return true;
   } catch (error) {
-    console.error("Pinata health check failed:", error.message);
+    log('error', 'pinata_health_failed', { error: error.message });
     return false;
   }
 }

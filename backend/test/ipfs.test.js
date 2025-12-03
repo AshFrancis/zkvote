@@ -65,7 +65,7 @@ test('pinJSON uploads and returns valid CID', skipIfNoJwt, async () => {
     timestamp: Date.now(),
   };
 
-  const result = await pinJSON(testData, 'daovote-test-metadata');
+  const result = await pinJSON(testData, 'zkvote-test-metadata');
 
   assert.ok(result.cid, 'Should return a CID');
   assert.equal(isValidCid(result.cid), true, 'CID should be valid format');
@@ -103,7 +103,7 @@ test('full upload and fetch cycle for JSON', skipIfNoJwt, async () => {
     testId: `test-${Date.now()}`,
   };
 
-  const uploadResult = await pinJSON(testData, 'daovote-roundtrip-test');
+  const uploadResult = await pinJSON(testData, 'zkvote-roundtrip-test');
   assert.ok(uploadResult.cid, 'Upload should return CID');
   console.log(`  Uploaded CID: ${uploadResult.cid}`);
 

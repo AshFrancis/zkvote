@@ -1,5 +1,5 @@
 /**
- * SQLite Database for DaoVote Event Storage
+ * SQLite Database for ZKVote Event Storage
  *
  * Provides persistent storage for events with efficient querying.
  * Supports frontend notifications with on-chain verification.
@@ -14,7 +14,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
-const DB_FILE = path.join(DATA_DIR, 'daovote.db');
+const DB_FILE = path.join(DATA_DIR, 'zkvote.db');
 
 // Logger
 const log = (level, event, meta = {}) => {
@@ -63,6 +63,18 @@ export function initDb() {
     CREATE TABLE IF NOT EXISTS metadata (
       key TEXT PRIMARY KEY,
       value TEXT
+    );
+
+    -- DAOs table for cached DAO data
+    CREATE TABLE IF NOT EXISTS daos (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      creator TEXT NOT NULL,
+      membership_open INTEGER DEFAULT 1,
+      members_can_propose INTEGER DEFAULT 0,
+      metadata_cid TEXT,
+      member_count INTEGER DEFAULT 0,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
   `);
 
@@ -250,6 +262,143 @@ export function getUnverifiedEvents(limit = 10) {
 export function deleteUnverifiedEvent(txHash) {
   const db = initDb();
   db.prepare('DELETE FROM events WHERE tx_hash = ? AND verified = 0').run(txHash);
+}
+
+// ============================================
+// DAO CACHE FUNCTIONS
+// ============================================
+
+/**
+ * Upsert a DAO into the cache
+ */
+export function upsertDao(dao) {
+  const db = initDb();
+  db.prepare(`
+    INSERT INTO daos (id, name, creator, membership_open, members_can_propose, metadata_cid, member_count, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      creator = excluded.creator,
+      membership_open = excluded.membership_open,
+      members_can_propose = excluded.members_can_propose,
+      metadata_cid = excluded.metadata_cid,
+      member_count = excluded.member_count,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(
+    dao.id,
+    dao.name,
+    dao.creator,
+    dao.membership_open ? 1 : 0,
+    dao.members_can_propose ? 1 : 0,
+    dao.metadata_cid || null,
+    dao.member_count || 0
+  );
+}
+
+/**
+ * Upsert multiple DAOs in a transaction
+ */
+export function upsertDaos(daos) {
+  const db = initDb();
+  const stmt = db.prepare(`
+    INSERT INTO daos (id, name, creator, membership_open, members_can_propose, metadata_cid, member_count, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      creator = excluded.creator,
+      membership_open = excluded.membership_open,
+      members_can_propose = excluded.members_can_propose,
+      metadata_cid = excluded.metadata_cid,
+      member_count = excluded.member_count,
+      updated_at = CURRENT_TIMESTAMP
+  `);
+
+  db.transaction(() => {
+    for (const dao of daos) {
+      stmt.run(
+        dao.id,
+        dao.name,
+        dao.creator,
+        dao.membership_open ? 1 : 0,
+        dao.members_can_propose ? 1 : 0,
+        dao.metadata_cid || null,
+        dao.member_count || 0
+      );
+    }
+  })();
+
+  log('info', 'daos_upserted', { count: daos.length });
+}
+
+/**
+ * Get all cached DAOs
+ */
+export function getAllCachedDaos() {
+  const db = initDb();
+  const rows = db.prepare('SELECT * FROM daos ORDER BY id ASC').all();
+  return rows.map(row => ({
+    id: row.id,
+    name: row.name,
+    creator: row.creator,
+    membership_open: !!row.membership_open,
+    members_can_propose: !!row.members_can_propose,
+    metadata_cid: row.metadata_cid,
+    member_count: row.member_count,
+    updated_at: row.updated_at,
+  }));
+}
+
+/**
+ * Get a specific cached DAO by ID
+ */
+export function getCachedDao(daoId) {
+  const db = initDb();
+  const row = db.prepare('SELECT * FROM daos WHERE id = ?').get(daoId);
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    creator: row.creator,
+    membership_open: !!row.membership_open,
+    members_can_propose: !!row.members_can_propose,
+    metadata_cid: row.metadata_cid,
+    member_count: row.member_count,
+    updated_at: row.updated_at,
+  };
+}
+
+/**
+ * Get DAOs for a specific user (by membership)
+ * This requires the daos table to be populated with user membership data
+ * For now, returns all DAOs - user filtering will be done by the frontend
+ */
+export function getDaosForUser(userAddress) {
+  // This would require a separate user_dao_memberships table
+  // For now, just return all DAOs
+  return getAllCachedDaos();
+}
+
+/**
+ * Get the last sync timestamp for DAOs
+ */
+export function getDaosSyncTime() {
+  return getMetadata('daosSyncTime');
+}
+
+/**
+ * Set the last sync timestamp for DAOs
+ */
+export function setDaosSyncTime(timestamp) {
+  setMetadata('daosSyncTime', timestamp);
+}
+
+/**
+ * Get cached DAO count
+ */
+export function getCachedDaoCount() {
+  const db = initDb();
+  const { count } = db.prepare('SELECT COUNT(*) as count FROM daos').get();
+  return count;
 }
 
 /**

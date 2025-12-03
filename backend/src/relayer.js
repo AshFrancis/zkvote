@@ -14,7 +14,16 @@ import {
   getIndexerStatus,
   addManualEvent,
   notifyEvent,
+  ensureDaoCreateEvent,
 } from './indexer.js';
+import {
+  getAllCachedDaos,
+  getCachedDao,
+  upsertDaos,
+  getDaosSyncTime,
+  setDaosSyncTime,
+  getCachedDaoCount,
+} from './db.js';
 import {
   initPinata,
   pinJSON,
@@ -39,7 +48,7 @@ const corsOrigins = process.env.CORS_ORIGIN
 const corsOptions = {
   origin: corsOrigins,  // In production, set to specific origin
   methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Relayer-Auth'],
   maxAge: 86400  // 24 hours
 };
 app.use(cors(corsOptions));
@@ -78,6 +87,16 @@ const ipfsUploadLimiter = rateLimit({
   keyGenerator: limiterKeyGen,
 });
 
+// More generous rate limit for IPFS read requests (cached, read-only)
+const ipfsReadLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 200, // 200 reads per minute per IP (more generous for cached content)
+  message: { error: 'Too many requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: limiterKeyGen,
+});
+
 // Minimal structured logger with proof redaction
 const log = (level, event, meta = {}) => {
   const safe = { ...meta };
@@ -91,10 +110,10 @@ const log = (level, event, meta = {}) => {
 const RPC_URL = process.env.SOROBAN_RPC_URL || 'http://localhost:8000/soroban/rpc';
 const NETWORK_PASSPHRASE = process.env.NETWORK_PASSPHRASE || 'Standalone Network ; February 2017';
 const PORT = process.env.PORT || 3001;
-const RELAYER_AUTH_TOKEN = process.env.RELAYER_AUTH_TOKEN; // optional shared secret to gate vote API
+const RELAYER_AUTH_TOKEN = process.env.RELAYER_AUTH_TOKEN; // required shared secret to gate vote API
 const LOG_CLIENT_IP = process.env.LOG_CLIENT_IP; // 'plain' | 'hash' | undefined
 const HEALTH_EXPOSE_DETAILS = process.env.HEALTH_EXPOSE_DETAILS !== 'false'; // hide relayer/contract ids when false
-const RPC_TIMEOUT_MS = Number(process.env.RPC_TIMEOUT_MS || 10_000);
+const RPC_TIMEOUT_MS = Number(process.env.RPC_TIMEOUT_MS || 30_000); // Increased for P25 BN254 operations
 const LOG_REQUEST_BODY = process.env.LOG_REQUEST_BODY !== 'false'; // disable to avoid logging body meta
 const STRIP_REQUEST_BODIES = process.env.STRIP_REQUEST_BODIES === 'true'; // drop bodies entirely from logs/handlers
 const STATIC_VK_VERSION = process.env.VOTING_VK_VERSION
@@ -112,6 +131,18 @@ const MEMBERSHIP_SBT_CONTRACT_ID = process.env.MEMBERSHIP_SBT_CONTRACT_ID;
 // Event Indexer Configuration
 const INDEXER_ENABLED = process.env.INDEXER_ENABLED !== 'false';
 const INDEXER_POLL_INTERVAL_MS = Number(process.env.INDEXER_POLL_INTERVAL_MS || 5000);
+
+// DAO Sync Configuration
+const DAO_SYNC_INTERVAL_MS = Number(process.env.DAO_SYNC_INTERVAL_MS || 30000); // 30 seconds default
+let daoSyncInterval = null;
+
+// Global Membership Cache Configuration
+// Stores all members for all DAOs - synced periodically from contract
+// Map<daoId, Set<memberAddress>>
+const MEMBERSHIP_SYNC_INTERVAL_MS = Number(process.env.MEMBERSHIP_SYNC_INTERVAL_MS || 600000); // 10 minutes default
+const daoMembersCache = new Map(); // daoId -> Set<memberAddress>
+const daoAdminsCache = new Map(); // daoId -> adminAddress (from DAO registry)
+let membershipSyncInterval = null;
 
 // IPFS/Pinata Configuration
 const PINATA_JWT = process.env.PINATA_JWT;
@@ -158,10 +189,19 @@ function validateEnv() {
   if (!process.env.RELAYER_SECRET_KEY) missing.push('RELAYER_SECRET_KEY');
   if (!RPC_URL) missing.push('SOROBAN_RPC_URL');
   if (!NETWORK_PASSPHRASE) missing.push('NETWORK_PASSPHRASE');
+  if (!RELAYER_AUTH_TOKEN) missing.push('RELAYER_AUTH_TOKEN');
 
   if (missing.length > 0) {
     log('error', 'missing_env', { missing });
     console.error('\nRun ./scripts/init-local.sh to generate backend/.env'); // keep human-readable tip
+    process.exit(1);
+  }
+
+  // Validate auth token strength (minimum 32 characters for security)
+  // Skip validation in test mode since tests set short tokens for convenience
+  if (RELAYER_AUTH_TOKEN && RELAYER_AUTH_TOKEN.length < 32 && process.env.RELAYER_TEST_MODE !== 'true') {
+    log('error', 'weak_auth_token', { length: RELAYER_AUTH_TOKEN.length, minLength: 32 });
+    console.error('RELAYER_AUTH_TOKEN must be at least 32 characters');
     process.exit(1);
   }
 
@@ -252,9 +292,8 @@ async function callWithTimeout(fn, label) {
   return Promise.race([fn(), timeout]);
 }
 
-// Optional shared-secret guard to reduce spam/abuse on write endpoints
+// Authentication guard for write endpoints (token is mandatory)
 function authGuard(req, res, next) {
-  if (!RELAYER_AUTH_TOKEN) return next();
   const token = extractAuthToken(req);
 
   if (token !== RELAYER_AUTH_TOKEN) {
@@ -272,7 +311,43 @@ function extractAuthToken(req) {
     : header;
 }
 
-// Health check (no rate limit)
+// CSRF Protection: Origin validation for write endpoints
+// This adds defense-in-depth beyond the auth token
+function csrfGuard(req, res, next) {
+  // Skip for safe methods
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    return next();
+  }
+
+  // If CORS is not configured (wildcard), skip origin check
+  if (corsOrigins === '*') {
+    return next();
+  }
+
+  // Get origin from headers
+  const origin = req.headers.origin;
+  const referer = req.headers.referer;
+  const requestOrigin = origin || (referer ? new URL(referer).origin : null);
+
+  // If no origin header (e.g., curl, server-to-server), require auth token only
+  if (!requestOrigin) {
+    return next();
+  }
+
+  // Validate origin against allowed origins
+  const allowedOrigins = Array.isArray(corsOrigins) ? corsOrigins : [corsOrigins];
+  if (!allowedOrigins.includes(requestOrigin)) {
+    log('warn', 'csrf_origin_mismatch', { path: req.path, origin: requestOrigin, allowed: allowedOrigins });
+    return res.status(403).json({ error: 'Origin not allowed' });
+  }
+
+  next();
+}
+
+// Apply CSRF guard globally to all routes
+app.use(csrfGuard);
+
+// Health check (no rate limit, no auth required for basic status)
 app.get('/health', async (_req, res) => {
   const rpc = process.env.HEALTHCHECK_PING === 'true' ? await rpcHealth() : { ok: true };
   const base = {
@@ -280,23 +355,21 @@ app.get('/health', async (_req, res) => {
     rpc,
   };
 
+  // Only expose details if auth token provided
   if (HEALTH_EXPOSE_DETAILS) {
-    if (RELAYER_AUTH_TOKEN) {
-      const token = extractAuthToken(_req);
-      if (token !== RELAYER_AUTH_TOKEN) {
-        return res.status(200).json({ status: 'ok', rpc });
-      }
+    const token = extractAuthToken(_req);
+    if (token === RELAYER_AUTH_TOKEN) {
+      base.relayer = relayerKeypair.publicKey();
+      base.votingContract = VOTING_CONTRACT_ID;
+      base.treeContract = TREE_CONTRACT_ID;
+      base.vkVersion = STATIC_VK_VERSION;
     }
-    base.relayer = relayerKeypair.publicKey();
-    base.votingContract = VOTING_CONTRACT_ID;
-    base.treeContract = TREE_CONTRACT_ID;
-    base.vkVersion = STATIC_VK_VERSION;
   }
 
   res.json(base);
 });
 
-// Readiness check (auth optional, but details only with token)
+// Readiness check (no auth required for basic status, details require auth)
 app.get('/ready', async (_req, res) => {
   try {
     const rpcStatus = await rpcHealth();
@@ -305,16 +378,10 @@ app.get('/ready', async (_req, res) => {
     }
 
     const base = { status: 'ready' };
+    // Only expose details if auth token provided
     if (HEALTH_EXPOSE_DETAILS) {
-      if (RELAYER_AUTH_TOKEN) {
-        const token = extractAuthToken(_req);
-        if (token === RELAYER_AUTH_TOKEN) {
-          base.relayer = relayerKeypair.publicKey();
-          base.votingContract = VOTING_CONTRACT_ID;
-          base.treeContract = TREE_CONTRACT_ID;
-          base.vkVersion = STATIC_VK_VERSION;
-        }
-      } else {
+      const token = extractAuthToken(_req);
+      if (token === RELAYER_AUTH_TOKEN) {
         base.relayer = relayerKeypair.publicKey();
         base.votingContract = VOTING_CONTRACT_ID;
         base.treeContract = TREE_CONTRACT_ID;
@@ -328,15 +395,8 @@ app.get('/ready', async (_req, res) => {
   }
 });
 
-// Lightweight config surface (no secrets)
-app.get('/config', (req, res) => {
-  if (RELAYER_AUTH_TOKEN) {
-    const token = extractAuthToken(req);
-    if (token !== RELAYER_AUTH_TOKEN) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-  }
-
+// Lightweight config surface (public - safe to expose contract IDs for reads)
+app.get('/config', (_req, res) => {
   const base = {
     votingContract: VOTING_CONTRACT_ID,
     treeContract: TREE_CONTRACT_ID,
@@ -349,13 +409,14 @@ app.get('/config', (req, res) => {
 
 // Submit anonymous vote (with rate limiting)
 app.post('/vote', authGuard, voteLimiter, async (req, res) => {
-  const { daoId, proposalId, choice, nullifier, root, commitment, proof } = STRIP_REQUEST_BODIES
+  const { daoId, proposalId, choice, nullifier, root, proof } = STRIP_REQUEST_BODIES
     ? {}
     : req.body;
 
   // Validate required fields
+  // Note: commitment is no longer required - it's now private (computed internally in circuit)
   if (daoId === undefined || proposalId === undefined || choice === undefined ||
-      !nullifier || !root || !commitment || !proof) {
+      !nullifier || !root || !proof) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
@@ -377,9 +438,7 @@ app.post('/vote', authGuard, voteLimiter, async (req, res) => {
   if (!isValidU256Hex(root) || !isWithinField(root)) {
     return res.status(400).json({ error: 'root must be a valid hex string < BN254 modulus' });
   }
-  if (!isValidU256Hex(commitment) || !isWithinField(commitment)) {
-    return res.status(400).json({ error: 'commitment must be a valid hex string < BN254 modulus' });
-  }
+  // Note: commitment is no longer validated or required - it's now private in circuit
 
   // Validate proof structure
   if (!proof.a || !proof.b || !proof.c) {
@@ -399,11 +458,10 @@ app.post('/vote', authGuard, voteLimiter, async (req, res) => {
     log('info', 'vote_request', { daoId, proposalId });
 
     // Convert inputs to Soroban types with validation
-    let scNullifier, scRoot, scCommitment, scProof;
+    let scNullifier, scRoot, scProof;
     try {
       scNullifier = u256ToScVal(nullifier);
       scRoot = u256ToScVal(root);
-      scCommitment = u256ToScVal(commitment);
       scProof = proofToScVal(proof);
     } catch (err) {
       return res.status(400).json({ error: err.message });
@@ -423,7 +481,6 @@ app.post('/vote', authGuard, voteLimiter, async (req, res) => {
       StellarSdk.nativeToScVal(choice, { type: 'bool' }),                  // choice
       scNullifier,                                                         // nullifier
       scRoot,                                                              // root
-      scCommitment,                                                        // commitment (NEW)
       scProof                                                              // proof
     ];
 
@@ -528,10 +585,33 @@ app.post('/vote', authGuard, voteLimiter, async (req, res) => {
     }
   } catch (err) {
     log('error', 'vote_exception', { message: err.message, stack: err.stack });
-    res.status(500).json(
+
+    // Classify error types for better user feedback
+    const errMsg = err.message || '';
+    let statusCode = 500;
+    let userMessage = 'Internal server error';
+
+    if (errMsg.includes('Timeout:')) {
+      statusCode = 504;
+      userMessage = 'Request timeout - please try again';
+    } else if (errMsg.includes('Transaction not found after timeout')) {
+      statusCode = 504;
+      userMessage = 'Transaction confirmation timeout - vote may have succeeded, please check proposal results';
+    } else if (errMsg.includes('getAccount')) {
+      statusCode = 503;
+      userMessage = 'Blockchain RPC temporarily unavailable - please retry';
+    } else if (errMsg.includes('ECONNREFUSED') || errMsg.includes('ETIMEDOUT')) {
+      statusCode = 503;
+      userMessage = 'Network error - please retry';
+    } else if (errMsg.includes('sequence')) {
+      statusCode = 503;
+      userMessage = 'Transaction sequence error - please retry';
+    }
+
+    res.status(statusCode).json(
       GENERIC_ERRORS
-        ? { error: 'Internal server error' }
-        : { error: 'Internal server error', message: err.message }
+        ? { error: userMessage }
+        : { error: userMessage, details: errMsg }
     );
   }
 });
@@ -663,6 +743,94 @@ app.get('/indexer/daos', queryLimiter, (req, res) => {
   }
 });
 
+// ============================================
+// DAO LIST ENDPOINTS (CACHED)
+// ============================================
+
+// Get all DAOs from cache, optionally with user membership info
+// Uses global membership cache for instant lookups (no RPC calls)
+app.get('/daos', queryLimiter, async (req, res) => {
+  try {
+    const daos = getAllCachedDaos();
+    const lastSync = getDaosSyncTime();
+    const userAddress = req.query.user;
+
+    // If no user address provided, return DAOs without membership info
+    if (!userAddress) {
+      return res.json({
+        daos,
+        total: daos.length,
+        lastSync,
+        cached: true,
+      });
+    }
+
+    // Validate user address format (Stellar address: G... for accounts, C... for contracts)
+    if (!/^[GC][A-Z2-7]{55}$/.test(userAddress)) {
+      return res.status(400).json({ error: 'Invalid Stellar address format' });
+    }
+
+    // Use global membership cache for instant lookups
+    const daosWithRoles = daos.map(dao => {
+      // Check if user is admin (creator)
+      const adminAddr = daoAdminsCache.get(dao.id) || dao.creator;
+      if (adminAddr === userAddress) {
+        return { ...dao, role: 'admin' };
+      }
+
+      // Check if user is member (from global membership cache)
+      const members = daoMembersCache.get(dao.id);
+      if (members && members.has(userAddress)) {
+        return { ...dao, role: 'member' };
+      }
+
+      return { ...dao, role: null };
+    });
+
+    log('info', 'get_daos_with_membership', {
+      user: userAddress.slice(0, 8) + '...',
+      count: daos.length,
+      cachedDaos: daoMembersCache.size
+    });
+
+    res.json({
+      daos: daosWithRoles,
+      total: daosWithRoles.length,
+      lastSync,
+      cached: true,
+    });
+  } catch (err) {
+    log('error', 'get_daos_failed', { error: err.message });
+    res.status(500).json({ error: 'Failed to get DAOs' });
+  }
+});
+
+// Get a specific DAO from cache
+app.get('/dao/:daoId', queryLimiter, (req, res) => {
+  const { daoId } = req.params;
+  try {
+    const dao = getCachedDao(parseInt(daoId));
+    if (!dao) {
+      return res.status(404).json({ error: 'DAO not found in cache' });
+    }
+    res.json({ dao, cached: true });
+  } catch (err) {
+    log('error', 'get_dao_failed', { daoId, error: err.message });
+    res.status(500).json({ error: 'Failed to get DAO' });
+  }
+});
+
+// Trigger manual DAO sync (admin only)
+app.post('/daos/sync', authGuard, async (req, res) => {
+  try {
+    const synced = await syncDaosFromContract();
+    res.json({ success: true, synced });
+  } catch (err) {
+    log('error', 'dao_sync_failed', { error: err.message });
+    res.status(500).json({ error: 'Failed to sync DAOs' });
+  }
+});
+
 // Manual event submission (admin only - requires auth token)
 app.post('/events', authGuard, (req, res) => {
   const { daoId, type, data } = req.body;
@@ -681,7 +849,8 @@ app.post('/events', authGuard, (req, res) => {
 
 // Frontend notification endpoint - notifies relayer of an event with txHash
 // The event is stored as pending and verified against the chain
-app.post('/events/notify', queryLimiter, (req, res) => {
+// For membership events (sbt_mint, sbt_revoke, member_join, member_leave), triggers membership cache refresh
+app.post('/events/notify', queryLimiter, async (req, res) => {
   const { daoId, type, data, txHash } = req.body;
 
   if (!daoId || !type || !txHash) {
@@ -695,6 +864,16 @@ app.post('/events/notify', queryLimiter, (req, res) => {
 
   try {
     notifyEvent(Number(daoId), type, data || {}, txHash);
+
+    // Trigger membership cache refresh for membership-related events
+    const membershipEvents = ['sbt_mint', 'sbt_revoke', 'member_join', 'member_leave', 'self_join'];
+    if (membershipEvents.includes(type)) {
+      // Refresh in background (don't block response)
+      triggerDaoMembershipSync(Number(daoId)).catch(err => {
+        log('warn', 'triggered_membership_sync_failed', { daoId, error: err.message });
+      });
+    }
+
     res.json({ success: true, message: 'Event queued for verification' });
   } catch (err) {
     log('error', 'notify_event_failed', { daoId, type, error: err.message });
@@ -820,7 +999,7 @@ app.post('/ipfs/metadata', ipfsUploadLimiter, async (req, res) => {
   try {
     log('info', 'ipfs_upload_metadata', { size: metadataSize });
 
-    const result = await pinJSON(metadata, 'daovote-proposal-metadata');
+    const result = await pinJSON(metadata, 'zkvote-proposal-metadata');
 
     log('info', 'ipfs_upload_success', { cid: result.cid, type: 'metadata' });
 
@@ -856,7 +1035,7 @@ app.get('/ipfs/health', queryLimiter, async (_req, res) => {
 });
 
 // Fetch content from IPFS (with caching)
-app.get('/ipfs/:cid', queryLimiter, async (req, res) => {
+app.get('/ipfs/:cid', ipfsReadLimiter, async (req, res) => {
   if (!IPFS_ENABLED) {
     return res.status(503).json({ error: 'IPFS service not configured' });
   }
@@ -897,7 +1076,7 @@ app.get('/ipfs/:cid', queryLimiter, async (req, res) => {
 });
 
 // GET /ipfs/image/:cid - Fetch raw image from IPFS (for img src tags)
-app.get('/ipfs/image/:cid', queryLimiter, async (req, res) => {
+app.get('/ipfs/image/:cid', ipfsReadLimiter, async (req, res) => {
   if (!IPFS_ENABLED) {
     return res.status(503).json({ error: 'IPFS service not configured' });
   }
@@ -1050,8 +1229,29 @@ app.post('/comment/anonymous', authGuard, commentLimiter, async (req, res) => {
       res.status(500).json({ error: 'Transaction failed', txHash: sendResult.hash });
     }
   } catch (err) {
-    log('error', 'comment_anonymous_exception', { message: err.message });
-    res.status(500).json({ error: 'Internal server error' });
+    log('error', 'comment_anonymous_exception', { message: err.message, stack: err.stack });
+
+    // Classify error types for better user feedback
+    const errMsg = err.message || '';
+    let statusCode = 500;
+    let userMessage = 'Internal server error';
+
+    if (errMsg.includes('Timeout:')) {
+      statusCode = 504;
+      userMessage = 'Request timeout - please try again';
+    } else if (errMsg.includes('Transaction not found after timeout')) {
+      statusCode = 504;
+      userMessage = 'Transaction confirmation timeout';
+    } else if (errMsg.includes('getAccount') || errMsg.includes('ECONNREFUSED')) {
+      statusCode = 503;
+      userMessage = 'Blockchain RPC temporarily unavailable - please retry';
+    }
+
+    res.status(statusCode).json(
+      GENERIC_ERRORS
+        ? { error: userMessage }
+        : { error: userMessage, details: errMsg }
+    );
   }
 });
 
@@ -1582,6 +1782,289 @@ function isValidContractId(contractId) {
   return /^C[A-Z2-7]{55}$/.test(contractId);
 }
 
+// ============================================
+// DAO SYNC FROM CONTRACT
+// ============================================
+
+/**
+ * Sync all DAOs from the DAO Registry contract to local cache
+ */
+async function syncDaosFromContract() {
+  if (!DAO_REGISTRY_CONTRACT_ID || !isValidContractId(DAO_REGISTRY_CONTRACT_ID)) {
+    log('warn', 'dao_sync_skipped', { reason: 'DAO_REGISTRY_CONTRACT_ID not configured' });
+    return 0;
+  }
+
+  try {
+    log('info', 'dao_sync_start');
+
+    // First, get the total DAO count
+    const contract = new StellarSdk.Contract(DAO_REGISTRY_CONTRACT_ID);
+    const account = await server.getAccount(relayerKeypair.publicKey());
+
+    // Call dao_count to get the number of DAOs
+    const countOp = contract.call('dao_count');
+    const countTx = new StellarSdk.TransactionBuilder(account, {
+      fee: '100',
+      networkPassphrase: NETWORK_PASSPHRASE
+    })
+      .addOperation(countOp)
+      .setTimeout(30)
+      .build();
+
+    const countSimResult = await callWithTimeout(
+      () => simulateWithBackoff(() => server.simulateTransaction(countTx)),
+      'simulate_dao_count'
+    );
+
+    if (!StellarSdk.rpc.Api.isSimulationSuccess(countSimResult)) {
+      log('warn', 'dao_count_failed', { error: countSimResult.error });
+      return 0;
+    }
+
+    const daoCount = Number(StellarSdk.scValToNative(countSimResult.result?.retval));
+    log('info', 'dao_count_fetched', { count: daoCount });
+
+    if (daoCount === 0) {
+      setDaosSyncTime(new Date().toISOString());
+      return 0;
+    }
+
+    // Fetch each DAO's info
+    const daos = [];
+    for (let i = 1; i <= daoCount; i++) {
+      try {
+        const daoAccount = await server.getAccount(relayerKeypair.publicKey());
+        const getOp = contract.call('get_dao', StellarSdk.nativeToScVal(i, { type: 'u64' }));
+        const getTx = new StellarSdk.TransactionBuilder(daoAccount, {
+          fee: '100',
+          networkPassphrase: NETWORK_PASSPHRASE
+        })
+          .addOperation(getOp)
+          .setTimeout(30)
+          .build();
+
+        const getSimResult = await callWithTimeout(
+          () => simulateWithBackoff(() => server.simulateTransaction(getTx)),
+          `simulate_get_dao_${i}`
+        );
+
+        if (StellarSdk.rpc.Api.isSimulationSuccess(getSimResult) && getSimResult.result?.retval) {
+          const daoData = StellarSdk.scValToNative(getSimResult.result.retval);
+          daos.push({
+            id: i,
+            name: daoData.name || `DAO ${i}`,
+            creator: daoData.creator || '',
+            membership_open: daoData.membership_open !== false,
+            members_can_propose: daoData.members_can_propose === true,
+            metadata_cid: daoData.metadata_cid || null,
+            member_count: Number(daoData.member_count || 0),
+          });
+        }
+      } catch (err) {
+        log('warn', 'dao_fetch_failed', { daoId: i, error: err.message });
+      }
+    }
+
+    // Save to database
+    if (daos.length > 0) {
+      upsertDaos(daos);
+
+      // Ensure each DAO has a dao_create event in the activity log
+      for (const dao of daos) {
+        ensureDaoCreateEvent(dao.id, dao);
+      }
+    }
+
+    setDaosSyncTime(new Date().toISOString());
+    log('info', 'dao_sync_complete', { synced: daos.length, total: daoCount });
+
+    return daos.length;
+  } catch (err) {
+    log('error', 'dao_sync_error', { error: err.message });
+    return 0;
+  }
+}
+
+/**
+ * Start the background DAO sync job
+ */
+function startDaoSync() {
+  if (daoSyncInterval) {
+    clearInterval(daoSyncInterval);
+  }
+
+  // Run initial sync
+  syncDaosFromContract().then(count => {
+    log('info', 'initial_dao_sync', { count });
+  }).catch(err => {
+    log('error', 'initial_dao_sync_failed', { error: err.message });
+  });
+
+  // Schedule periodic sync
+  daoSyncInterval = setInterval(() => {
+    syncDaosFromContract().catch(err => {
+      log('error', 'periodic_dao_sync_failed', { error: err.message });
+    });
+  }, DAO_SYNC_INTERVAL_MS);
+
+  log('info', 'dao_sync_started', { intervalMs: DAO_SYNC_INTERVAL_MS });
+}
+
+/**
+ * Stop the background DAO sync job
+ */
+function stopDaoSync() {
+  if (daoSyncInterval) {
+    clearInterval(daoSyncInterval);
+    daoSyncInterval = null;
+    log('info', 'dao_sync_stopped');
+  }
+}
+
+// ============================================
+// GLOBAL MEMBERSHIP SYNC
+// ============================================
+
+/**
+ * Sync members for a single DAO from the SBT contract
+ * Uses get_members(dao_id, offset, limit) to fetch all members
+ */
+async function syncDaoMembership(daoId) {
+  if (!MEMBERSHIP_SBT_CONTRACT_ID || !isValidContractId(MEMBERSHIP_SBT_CONTRACT_ID)) {
+    return;
+  }
+
+  try {
+    const sbtContract = new StellarSdk.Contract(MEMBERSHIP_SBT_CONTRACT_ID);
+    const members = new Set();
+    const BATCH_SIZE = 50; // Fetch 50 members at a time
+    let offset = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const account = await server.getAccount(relayerKeypair.publicKey());
+      const getMembersOp = sbtContract.call('get_members',
+        StellarSdk.nativeToScVal(daoId, { type: 'u64' }),
+        StellarSdk.nativeToScVal(offset, { type: 'u64' }),
+        StellarSdk.nativeToScVal(BATCH_SIZE, { type: 'u64' })
+      );
+      const getMembersTx = new StellarSdk.TransactionBuilder(account, {
+        fee: '100',
+        networkPassphrase: NETWORK_PASSPHRASE
+      })
+        .addOperation(getMembersOp)
+        .setTimeout(30)
+        .build();
+
+      const simResult = await callWithTimeout(
+        () => simulateWithBackoff(() => server.simulateTransaction(getMembersTx)),
+        `simulate_get_members_${daoId}_${offset}`
+      );
+
+      if (StellarSdk.rpc.Api.isSimulationSuccess(simResult) && simResult.result?.retval) {
+        const memberAddresses = StellarSdk.scValToNative(simResult.result.retval);
+        if (Array.isArray(memberAddresses) && memberAddresses.length > 0) {
+          for (const addr of memberAddresses) {
+            members.add(addr);
+          }
+          offset += memberAddresses.length;
+          // If we got fewer than BATCH_SIZE, we've reached the end
+          hasMore = memberAddresses.length === BATCH_SIZE;
+        } else {
+          hasMore = false;
+        }
+      } else {
+        hasMore = false;
+      }
+    }
+
+    // Update the cache
+    daoMembersCache.set(daoId, members);
+    log('info', 'dao_membership_synced', { daoId, memberCount: members.size });
+
+  } catch (err) {
+    log('warn', 'dao_membership_sync_failed', { daoId, error: err.message });
+  }
+}
+
+/**
+ * Sync all DAO memberships from the SBT contract
+ * Fetches all members for all cached DAOs
+ */
+async function syncAllMemberships() {
+  if (!MEMBERSHIP_SBT_CONTRACT_ID || !isValidContractId(MEMBERSHIP_SBT_CONTRACT_ID)) {
+    log('warn', 'membership_sync_skipped', { reason: 'MEMBERSHIP_SBT_CONTRACT_ID not configured' });
+    return;
+  }
+
+  const daos = getAllCachedDaos();
+  if (daos.length === 0) {
+    log('info', 'membership_sync_skipped', { reason: 'no DAOs in cache' });
+    return;
+  }
+
+  log('info', 'membership_sync_start', { daoCount: daos.length });
+
+  // Also cache admin addresses from DAO data
+  for (const dao of daos) {
+    if (dao.creator) {
+      daoAdminsCache.set(dao.id, dao.creator);
+    }
+  }
+
+  // Sync each DAO's membership (sequentially to avoid RPC overload)
+  for (const dao of daos) {
+    await syncDaoMembership(dao.id);
+  }
+
+  log('info', 'membership_sync_complete', { daoCount: daos.length });
+}
+
+/**
+ * Start the background membership sync job
+ */
+function startMembershipSync() {
+  if (membershipSyncInterval) {
+    clearInterval(membershipSyncInterval);
+  }
+
+  // Run initial sync after DAO sync completes (give it a few seconds)
+  setTimeout(() => {
+    syncAllMemberships().catch(err => {
+      log('error', 'initial_membership_sync_failed', { error: err.message });
+    });
+  }, 5000);
+
+  // Schedule periodic sync (every 10 minutes by default)
+  membershipSyncInterval = setInterval(() => {
+    syncAllMemberships().catch(err => {
+      log('error', 'periodic_membership_sync_failed', { error: err.message });
+    });
+  }, MEMBERSHIP_SYNC_INTERVAL_MS);
+
+  log('info', 'membership_sync_started', { intervalMs: MEMBERSHIP_SYNC_INTERVAL_MS });
+}
+
+/**
+ * Stop the background membership sync job
+ */
+function stopMembershipSync() {
+  if (membershipSyncInterval) {
+    clearInterval(membershipSyncInterval);
+    membershipSyncInterval = null;
+    log('info', 'membership_sync_stopped');
+  }
+}
+
+/**
+ * Trigger membership sync for a specific DAO (called from event notifications)
+ */
+async function triggerDaoMembershipSync(daoId) {
+  log('info', 'triggered_membership_sync', { daoId });
+  await syncDaoMembership(daoId);
+}
+
 // Start server unless running under test mode (imports should not bind ports)
 if (process.env.RELAYER_TEST_MODE !== 'true') {
   app.listen(PORT, async () => {
@@ -1643,17 +2126,36 @@ if (process.env.RELAYER_TEST_MODE !== 'true') {
         log('warn', 'indexer_start_failed', { error: err.message });
       }
     }
+
+    // Start DAO sync if DAO_REGISTRY_CONTRACT_ID is configured
+    if (DAO_REGISTRY_CONTRACT_ID && isValidContractId(DAO_REGISTRY_CONTRACT_ID)) {
+      console.log('\nDAO Cache Endpoints:');
+      console.log('  GET  /daos                - Get all DAOs (cached)');
+      console.log('  GET  /daos?user=ADDRESS   - Get DAOs with membership info');
+      console.log('  GET  /dao/:daoId          - Get single DAO (cached)');
+      console.log('  POST /daos/sync           - Trigger DAO sync (admin)');
+      startDaoSync();
+
+      // Start membership sync after DAO sync (needs DAOs to be cached first)
+      if (MEMBERSHIP_SBT_CONTRACT_ID && isValidContractId(MEMBERSHIP_SBT_CONTRACT_ID)) {
+        startMembershipSync();
+      }
+    }
   });
 
   // Graceful shutdown
   process.on('SIGTERM', () => {
     log('info', 'shutdown_signal');
     stopIndexer();
+    stopDaoSync();
+    stopMembershipSync();
     process.exit(0);
   });
   process.on('SIGINT', () => {
     log('info', 'shutdown_signal');
     stopIndexer();
+    stopDaoSync();
+    stopMembershipSync();
     process.exit(0);
   });
 }

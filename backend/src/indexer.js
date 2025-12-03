@@ -313,3 +313,44 @@ export function notifyEvent(daoId, type, data, txHash) {
 export function getRpcServer() {
   return rpcServer;
 }
+
+/**
+ * Ensure a dao_create event exists for a DAO
+ * Creates a synthetic event if one doesn't already exist
+ * This handles DAOs created before the indexer started watching
+ */
+export function ensureDaoCreateEvent(daoId, daoData) {
+  db.initDb();
+
+  // Check if dao_create event already exists for this DAO
+  const existingEvents = db.getEventsForDao(daoId, {
+    types: ['dao_create', 'dao_create_event'],
+    limit: 1,
+  });
+
+  if (existingEvents.events.length > 0) {
+    // Already has a dao_create event
+    return false;
+  }
+
+  // Create a synthetic dao_create event
+  const added = db.addEvent({
+    daoId: Number(daoId),
+    type: 'dao_create',
+    data: {
+      admin: daoData.creator,
+      name: daoData.name,
+      synthetic: true, // Mark as synthetic (not from on-chain event)
+    },
+    ledger: 0, // Unknown ledger for historical events
+    txHash: `synthetic-dao-create-${daoId}`,
+    timestamp: new Date(0).toISOString(), // Epoch time to sort to the bottom
+    verified: true,
+  });
+
+  if (added) {
+    log('info', 'dao_create_event_synthesized', { daoId, name: daoData.name });
+  }
+
+  return added;
+}

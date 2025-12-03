@@ -298,7 +298,7 @@ test('POST /comment/anonymous - validates required fields', async () => {
   assert.ok(res.body.error.includes('Missing'));
 });
 
-test('POST /comment/anonymous - validates nonce is non-negative', async () => {
+test('POST /comment/anonymous - validates voteChoice is boolean', async () => {
   app = await setupApp();
 
   const res = await request(app)
@@ -311,12 +311,12 @@ test('POST /comment/anonymous - validates nonce is non-negative', async () => {
       nullifier: '0x' + '11'.repeat(32),
       root: '0x' + '22'.repeat(32),
       commitment: '0x' + '33'.repeat(32),
-      nonce: -1,
+      voteChoice: 'invalid', // Should be boolean
       proof: { a: '0x' + '44'.repeat(64), b: '0x' + '55'.repeat(128), c: '0x' + '66'.repeat(64) },
     });
 
   assert.equal(res.statusCode, 400);
-  assert.ok(res.body.error.includes('nonce'));
+  assert.ok(res.body.error.includes('voteChoice'));
 });
 
 test('POST /comment/anonymous - validates nullifier is within BN254 field', async () => {
@@ -335,7 +335,7 @@ test('POST /comment/anonymous - validates nullifier is within BN254 field', asyn
       nullifier: tooBig,
       root: '0x' + '22'.repeat(32),
       commitment: '0x' + '33'.repeat(32),
-      nonce: 0,
+      voteChoice: true,
       proof: { a: '0x' + '44'.repeat(64), b: '0x' + '55'.repeat(128), c: '0x' + '66'.repeat(64) },
     });
 

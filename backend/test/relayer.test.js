@@ -59,10 +59,12 @@ test('vote requires auth when token set', async () => {
   assert.equal(res.statusCode, 401);
 });
 
-test('config requires auth when token set', async () => {
+test('config is publicly accessible (no auth required)', async () => {
   const app = await setupApp();
   const res = await request(app).get('/config');
-  assert.equal(res.statusCode, 401);
+  // /config is intentionally public - it exposes contract IDs for reads
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.votingContract.startsWith('C'), true);
 });
 
 test('config returns contract ids with auth', async () => {
