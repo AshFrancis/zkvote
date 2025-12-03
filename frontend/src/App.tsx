@@ -6,20 +6,20 @@ import DAODashboard from "./components/DAODashboard";
 import DAOList from "./components/DAOList";
 import Homepage from "./components/Homepage";
 import Docs from "./components/Docs";
-import UserDAOList from "./components/UserDAOList";
 import ManageMembers from "./components/ManageMembers";
 import PublicVotes from "./components/PublicVotes";
 import ProposalPage from "./components/ProposalPage";
+import { ErrorBoundary, RouteErrorBoundary } from "./components/ErrorBoundary";
 import { useWallet } from "./hooks/useWallet";
 import { useTheme } from "./hooks/useTheme";
+import { useDaoName } from "./hooks/useDaoName";
+import { useDaoInfo } from "./hooks/useDaoInfo";
 import { initializeContractClients } from "./lib/contracts";
-import { getReadOnlyDaoRegistry } from "./lib/readOnlyContracts";
 import { truncateText, toIdSlug, parseIdFromSlug } from "./lib/utils";
 import verificationKey from "./lib/verification_key_soroban.json";
 import { CONTRACTS } from "./config/contracts";
 import { validateStaticConfig } from "./config/guardrails";
 import { useRelayerStatus } from "./hooks/useRelayerStatus";
-import { RelayerStatus as RelayerStatusComponent } from "./components/RelayerStatus";
 import { RelayerStatusBanner } from "./components/RelayerStatusBanner";
 import { Alert, LoadingSpinner } from "./components/ui";
 import { Button } from "./components/ui/Button";
@@ -38,104 +38,23 @@ function DAODetailPage({ publicKey, isInitializing, tab = 'proposals' }: { publi
   const { daoSlug } = useParams<{ daoSlug: string }>();
   const navigate = useNavigate();
   const selectedDaoId = daoSlug ? parseIdFromSlug(daoSlug) : null;
-  const [daoName, setDaoName] = useState<string>(() => {
-    // Initialize with cached DAO name if available
-    if (selectedDaoId) {
-      const cacheKey = `dao_info_${selectedDaoId}`;
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        const cachedDao = JSON.parse(cached);
-        return cachedDao.name || "";
-      }
-    }
-    return "";
-  });
-  const [loading, setLoading] = useState(() => {
-    // Only show loading if no cache exists
-    if (selectedDaoId) {
-      const cacheKey = `dao_info_${selectedDaoId}`;
-      const cached = localStorage.getItem(cacheKey);
-      return !cached;
-    }
-    return true;
+
+  // Use the useDaoName hook to handle DAO name loading and caching
+  const { daoName, loading } = useDaoName({
+    publicKey,
+    daoId: selectedDaoId,
+    isInitializing,
   });
 
+  // Update URL with proper slug when name loads
   useEffect(() => {
-    // Wait for wallet initialization before loading
-    if (isInitializing) {
-      return;
-    }
-    if (selectedDaoId) {
-      loadDAOName();
-    }
-  }, [publicKey, selectedDaoId, isInitializing]);
-
-  const loadDAOName = async () => {
-    if (!selectedDaoId) return;
-    const cacheKey = `dao_info_${selectedDaoId}`;
-
-    try {
-      // Load from cache first
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        const cachedDao = JSON.parse(cached);
-        setDaoName(cachedDao.name || "");
-        setLoading(false);
-      }
-
-      // Fetch fresh data
-      let result;
-      // Try with wallet client first, fall back to read-only if unfunded
-      if (publicKey) {
-        try {
-          const clients = initializeContractClients(publicKey);
-          result = await clients.daoRegistry.get_dao({
-            dao_id: BigInt(selectedDaoId),
-          });
-        } catch (err) {
-          // If account not found, use read-only client
-          const errorMessage = err instanceof Error ? err.message : String(err);
-          if (errorMessage.includes('Account not found') || errorMessage.includes('does not exist')) {
-            const registry = getReadOnlyDaoRegistry();
-            result = await registry.get_dao({
-              dao_id: BigInt(selectedDaoId),
-            });
-          } else {
-            throw err;
-          }
-        }
-      } else {
-        // No wallet connected, use read-only
-        const registry = getReadOnlyDaoRegistry();
-        result = await registry.get_dao({
-          dao_id: BigInt(selectedDaoId),
-        });
-      }
-
-      const newDaoName = result.result.name;
-      setDaoName(newDaoName);
-
-      // Update URL with proper slug if needed
-      const expectedSlug = toIdSlug(selectedDaoId, newDaoName);
+    if (selectedDaoId && daoName && !loading) {
+      const expectedSlug = toIdSlug(selectedDaoId, daoName);
       if (daoSlug !== expectedSlug) {
         navigate(`/daos/${expectedSlug}`, { replace: true });
       }
-
-      // Update cache - merge with existing cached data if it exists
-      if (cached) {
-        const cachedDao = JSON.parse(cached);
-        cachedDao.name = newDaoName;
-        localStorage.setItem(cacheKey, JSON.stringify(cachedDao));
-      } else {
-        // Create minimal cache entry with just the name
-        localStorage.setItem(cacheKey, JSON.stringify({ name: newDaoName }));
-      }
-    } catch (err) {
-      console.error('Failed to load DAO name:', err);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [selectedDaoId, daoName, loading, daoSlug, navigate]);
 
   return (
     <div className="space-y-6">
@@ -166,126 +85,26 @@ function ManageMembersPage({ publicKey, isInitializing }: { publicKey: string | 
   const { daoSlug } = useParams<{ daoSlug: string }>();
   const navigate = useNavigate();
   const selectedDaoId = daoSlug ? parseIdFromSlug(daoSlug) : null;
-  const [daoName, setDaoName] = useState<string>(() => {
-    // Initialize with cached DAO name if available
-    if (selectedDaoId) {
-      const cacheKey = `dao_info_${selectedDaoId}`;
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        const cachedDao = JSON.parse(cached);
-        return cachedDao.name || "";
-      }
-    }
-    return "";
-  });
-  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    // Initialize with cached admin status if available
-    if (selectedDaoId && publicKey) {
-      const cacheKey = `dao_info_${selectedDaoId}`;
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        const cachedDao = JSON.parse(cached);
-        return cachedDao.creator === publicKey;
-      }
-    }
-    return false;
-  });
-  const [loading, setLoading] = useState(() => {
-    // Only show loading if no cache exists
-    if (selectedDaoId) {
-      const cacheKey = `dao_info_${selectedDaoId}`;
-      const cached = localStorage.getItem(cacheKey);
-      return !cached;
-    }
-    return true;
+
+  // Use the useDaoInfo hook to handle DAO info loading and caching
+  const { daoInfo, loading } = useDaoInfo({
+    publicKey,
+    daoId: selectedDaoId,
+    isInitializing,
   });
 
+  // Update URL with proper slug when name loads
   useEffect(() => {
-    // Wait for wallet initialization before loading
-    if (isInitializing) {
-      return;
-    }
-    if (selectedDaoId) {
-      loadDAOInfo();
-    }
-  }, [publicKey, selectedDaoId, isInitializing]);
-
-  const loadDAOInfo = async () => {
-    if (!selectedDaoId) return;
-    const cacheKey = `dao_info_${selectedDaoId}`;
-
-    try {
-      // Load from cache first
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        const cachedDao = JSON.parse(cached);
-        setDaoName(cachedDao.name || "");
-        setIsAdmin(cachedDao.creator === publicKey);
-        setLoading(false);
-      }
-
-      // Fetch fresh data
-      let result;
-      // Try with wallet client first, fall back to read-only if unfunded
-      if (publicKey) {
-        try {
-          const clients = initializeContractClients(publicKey);
-          result = await clients.daoRegistry.get_dao({
-            dao_id: BigInt(selectedDaoId),
-          });
-        } catch (err) {
-          // If account not found, use read-only client
-          const errorMessage = err instanceof Error ? err.message : String(err);
-          if (errorMessage.includes('Account not found') || errorMessage.includes('does not exist')) {
-            const registry = getReadOnlyDaoRegistry();
-            result = await registry.get_dao({
-              dao_id: BigInt(selectedDaoId),
-            });
-          } else {
-            throw err;
-          }
-        }
-      } else {
-        // No wallet connected, use read-only
-        const registry = getReadOnlyDaoRegistry();
-        result = await registry.get_dao({
-          dao_id: BigInt(selectedDaoId),
-        });
-      }
-
-      const newDaoName = result.result.name;
-      const newIsAdmin = result.result.admin === publicKey;
-      setDaoName(newDaoName);
-      setIsAdmin(newIsAdmin);
-
-      // Update URL with proper slug if needed
-      const expectedSlug = toIdSlug(selectedDaoId, newDaoName);
+    if (selectedDaoId && daoInfo?.name && !loading) {
+      const expectedSlug = toIdSlug(selectedDaoId, daoInfo.name);
       if (daoSlug !== expectedSlug) {
         navigate(`/daos/${expectedSlug}/members`, { replace: true });
       }
-
-      // Update cache - merge with existing cached data if it exists
-      if (cached) {
-        const cachedDao = JSON.parse(cached);
-        cachedDao.name = newDaoName;
-        cachedDao.creator = result.result.admin;
-        localStorage.setItem(cacheKey, JSON.stringify(cachedDao));
-      } else {
-        // Create minimal cache entry
-        localStorage.setItem(cacheKey, JSON.stringify({
-          name: newDaoName,
-          creator: result.result.admin
-        }));
-      }
-    } catch (err) {
-      console.error('Failed to load DAO info:', err);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [selectedDaoId, daoInfo?.name, loading, daoSlug, navigate]);
 
   // Generate slug for navigation
-  const daoSlugForNav = selectedDaoId && daoName ? toIdSlug(selectedDaoId, daoName) : daoSlug;
+  const daoSlugForNav = selectedDaoId && daoInfo?.name ? toIdSlug(selectedDaoId, daoInfo.name) : daoSlug;
 
   if (loading) {
     return (
@@ -310,7 +129,7 @@ function ManageMembersPage({ publicKey, isInitializing }: { publicKey: string | 
           onClick={() => navigate(`/daos/${daoSlugForNav}`)}
           className="text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
         >
-          {truncateText(daoName, 30)}
+          {truncateText(daoInfo?.name || '', 30)}
         </button>
         <span className="text-gray-400 dark:text-gray-600">/</span>
         <span className="text-gray-900 dark:text-gray-100 font-medium">Members</span>
@@ -318,7 +137,7 @@ function ManageMembersPage({ publicKey, isInitializing }: { publicKey: string | 
 
       {/* Manage/View Members */}
       {selectedDaoId !== null && (
-        <ManageMembers publicKey={publicKey} daoId={selectedDaoId} isAdmin={isAdmin} isInitializing={isInitializing} />
+        <ManageMembers publicKey={publicKey} daoId={selectedDaoId} isAdmin={daoInfo?.isAdmin || false} isInitializing={isInitializing} />
       )}
     </div>
   );
@@ -586,7 +405,7 @@ function App() {
       // Single transaction: Create and initialize DAO with metadata (without creator registration)
       // Creator will register with deterministic credentials after creation
       console.log("Creating and initializing DAO...");
-      setSuccess("Creating DAO (minting SBT, initializing tree, and setting verification key)...");
+      setSuccess("Creating DAO (initializing tree and setting verification key)...");
 
       const createAndInitTx = await clients.daoRegistry.create_and_init_dao_no_reg(
         {
@@ -657,12 +476,13 @@ function App() {
 
       {/* Main Content */}
       <main className="container mx-auto py-8 md:py-24 px-4 sm:px-6 lg:px-8">
+        <ErrorBoundary>
         <Routes>
           {/* Homepage Route */}
-          <Route path="/" element={<Homepage />} />
+          <Route path="/" element={<RouteErrorBoundary><Homepage /></RouteErrorBoundary>} />
 
           {/* Docs Route */}
-          <Route path="/docs/" element={<Docs />} />
+          <Route path="/docs/" element={<RouteErrorBoundary><Docs /></RouteErrorBoundary>} />
 
           {/* Browse DAOs Route */}
           <Route path="/daos/" element={
@@ -910,76 +730,66 @@ function App() {
                 </div>
               )}
 
-              {/* User's DAOs - only visible when connected */}
-              {isConnected && publicKey && (
-                <UserDAOList
-                  userAddress={publicKey}
-                  onSelectDao={handleSelectDao}
-                  onDaosLoaded={(ids) => {
-                    setUserDaoIds(ids);
-                    setUserDaosLoaded(true);
-                  }}
-                  isInitializing={isInitializing}
-                />
-              )}
-
-              {/* DAO List - visible to everyone, but wait for user DAOs to load when connected */}
-              {(!isConnected || userDaosLoaded) && (
-                <DAOList
-                  onSelectDao={handleSelectDao}
-                  isConnected={isConnected}
-                  userDaoIds={userDaoIds}
-                  isInitializing={isInitializing}
-                />
-              )}
+              {/* DAO List - single component handles both user's DAOs and other DAOs */}
+              <DAOList
+                onSelectDao={handleSelectDao}
+                isConnected={isConnected}
+                userAddress={publicKey}
+                onUserDaosLoaded={(ids) => {
+                  setUserDaoIds(ids);
+                  setUserDaosLoaded(true);
+                }}
+                isInitializing={isInitializing}
+              />
 
             </div>
           } />
 
           {/* Public Votes Routes */}
           <Route path="/public-votes/" element={
-            <PublicVotes publicKey={publicKey} isConnected={isConnected} isInitializing={isInitializing} tab="proposals" />
+            <RouteErrorBoundary><PublicVotes publicKey={publicKey} isConnected={isConnected} isInitializing={isInitializing} tab="proposals" /></RouteErrorBoundary>
           } />
           <Route path="/public-votes/info" element={
-            <PublicVotes publicKey={publicKey} isConnected={isConnected} isInitializing={isInitializing} tab="info" />
+            <RouteErrorBoundary><PublicVotes publicKey={publicKey} isConnected={isConnected} isInitializing={isInitializing} tab="info" /></RouteErrorBoundary>
           } />
           <Route path="/public-votes/members" element={
-            <PublicVotes publicKey={publicKey} isConnected={isConnected} isInitializing={isInitializing} tab="members" />
+            <RouteErrorBoundary><PublicVotes publicKey={publicKey} isConnected={isConnected} isInitializing={isInitializing} tab="members" /></RouteErrorBoundary>
           } />
           <Route path="/public-votes/create-proposal" element={
-            <PublicVotes publicKey={publicKey} isConnected={isConnected} isInitializing={isInitializing} tab="create-proposal" />
+            <RouteErrorBoundary><PublicVotes publicKey={publicKey} isConnected={isConnected} isInitializing={isInitializing} tab="create-proposal" /></RouteErrorBoundary>
           } />
 
           {/* DAO Detail Route - defaults to proposals tab */}
           <Route path="/daos/:daoSlug" element={
-            <DAODetailPage publicKey={publicKey} isInitializing={isInitializing} tab="proposals" />
+            <RouteErrorBoundary><DAODetailPage publicKey={publicKey} isInitializing={isInitializing} tab="proposals" /></RouteErrorBoundary>
           } />
 
           {/* DAO Info Route */}
           <Route path="/daos/:daoSlug/info" element={
-            <DAODetailPage publicKey={publicKey} isInitializing={isInitializing} tab="info" />
+            <RouteErrorBoundary><DAODetailPage publicKey={publicKey} isInitializing={isInitializing} tab="info" /></RouteErrorBoundary>
           } />
 
           {/* DAO Members Route */}
           <Route path="/daos/:daoSlug/members" element={
-            <DAODetailPage publicKey={publicKey} isInitializing={isInitializing} tab="members" />
+            <RouteErrorBoundary><DAODetailPage publicKey={publicKey} isInitializing={isInitializing} tab="members" /></RouteErrorBoundary>
           } />
 
           {/* DAO Settings Route */}
           <Route path="/daos/:daoSlug/settings" element={
-            <DAODetailPage publicKey={publicKey} isInitializing={isInitializing} tab="settings" />
+            <RouteErrorBoundary><DAODetailPage publicKey={publicKey} isInitializing={isInitializing} tab="settings" /></RouteErrorBoundary>
           } />
 
           {/* Create Proposal Route */}
           <Route path="/daos/:daoSlug/create-proposal" element={
-            <DAODetailPage publicKey={publicKey} isInitializing={isInitializing} tab="create-proposal" />
+            <RouteErrorBoundary><DAODetailPage publicKey={publicKey} isInitializing={isInitializing} tab="create-proposal" /></RouteErrorBoundary>
           } />
 
           {/* Proposal Detail Route */}
           <Route path="/daos/:daoSlug/proposals/:proposalSlug" element={
-            <ProposalPage publicKey={publicKey} kit={kit} isInitializing={isInitializing} />
+            <RouteErrorBoundary><ProposalPage publicKey={publicKey} kit={kit} isInitializing={isInitializing} /></RouteErrorBoundary>
           } />
         </Routes>
+        </ErrorBoundary>
       </main>
 
       {/* Footer */}
@@ -1030,7 +840,7 @@ function App() {
                 <h4 className="text-sm font-semibold">Resources</h4>
                 <ul className="space-y-3 text-sm text-muted-foreground">
                   <li>
-                    <a href="https://github.com/ashtron/daovote" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
+                    <a href="https://github.com/ashtron/zkvote" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
                       GitHub
                     </a>
                   </li>
@@ -1055,7 +865,7 @@ function App() {
               Built with Stellar Soroban Protocol 25 • Groth16 on BN254 • Poseidon Merkle Trees
             </p>
             <div className="flex items-center gap-6">
-              <a href="https://github.com/ashtron/daovote" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors">
+              <a href="https://github.com/ashtron/zkvote" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
                 </svg>
