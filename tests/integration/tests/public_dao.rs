@@ -72,7 +72,7 @@ fn bn254_g2_generator(env: &Env) -> soroban_sdk::BytesN<128> {
     soroban_sdk::BytesN::from_array(env, &bytes)
 }
 
-// Helper function to create test verification key (7 IC elements for vote circuit)
+// Helper function to create test verification key (6 IC elements for vote circuit)
 fn create_test_vk(env: &Env) -> voting::VerificationKey {
     let g1_gen = bn254_g1_generator(env);
     let g2_gen = bn254_g2_generator(env);
@@ -89,8 +89,7 @@ fn create_test_vk(env: &Env) -> voting::VerificationKey {
             g1_gen.clone(),
             g1_gen.clone(),
             g1_gen.clone(),
-            g1_gen.clone(),
-            g1_gen,
+            g1_gen, // 6 elements for 5 public signals + 1
         ],
     }
 }

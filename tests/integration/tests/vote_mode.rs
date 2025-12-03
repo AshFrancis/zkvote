@@ -61,7 +61,8 @@ fn hex_str_to_u256(env: &Env, hex: &str) -> U256 {
 }
 
 // Real verification key from circuits/build/verification_key_soroban_be.json (BIG-ENDIAN)
-// 7 IC elements for 6 public signals: root, nullifier, daoId, proposalId, voteChoice, commitment
+// 6 IC elements for 5 public signals: root, nullifier, daoId, proposalId, voteChoice
+// (commitment is now a PRIVATE signal for improved privacy)
 fn get_real_vk(env: &Env) -> voting::VerificationKey {
     let mut ic = SdkVec::new(env);
     ic.push_back(hex_to_bytes(env, "0386c87c5f77037451fea91c60759229ca390a30e60d564e5ff0f0f95ffbd18207683040dab753f41635f947d3d13e057c73cb92a38d83400af26019ce24d54f"));
@@ -70,13 +71,13 @@ fn get_real_vk(env: &Env) -> voting::VerificationKey {
     ic.push_back(hex_to_bytes(env, "2a7f1a9e3de9411015b1c5652856bc7a467110344153252026c44ca55f5dca632f0db38e6d0268092cba5ea0b5db9610e45bd8b4aac852527aeb6323c8f09804"));
     ic.push_back(hex_to_bytes(env, "09c5b9b793a6f8098f0ac918aa0a19a75b74e7f1428f726194a48af37da8ac14122edc5b3704f106fa3c095ac74f524032e460179c3e8ecd562ef050c884336a"));
     ic.push_back(hex_to_bytes(env, "143c06565aad1cacd0ddbc0cfc6dd131c70392d29c16d8c80ed7f62ada52587b13e189e68fe2fe8806b272da3c5762a18b23680cdeda63faef014b7dd6806f21"));
-    ic.push_back(hex_to_bytes(env, "1ff2e1a8bf1cdc19c43a4040d1a87832823cdafe5fdf0bd812eabc05882e1ff12139f471e228bdec73ad109a16c1fd938d9e8c2b4d5c5c0b9cb703c8eec3a8b0"));
+    // Removed 7th IC element (was for commitment public signal)
 
     voting::VerificationKey {
         alpha: hex_to_bytes(env, "2d4d9aa7e302d9df41749d5507949d05dbea33fbb16c643b22f599a2be6df2e214bedd503c37ceb061d8ec60209fe345ce89830a19230301f076caff004d1926"),
         beta: hex_to_bytes(env, "0967032fcbf776d1afc985f88877f182d38480a653f2decaa9794cbc3bf3060c0e187847ad4c798374d0d6732bf501847dd68bc0e071241e0213bc7fc13db7ab304cfbd1e08a704a99f5e847d93f8c3caafddec46b7a0d379da69a4d112346a71739c1b1a457a8c7313123d24d2f9192f896b7c63eea05a9d57f06547ad0cec8"),
         gamma: hex_to_bytes(env, "198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c21800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa"),
-        delta: hex_to_bytes(env, "23bbe71cdbd371ce93879c1920554716ce89ee4e21f9a8aad6e7deb311f460381e3ed1aca9278a56e254d910b89f806fb308f538efd16563538b0b1ddb6d64be28ce9a5f31d7716460220c7e42e96ffa61608228d9a7a55186129cd138e47e590e2874e9d1bae76cbd0cf7081a5b178a34d8a218f7d139830922411a9fbca6c6"),
+        delta: hex_to_bytes(env, "0d633d289456016e0c0e975e7da2d19153ca3b6a74dd83331df6407a68d9e9f81ff0cfb2f48375ed6c03370d8a55e25777a3fb3f6c748bb9e83116bf19ef6385062ce3e273c849fdc51bb2cf34308828862f248134512541fde080ed08d0eb4016cef3c53afe73c871cd493e46139da661ed0d2875fd63c8044c38a68b4caec5"),
         ic,
     }
 }
@@ -87,15 +88,15 @@ fn get_real_proof(env: &Env) -> voting::Proof {
     voting::Proof {
         a: hex_to_bytes(
             env,
-            "2d806e0094f82e4826cbaf1c55d9411c99cbd4724a06b3636343e9b4662101d027f2ac0e90e5abf5c8eb68bc544720783089cac24d53f97b4ccb23997ee1bef1",
+            "06c6298fee7716bce0aca65c8e6ccde25e06bdcb6268a1b2d31db1b8d750a9b0050db001368342508a5404e7d7b5ff5f1c7d27ee0362fdae57730ab2a1b524de",
         ),
         b: hex_to_bytes(
             env,
-            "079a9e010f261129556108ece03d72f2241446001f4867236ee62d0cdd165a2d1f4155f6d442b0f8eb5dd5562119b9efad6c51f52923beb9122e1ef8479c45d508d8febd3f8a15ce920ab23fa2228a56e2af681b9b1aec9071dce66801c5fa810d51353b9164be959e736cd071d642bf3f7cbbeab73eb6dadd02471fc0000fac",
+            "07bbb05583f634a5ff3ffe912712e7c69d560ec9b4378bc556cb0f29f16d779e02b606ac49555280a0588d6a84c8a344cd1cdc20c50306d549f0a71c6744b3e11ef657db258d908b245d6dc735ae2429e38078384a144b717e921dd1552534b32db66d34db9e4ad93c69ece88542249d7339bdd627ec6a8f619faddfa30edf30",
         ),
         c: hex_to_bytes(
             env,
-            "1417617b66c6217dfd3d37a2949f230cd2126c8edebf73cd6fe9912c56e4b69e050323a90b08147b46079f4f0e359ee504da2082dda2ab112b8099fc064f4a6a",
+            "1d147aacab1c868ac69c78f1bf20a52ed47aaa3a96399fb4e2958316b0dba7c321666fe7da09fc9039397d3c03d1f1fa86d2e917161dade28cac8e0639a6c00d",
         ),
     }
 }
@@ -108,18 +109,19 @@ fn get_real_proof(env: &Env) -> voting::Proof {
 const REAL_COMMITMENT_HEX: &str =
     "2536d01521137bf7b39e3fd26c1376f456ce46a45993a5d7c3c158a450fd7329";
 const REAL_NULLIFIER_HEX: &str = "0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a50";
-// Additional real proof (member, index 0, late join) generated via circuits/generate_proof_instance.js
+// Member2 identity: different secret/salt for late joiner test
+// secret=555555555555555555, salt=666666666666666666, daoId=1, proposalId=1, voteChoice=1
 const REAL2_COMMITMENT_HEX: &str =
-    "012d2a4324506e9db0081457edb50a66a6a7c06cce0b6b6cd1b4345a8d8a21f0";
+    "0ee80d672b29fc843f8332d50d88ea16661cfba5c81e3a0c322e8ae889aafacb";
 const REAL2_NULLIFIER_HEX: &str =
-    "2ea01c1227e074745102e534fe4ae64a1c50d5a630ffa39c9e944d665858d10e";
-const REAL2_ROOT_HEX: &str = "18eb1b3ca83d4da5d314bdc471b7ea052ca61998257821d97572f50aa2f5a280";
-// Soroban-converted proof for member2_index0 (BE, G2 ordered as [imag_x, real_x, imag_y, real_y])
+    "24e3bcb4baf4c1183d0b36498dc1b59e0d349c33a65ffc8fd0d89d7f1dfcfeec";
+const REAL2_ROOT_HEX: &str = "115db8e956aa845dc267878d7c4ee1ad00cbb1ab02a857929f152fe91ffb4605";
+// Soroban-converted proof for member2 (BE, G2 ordered as [imag_x, real_x, imag_y, real_y])
 const REAL2_PROOF_A: &str =
-    "231d8411466e24e4d514ceffc6ee7d0f90518573147c0290f6f9f628dc9b2e6f007372ea52eecd0e4db398f57dfb2111d9d75482dfc217690b30b0e81b59f6b9";
-const REAL2_PROOF_B: &str = "075ba375a79af805e7a946a31ac1b3a2b9630d603e4010006aeeb5606774830705de109bd687f4e63053fb56275d15ee3d45a5f7ef4591b87046d2134b87e6951197f315ecec439027dcf7b3826e35f2a84b2e787a90be72804732e33cb63f0204033c8c4b797b6580a6fc95a20db5e5563d5e4de38b0f23baf4de885fe4d2ff";
+    "20c008d8e65d3cda8a5776ddde8bb92e3706a1b186ead62238d65b3263b8770909bf9629d0a3c8b1e71e590a1444b886dc4f84e9b66c60cb238087a6be14003f";
+const REAL2_PROOF_B: &str = "1682573d9a4776167c0ddc74f0429da4d45367ec68e686cec3df1e2daba92ee129bb0f0e5db41a4e3c1d934edc820b4301591387f71b2413fd5fa17d2ec50bb42b63fc5889ec01f5b687e6a862f5ca982ac4234a2793705b547a0e56e8ea971d04d8d8eb7bd586b32cf2d60712d59474067034f87e2521d0821e36f2a712c5fe";
 const REAL2_PROOF_C: &str =
-    "0229d1f4afd6d36b064ab8048263b4b64d7b14efd4fe713f4b8e854e932d75bd2406f934e1b865c6d26ee8bf2239b3ce6ebeb2f59265089540392ca864600f0c";
+    "26b5b0e8fdf645d99e117e4b1799773334f4b0f9508b484fa88d546784dd2424122b0ff02af71ad64efc4f75248775804046e51a3ac49d9924c9c67b5326bf64";
 
 // Churn test: two trailing proposals, late joiner votes on both (testutils path, mock proof).
 #[test]
@@ -188,7 +190,6 @@ fn test_trailing_mode_churn_across_parallel_proposals() {
         &true,
         &nullifier1,
         &root_after_join,
-        &commitment2,
         &proof,
     );
 
@@ -199,7 +200,6 @@ fn test_trailing_mode_churn_across_parallel_proposals() {
         &false,
         &nullifier2,
         &root_after_join,
-        &commitment2,
         &proof,
     );
 
@@ -256,8 +256,7 @@ fn create_mock_vk(env: &Env) -> voting::VerificationKey {
             g1_gen.clone(),
             g1_gen.clone(),
             g1_gen.clone(),
-            g1_gen.clone(),
-            g1_gen.clone(), // 7th element for commitment
+            g1_gen.clone(), // 6 elements for 5 public signals + 1
         ],
     }
 }
@@ -332,7 +331,6 @@ fn test_fixed_mode_late_joiner_cannot_vote() {
         &true,
         &nullifier2,
         &new_root,
-        &commitment2,
         &proof2,
     );
 }
@@ -405,7 +403,6 @@ fn test_trailing_mode_late_joiner_can_vote() {
         &true,
         &nullifier,
         &root_after_member1, // Use the root from when member1 was the only member
-        &commitment1,
         &proof,
     );
 
@@ -416,7 +413,9 @@ fn test_trailing_mode_late_joiner_can_vote() {
     println!("✅ Trailing mode correctly allowed member to vote with historical root");
 }
 
-/// Trailing mode with a real proof for a late joiner (member at index 1).
+/// Trailing mode with a real proof for a late joiner (member at index 0 in an empty tree).
+/// Uses member2 identity: secret=555555555555555555, salt=666666666666666666
+/// Proof generated for daoId=1, proposalId=1, voteChoice=1
 #[test]
 fn test_trailing_mode_late_joiner_can_vote_real_member2() {
     let env = Env::default();
@@ -474,7 +473,6 @@ fn test_trailing_mode_late_joiner_can_vote_real_member2() {
         &true,
         &nullifier2,
         &root_after_join,
-        &commitment2,
         &proof,
     );
 
@@ -545,7 +543,6 @@ fn test_trailing_mode_removed_member_cannot_vote_on_new_proposal() {
         &true,
         &nullifier1,
         &old_root,
-        &commitment1,
         &proof1,
     );
 }
@@ -610,7 +607,6 @@ fn test_trailing_mode_removed_member_cannot_vote_on_old_proposal() {
         &true,
         &nullifier1,
         &old_root,
-        &commitment1,
         &proof1,
     );
 }

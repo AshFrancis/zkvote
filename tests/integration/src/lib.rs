@@ -71,8 +71,9 @@ mod tests {
                 gamma: g2_gen.clone(),
                 delta: g2_gen.clone(),
                 // IC vector: IC[0] + one for each public signal
-                // Public signals: [root, nullifier, daoId, proposalId, voteChoice, commitment] = 6 signals
-                // So IC needs 7 elements
+                // Public signals: [root, nullifier, daoId, proposalId, voteChoice] = 5 signals
+                // (commitment is now PRIVATE, not public)
+                // So IC needs 6 elements
                 ic: Vec::from_array(
                     &self.env,
                     [
@@ -82,7 +83,6 @@ mod tests {
                         g1_gen.clone(), // IC[3] for daoId
                         g1_gen.clone(), // IC[4] for proposalId
                         g1_gen.clone(), // IC[5] for voteChoice
-                        g1_gen.clone(), // IC[6] for commitment
                     ],
                 ),
             }
@@ -335,7 +335,6 @@ mod tests {
             &true, // FOR
             &nullifier1,
             &root,
-            &commitment1, // NEW: commitment for revocation checks
             &proof,
         );
 
@@ -347,7 +346,6 @@ mod tests {
             &false, // AGAINST
             &nullifier2,
             &root,
-            &commitment2, // NEW: commitment for revocation checks
             &proof,
         );
 
@@ -493,7 +491,6 @@ mod tests {
             &true,
             &nullifier,
             &root,
-            &commitment, // NEW: commitment for revocation checks
             &proof,
         );
 
@@ -504,7 +501,6 @@ mod tests {
             &false, // Different choice, same nullifier
             &nullifier,
             &root,
-            &commitment, // NEW: commitment for revocation checks
             &proof,
         );
     }
@@ -661,7 +657,6 @@ mod tests {
             &true,
             &nullifier1,
             &eligible_root,
-            &commitment1, // NEW: commitment for revocation checks
             &proof,
         );
 
@@ -732,7 +727,6 @@ mod tests {
             &true,
             &nullifier,
             &new_root,    // This won't match eligible_root
-            &commitment2, // NEW: commitment for revocation checks
             &proof,
         );
     }
@@ -801,7 +795,6 @@ mod tests {
             &true,
             &nullifier,
             &new_root, // New root is valid in trailing mode
-            &commitment2,
             &proof,
         );
 
@@ -876,7 +869,6 @@ mod tests {
             &true,
             &nullifier,
             &old_root,
-            &commitment1, // This commitment was revoked
             &proof,
         );
     }
@@ -950,7 +942,6 @@ mod tests {
             &true,
             &nullifier,
             &member_root,
-            &commitment1, // This commitment was revoked at ts 300
             &proof,
         );
     }
@@ -1022,7 +1013,6 @@ mod tests {
             &true,
             &nullifier1,
             &root,
-            &commitment,
             &proof,
         );
 
@@ -1033,7 +1023,6 @@ mod tests {
             &false,
             &nullifier2,
             &root,
-            &commitment,
             &proof,
         );
     }
@@ -1137,7 +1126,6 @@ mod tests {
             &true,
             &nullifier,
             &root,
-            &commitment,
             &proof,
         );
         let cpu_after = system.env.cost_estimate().budget().cpu_instruction_cost();
@@ -1207,7 +1195,6 @@ mod tests {
             &true,
             &nullifier,
             &root1,
-            &commitment,
             &proof,
         );
         system.voting_client().vote(
@@ -1216,7 +1203,6 @@ mod tests {
             &false,
             &nullifier,
             &root2,
-            &commitment,
             &proof,
         );
     }
@@ -1264,7 +1250,6 @@ mod tests {
                 &(i % 2 == 0),
                 &nullifier,
                 &root,
-                &commitment,
                 &proof,
             );
         }

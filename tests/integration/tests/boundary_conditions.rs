@@ -76,8 +76,7 @@ fn create_mock_vk(env: &Env) -> voting::VerificationKey {
             g1.clone(),
             g1.clone(),
             g1.clone(),
-            g1.clone(),
-            g1.clone(),
+            g1.clone(), // 6 elements for 5 public signals + 1
         ],
     }
 }
