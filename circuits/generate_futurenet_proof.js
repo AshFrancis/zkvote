@@ -139,7 +139,7 @@ async function main() {
   fs.writeFileSync(path.join(outDir, 'futurenet_proof.json'), JSON.stringify(data, null, 2));
 
   console.log('\n=== Stellar CLI Vote Command ===\n');
-  console.log(`cd /Users/ash/code/daovote && source .contract-ids.futurenet && stellar contract invoke \\`);
+  console.log(`cd /Users/ash/code/zkvote && source .contract-ids.futurenet && stellar contract invoke \\`);
   console.log(`  --rpc-url "https://rpc-futurenet.stellar.org:443" \\`);
   console.log(`  --network-passphrase "Test SDF Future Network ; October 2022" \\`);
   console.log(`  --source mykey \\`);

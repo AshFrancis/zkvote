@@ -1,53 +1,56 @@
 // Conversion utility functions for BN254 point serialization
 // Extracted for unit testing
+//
+// After PR #1614, Soroban's BN254 host functions use BIG-ENDIAN byte order
+// per CAP-74 and EIP-196/197 (Ethereum precompile format).
+//
+// G1 format: be_bytes(X) || be_bytes(Y)
+// G2 format: be_bytes(X.c1) || be_bytes(X.c0) || be_bytes(Y.c1) || be_bytes(Y.c0)
+//
+// snarkjs outputs G2 as [[c0, c1], [c0, c1]], so we need to swap within each pair.
 
 /**
- * Convert bigint to 32-byte hex string in LITTLE-ENDIAN format
- * Soroban BN254 host functions expect little-endian byte order!
+ * Convert bigint to 32-byte hex string in BIG-ENDIAN format
+ * After PR #1614, Soroban BN254 host functions expect big-endian byte order!
  *
  * @param {bigint} n - Field element as bigint
- * @returns {string} 64-character hex string (32 bytes, little-endian)
+ * @returns {string} 64-character hex string (32 bytes, big-endian)
  */
-function toLE32ByteHex(n) {
-    const hex = n.toString(16).padStart(64, '0');
-    // Reverse byte order: big-endian → little-endian
-    const bytes = hex.match(/.{2}/g);  // Split into bytes
-    return bytes.reverse().join('');    // Reverse and rejoin
+function toBE32ByteHex(n) {
+    return BigInt(n).toString(16).padStart(64, '0');
 }
 
 /**
  * Convert G1 point (affine coordinates) to Soroban format
  * G1 point: [x, y, z] where z should be 1 for affine
- * Output: 64 bytes (32-byte x LE, 32-byte y LE)
+ * Output: 64 bytes (32-byte x BE, 32-byte y BE)
  *
  * @param {Array<string>} point - [x, y, z] as decimal strings
  * @returns {string} 128-character hex string (64 bytes)
  */
 function convertG1Point(point) {
-    const x = toLE32ByteHex(BigInt(point[0]));
-    const y = toLE32ByteHex(BigInt(point[1]));
+    const x = toBE32ByteHex(BigInt(point[0]));
+    const y = toBE32ByteHex(BigInt(point[1]));
     return x + y;
 }
 
 /**
  * Convert G2 point (affine coordinates in Fq2) to Soroban format
- * G2 point: [[x1, x2], [y1, y2], [z1, z2]] where z should be [1, 0] for affine
- * Output: 128 bytes (32-byte x1 LE, 32-byte x2 LE, 32-byte y1 LE, 32-byte y2 LE)
+ * G2 point: [[c0, c1], [c0, c1], [z0, z1]] where z should be [1, 0] for affine
+ * snarkjs outputs: [[x.c0, x.c1], [y.c0, y.c1]]
+ * Soroban BE expects: X.c1 || X.c0 || Y.c1 || Y.c0 (imaginary before real per CAP-74)
  *
- * IMPORTANT: Natural Fq2 element ordering [x1, x2, y1, y2] (NOT reversed!)
- * Where x = x1 + x2·u in Fq2 field extension
- *
- * @param {Array<Array<string>>} point - [[x1, x2], [y1, y2], [z1, z2]] as decimal strings
+ * @param {Array<Array<string>>} point - [[x_c0, x_c1], [y_c0, y_c1], [z_c0, z_c1]] as decimal strings
  * @returns {string} 256-character hex string (128 bytes)
  */
 function convertG2Point(point) {
-    // Natural order (NOT reversed) for Fq2 elements
-    const x1 = toLE32ByteHex(BigInt(point[0][0]));
-    const x2 = toLE32ByteHex(BigInt(point[0][1]));
-    const y1 = toLE32ByteHex(BigInt(point[1][0]));
-    const y2 = toLE32ByteHex(BigInt(point[1][1]));
+    // CAP-74: c1 (imaginary) before c0 (real) for extension field elements
+    const x_c1 = toBE32ByteHex(BigInt(point[0][1]));  // X imaginary
+    const x_c0 = toBE32ByteHex(BigInt(point[0][0]));  // X real
+    const y_c1 = toBE32ByteHex(BigInt(point[1][1]));  // Y imaginary
+    const y_c0 = toBE32ByteHex(BigInt(point[1][0]));  // Y real
 
-    return x1 + x2 + y1 + y2;
+    return x_c1 + x_c0 + y_c1 + y_c0;
 }
 
 /**
@@ -96,7 +99,7 @@ function reverseHexBytes(hex) {
 }
 
 module.exports = {
-    toLE32ByteHex,
+    toBE32ByteHex,
     convertG1Point,
     convertG2Point,
     convertProofToSoroban,

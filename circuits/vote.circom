@@ -7,16 +7,15 @@ include "merkle_tree.circom";
 // DaoVote Anonymous Vote Circuit
 //
 // Proves:
-// 1. Voter knows secret & salt that hash to a leaf in the Merkle tree
+// 1. Voter knows secret & salt that hash to a commitment (leaf) in the Merkle tree
 // 2. Nullifier is correctly derived from secret, daoId, and proposalId (domain-separated)
 // 3. Vote choice is binary (0 or 1)
-// 4. Commitment matches Poseidon(secret, salt)
 //
-// Public signals: [root, nullifier, daoId, proposalId, voteChoice, commitment]
+// Public signals: [root, nullifier, daoId, proposalId, voteChoice]
 // Private signals: secret, salt, pathElements, pathIndices
 //
-// NOTE: Exposing commitment makes votes linkable across proposals (same commitment = same voter)
-// but preserves anonymity (commitment doesn't reveal identity/address).
+// PRIVACY: Commitment is NOT exposed publicly. Votes are fully unlinkable across proposals.
+// Revocation is enforced via Merkle tree updates (zeroing leaves) rather than on-chain checks.
 template Vote(levels) {
     // Public inputs
     signal input root;              // Merkle tree root (verified on-chain)
@@ -24,7 +23,6 @@ template Vote(levels) {
     signal input daoId;             // DAO identifier (for domain separation)
     signal input proposalId;        // Which proposal this vote is for
     signal input voteChoice;        // 0 = against, 1 = for
-    signal input commitment;        // Identity commitment (allows revocation checks)
 
     // Private inputs
     signal input secret;            // Voter's secret (like password)
@@ -33,13 +31,14 @@ template Vote(levels) {
     signal input pathIndices[levels];   // Merkle proof path (0=left, 1=right)
 
     // 1. Compute identity commitment: Poseidon(secret, salt)
-    // and verify it matches the public commitment input
+    // This is used as the leaf in the Merkle tree
     component commitmentHasher = Poseidon(2);
     commitmentHasher.inputs[0] <== secret;
     commitmentHasher.inputs[1] <== salt;
 
-    // Constrain computed commitment to match public commitment
-    commitment === commitmentHasher.out;
+    // Commitment is computed internally (private) - not exposed as public signal
+    signal commitment;
+    commitment <== commitmentHasher.out;
 
     // 2. Verify Merkle tree inclusion
     component merkleProof = MerkleTreeInclusionProof(levels);
@@ -68,4 +67,6 @@ template Vote(levels) {
 }
 
 // Default tree depth of 18 (supports ~262K members)
-component main {public [root, nullifier, daoId, proposalId, voteChoice, commitment]} = Vote(18);
+// Public signals: [root, nullifier, daoId, proposalId, voteChoice] - 5 signals
+// Commitment is computed internally from secret+salt (private)
+component main {public [root, nullifier, daoId, proposalId, voteChoice]} = Vote(18);
