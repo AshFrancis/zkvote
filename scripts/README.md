@@ -1,158 +1,141 @@
-# DaoVote Deployment Scripts
+# ZKVote Scripts
 
-Automated deployment scripts for DaoVote anonymous voting system on Stellar Soroban.
+Scripts for deploying and testing ZKVote on Stellar Soroban (Futurenet).
+
+## Directory Structure
+
+```
+scripts/
+├── deploy/                         # Deployment scripts
+│   ├── deploy-hosted-futurenet.sh  # Deploy all contracts to futurenet
+├── test/                           # Test scripts
+│   ├── e2e-zkproof.sh              # Real ZK proof e2e test
+│   └── poseidon-kat.sh             # Poseidon KAT verification
+└── utils/                          # Utility scripts
+    ├── convert-vk-to-hex.js        # VK format conversion
+    ├── poseidon-kat-verify.js      # Generate KAT vectors
+    ├── create-public-dao.sh        # Create test DAO
+    └── run_budget_sim.sh           # Budget simulation
+```
 
 ## Prerequisites
 
 1. **Stellar CLI** installed:
    ```bash
-   cargo install stellar-cli  # ensure version matches soroban host (see rust-toolchain.toml)
+   cargo install stellar-cli
    ```
 
-2. **Stellar network running** (choose one):
-   - **Local P25 network** (recommended for development):
-     ```bash
-     docker run --rm -d --name stellar -p 8000:8000 stellar/quickstart:future --futurenet
-     ```
-   - **Stellar Futurenet** (for testing with shared network)
-
-3. **Account with funds**:
+2. **Funded Futurenet account**:
    ```bash
-   # Generate account
    stellar keys generate mykey
-   
-   # Fund on local network
-   stellar keys fund mykey --network local
-   
-   # OR fund on futurenet
    stellar keys fund mykey --network futurenet
    ```
 
-4. **Contracts built**:
+3. **Contracts built**:
    ```bash
    cargo build --target wasm32v1-none --release
    ```
 
 ## Quick Start
 
-### Local Deployment
+### Deploy to Futurenet
 
 ```bash
-# 1. Deploy all contracts with constructors
-./scripts/deploy-local.sh
+# Deploy all contracts
+./scripts/deploy/futurenet.sh
 
-# 2. Configure backend with relayer key
-./scripts/init-local.sh
-
-# 3. Start backend relayer
-cd backend
-npm install
-npm run dev
+# Set verification key
+./scripts/deploy/set-vk.sh
 ```
 
-### Futurenet Deployment
+### Run Tests
 
 ```bash
-# 1. Set network to futurenet
-export NETWORK=futurenet
+# Run ZK proof e2e test
+./scripts/test/e2e-zkproof.sh
 
-# 2. Deploy contracts
-./scripts/deploy-local.sh
+# Run Poseidon KAT verification
+./scripts/test/poseidon-kat.sh
 
-# 3. Configure backend
-./scripts/init-local.sh
-
-# 4. Start backend
-cd backend
-npm install
-npm run dev
+# Run Rust unit/integration tests
+cargo test --workspace
 ```
 
-## Scripts
+## Deploy Scripts
 
-### `run_budget_sim.sh`
-Simulate `set_vk`, `create_proposal`, and `vote` against WASM using `soroban contract invoke --simulate` to capture CPU/mem for budget baselines.
-
-**Usage:**
-```bash
-./scripts/run_budget_sim.sh \
-  target/wasm32v1-none/release/voting.wasm \
-  target/wasm32v1-none/release/dao_registry.wasm \
-  target/wasm32v1-none/release/membership_sbt.wasm \
-  target/wasm32v1-none/release/membership_tree.wasm
-```
-If omitted, defaults to the release WASMs above.
-
-**Note:** Requires `soroban` CLI configured for your target network (local/futurenet) and a funded key. Outputs CPU/mem metrics you can apply to `tests/integration/tests/budget_smoke.rs`.
-**Env checklist before running:**
-- `STELLAR_NETWORK_PASSPHRASE` (e.g., futurenet passphrase)
-- `STELLAR_RPC_URL` (e.g., http://localhost:8000/soroban/rpc)
-- `SOURCE` (funded key name from `stellar keys list`)
-
-### `deploy-local.sh`
+### `deploy/futurenet.sh`
 
 Deploys all contracts in dependency order with constructor arguments.
 
-**Usage:**
-```bash
-./scripts/deploy-local.sh
-```
-
 **Environment variables:**
-- `NETWORK` - Network name (default: `local`)
 - `SOURCE` - Deployer account key name (default: `mykey`)
 - `WASM_DIR` - WASM files directory (default: `target/wasm32v1-none/release`)
 
 **Output:**
-- Creates `.contract-ids.local` with deployed contract addresses
+- Creates `.contract-ids.futurenet` with deployed contract addresses
 
 **Deployment order:**
-1. **DAORegistry** (no constructor)
-2. **MembershipSBT** (constructor: `registry`)
-3. **MembershipTree** (constructor: `sbt_contract`)
-4. **Voting** (constructor: `tree_contract`)
+1. DAORegistry (no constructor)
+2. MembershipSBT (constructor: `registry`)
+3. MembershipTree (constructor: `sbt_contract`)
+4. Voting (constructor: `tree_contract`)
+5. Comments (constructor: `registry`)
 
-**Constructor arguments:**
-```bash
-# MembershipSBT
--- --registry <REGISTRY_ID>
+### `deploy/set-vk.sh`
 
-# MembershipTree
--- --sbt_contract <SBT_ID>
-
-# Voting
--- --tree_contract <TREE_ID>
-```
-
-### `init-local.sh`
-
-Configures backend environment after deployment.
+Sets the Groth16 verification key on the voting contract.
 
 **Usage:**
 ```bash
-./scripts/init-local.sh
+./scripts/deploy/set-vk.sh
 ```
 
-**Environment variables:**
-- `RELAYER_KEY` - Relayer key name (default: `relayer`)
+## Test Scripts
 
-**Actions:**
-1. Generates or uses existing relayer key
-2. Funds relayer account (local network only)
-3. Creates `backend/.env` with:
-   - Network configuration
-   - Relayer secret key (secure)
-   - Contract addresses
-   - Server configuration
+### `test/e2e-zkproof.sh`
 
-**Output:**
-- Creates `backend/.env` (gitignored)
-- Never commits secrets to version control
+End-to-end test with real ZK proof generation and verification on futurenet.
 
-**Security notes:**
-- Relayer secret key is randomly generated
-- `backend/.env` is automatically in `.gitignore`
-- Never share or commit `.env` files
+**What it tests:**
+1. Create DAO
+2. Add member with SBT
+3. Register commitment
+4. Create proposal
+5. Generate real Groth16 proof
+6. Submit vote through relayer
+7. Verify vote recorded
+
+### `test/poseidon-kat.sh`
+
+Known Answer Test for Poseidon hash function. Verifies circuit and on-chain Poseidon match.
+
+**MUST pass before production deployment.**
+
+## Utility Scripts
+
+### `utils/convert-vk-to-hex.js`
+
+Converts snarkjs verification key to hex format for on-chain storage.
+
+```bash
+node scripts/utils/convert-vk-to-hex.js circuits/build/verification_key.json
+```
+
+### `utils/poseidon-kat-verify.js`
+
+Generates Poseidon Known Answer Test vectors using circomlibjs.
+
+### `utils/create-public-dao.sh`
+
+Helper script to create a public DAO for testing.
+
+### `utils/run_budget_sim.sh`
+
+Simulates contract calls to capture CPU/memory budgets.
+
+```bash
+./scripts/utils/run_budget_sim.sh
+```
 
 ## Contract Dependencies
 
@@ -168,150 +151,25 @@ Voting (needs: tree_contract)
 
 ## Generated Files
 
-### `.contract-ids.local`
+### `.contract-ids.futurenet`
 ```bash
-# DaoVote Contract IDs (local network)
-# Generated: <timestamp>
-NETWORK=local
+NETWORK=futurenet
 REGISTRY_ID=CXXX...
 SBT_ID=CXXX...
 TREE_ID=CXXX...
 VOTING_ID=CXXX...
+COMMENTS_ID=CXXX...
 ```
 
-### `backend/.env`
-```bash
-# DaoVote Relayer Configuration
-# Generated: <timestamp>
-# Network: local
+## Security
 
-# Network Configuration
-SOROBAN_RPC_URL=http://localhost:8000/soroban/rpc
-NETWORK_PASSPHRASE=Standalone Network ; February 2017
+- Never commit `.env` files or secret keys
+- Use separate keys for testnet and mainnet
+- Verify network passphrases before deployment
+- Monitor relayer account balance
 
-# Relayer Account
-# WARNING: Keep this secret secure!
-RELAYER_SECRET_KEY=SXXX...
+## See Also
 
-# Contract Addresses
-VOTING_CONTRACT_ID=CXXX...
-TREE_CONTRACT_ID=CXXX...
-
-# Server Configuration
-PORT=3001
-```
-
-## Troubleshooting
-
-### "WASM files not found"
-Build contracts first:
-```bash
-cargo build --target wasm32v1-none --release
-```
-
-### "Account not found"
-Fund the account:
-```bash
-stellar keys fund mykey --network local
-```
-
-### "Network not running"
-Start the local network:
-```bash
-docker run --rm -d --name stellar -p 8000:8000 stellar/quickstart:future --futurenet
-```
-
-### "Constructor argument error"
-Ensure stellar CLI is up to date:
-```bash
-cargo install stellar-cli --force
-```
-
-### "Relayer account not funded"
-Fund manually:
-```bash
-stellar keys fund relayer --network local
-```
-
-## Advanced Usage
-
-### Custom Network
-
-```bash
-# Deploy to custom network
-export NETWORK=testnet
-export SOURCE=admin-key
-./scripts/deploy-local.sh
-./scripts/init-local.sh
-```
-
-### Redeployment
-
-```bash
-# Remove old contract IDs
-rm -f .contract-ids.local
-
-# Remove old backend config
-rm -f backend/.env
-
-# Redeploy
-./scripts/deploy-local.sh
-./scripts/init-local.sh
-```
-
-### Manual Deployment
-
-If you need to deploy contracts manually:
-
-```bash
-# 1. Deploy Registry
-REGISTRY_ID=$(stellar contract deploy \
-  --wasm target/wasm32v1-none/release/dao_registry.wasm \
-  --source mykey --network local)
-
-# 2. Deploy SBT with registry arg
-SBT_ID=$(stellar contract deploy \
-  --wasm target/wasm32v1-none/release/membership_sbt.wasm \
-  --source mykey --network local \
-  -- --registry $REGISTRY_ID)
-
-# 3. Deploy Tree with SBT arg
-TREE_ID=$(stellar contract deploy \
-  --wasm target/wasm32v1-none/release/membership_tree.wasm \
-  --source mykey --network local \
-  -- --sbt_contract $SBT_ID)
-
-# 4. Deploy Voting with Tree arg
-VOTING_ID=$(stellar contract deploy \
-  --wasm target/wasm32v1-none/release/voting.wasm \
-  --source mykey --network local \
-  -- --tree_contract $TREE_ID)
-```
-
-## Security Considerations
-
-1. **Secret Keys**
-   - Never commit `backend/.env` to version control
-   - Never share relayer secret keys
-   - Use separate keys for testnet and mainnet
-
-2. **Network Security**
-   - Use HTTPS RPC URLs in production
-   - Verify network passphrases
-   - Monitor relayer account balance
-
-3. **Contract Upgrades**
-   - Contracts are immutable after deployment
-   - Test thoroughly on testnet before mainnet
-   - Plan upgrade strategy using contract wrappers
-
-## Next Steps
-
-After deployment:
-1. Create a DAO: `stellar contract invoke --id $REGISTRY_ID -- create_dao`
-2. Mint membership SBTs to members
-3. Add members to Merkle tree
-4. Set verification key for Groth16 proofs
-5. Create proposals and start voting
-
-See main README.md for complete usage guide.
+- `tests/e2e/` - JavaScript e2e test suite
+- `tests/integration/` - Rust integration tests
+- Main `README.md` for project overview
