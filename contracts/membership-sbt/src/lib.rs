@@ -284,7 +284,7 @@ impl MembershipSbt {
 
         // Check if already has active SBT (not revoked)
         if Self::has(env.clone(), dao_id, member.clone()) {
-            panic!("already minted");
+            panic_with_error!(&env, SbtError::AlreadyMinted);
         }
 
         let member_key = DataKey::Member(dao_id, member.clone());

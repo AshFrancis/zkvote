@@ -185,10 +185,10 @@ fn create_dummy_vk(env: &Env) -> VerificationKey {
         beta: g2.clone(),
         gamma: g2.clone(),
         delta: g2.clone(),
-        // IC vector needs 7 elements for 6 public signals: [root, nullifier, daoId, proposalId, voteChoice, commitment]
+        // IC vector needs 6 elements for 5 public signals: [root, nullifier, daoId, proposalId, voteChoice]
+        // (commitment is now private, not a public signal)
         ic: soroban_sdk::vec![
             env,
-            g1.clone(),
             g1.clone(),
             g1.clone(),
             g1.clone(),
@@ -421,7 +421,6 @@ fn test_vote_success() {
         &true,
         &nullifier,
         &proposal.eligible_root,
-        &U256::from_u32(&env, 12345),
         &proof,
     );
 
@@ -465,7 +464,6 @@ fn test_double_vote_fails() {
         &true,
         &nullifier,
         &proposal.eligible_root,
-        &U256::from_u32(&env, 12345),
         &proof,
     );
     voting_client.vote(
@@ -474,7 +472,6 @@ fn test_double_vote_fails() {
         &false,
         &nullifier,
         &proposal.eligible_root,
-        &U256::from_u32(&env, 12345),
         &proof,
     );
 
@@ -490,7 +487,6 @@ fn test_double_vote_fails() {
         &false,
         &nullifier2,
         &proposal.eligible_root,
-        &U256::from_u32(&env, 12345),
         &proof,
     );
 }
@@ -528,7 +524,6 @@ fn test_nullifier_zero_rejected() {
         &true,
         &nullifier,
         &proposal.eligible_root,
-        &U256::from_u32(&env, 12345),
         &proof,
     );
 }
@@ -568,7 +563,6 @@ fn test_vote_after_close_fails() {
         &true,
         &nullifier,
         &proposal.eligible_root,
-        &U256::from_u32(&env, 12345),
         &proof,
     );
 }
@@ -642,7 +636,6 @@ fn test_vote_after_archive_fails() {
         &true,
         &nullifier,
         &proposal.eligible_root,
-        &U256::from_u32(&env, 12345),
         &proof,
     );
 }
@@ -751,7 +744,6 @@ fn test_nullifier_duplicate_panics_in_stream() {
             &true,
             &n_u,
             &proposal.eligible_root,
-            &U256::from_u32(&env, 12345),
             &proof,
         );
     }
@@ -796,7 +788,6 @@ fn test_reopen_not_allowed() {
         &true,
         &nullifier,
         &proposal.eligible_root,
-        &U256::from_u32(&env, 12345),
         &proof,
     );
 }
@@ -839,7 +830,6 @@ fn test_randomized_nullifier_sequence_no_duplicates() {
             &(i % 2 == 0),
             &n_u,
             &proposal.eligible_root,
-            &U256::from_u32(&env, 12345),
             &proof,
         );
     }
@@ -895,7 +885,6 @@ fn test_tampered_vk_hash_rejected() {
         &true,
         &nullifier,
         &proposal.eligible_root,
-        &U256::from_u32(&env, 12345),
         &proof,
     );
 }
@@ -965,7 +954,6 @@ fn test_vote_with_invalid_root_fails() {
         &true,
         &nullifier,
         &invalid_root,
-        &U256::from_u32(&env, 12345),
         &proof,
     );
 }
@@ -1070,7 +1058,6 @@ fn test_get_results() {
         &true,
         &nullifier,
         &proposal.eligible_root,
-        &U256::from_u32(&env, 12345),
         &proof,
     );
 
@@ -1151,7 +1138,6 @@ fn test_vote_with_malformed_proof_fails() {
         &true,
         &nullifier,
         &proposal.eligible_root,
-        &U256::from_u32(&env, 12345),
         &bad_proof,
     );
 }
@@ -1199,7 +1185,6 @@ fn test_vote_with_swapped_pub_signals_fails() {
         &nullifier,
         // Intentionally swap dao_id/proposal_id signals (wrong roots/commitments)
         &U256::from_u32(&env, 99999),
-        &U256::from_u32(&env, 54321),
         &proof,
     );
 }
@@ -1245,7 +1230,6 @@ fn test_vote_with_swapped_dao_proposal_ids_fails() {
         &true,
         &nullifier,
         &U256::from_u32(&env, 99999),
-        &U256::from_u32(&env, 11111),
         &proof,
     );
 }
@@ -1291,7 +1275,6 @@ fn test_vote_with_all_zero_proof_fails() {
         &true,
         &nullifier,
         &root,
-        &U256::from_u32(&env, 999),
         &proof,
     );
 }
@@ -1337,7 +1320,6 @@ fn test_vote_with_off_curve_proof_fails() {
         &true,
         &nullifier,
         &root,
-        &U256::from_u32(&env, 999),
         &proof,
     );
 }
@@ -1379,7 +1361,6 @@ fn test_vote_after_expiry_fails() {
         &true,
         &nullifier,
         &proposal.eligible_root,
-        &U256::from_u32(&env, 12345),
         &proof,
     );
 }
@@ -1423,8 +1404,7 @@ fn test_vote_with_commitment_from_other_dao_fails() {
         &proposal_id,
         &true,
         &nullifier,
-        &root_dao1,                   // wrong root for DAO 2
-        &U256::from_u32(&env, 12345), // commitment not present in DAO 2 tree
+        &root_dao1, // wrong root for DAO 2
         &proof,
     );
 }
@@ -1482,7 +1462,6 @@ fn test_vote_with_mismatched_vk_hash_in_proposal_fails() {
         &true,
         &nullifier,
         &proposal.eligible_root,
-        &U256::from_u32(&env, 12345),
         &proof,
     );
 }
@@ -1535,7 +1514,6 @@ fn test_vote_with_vk_ic_length_mismatch_fails() {
         &true,
         &nullifier,
         &proposal.eligible_root,
-        &U256::from_u32(&env, 12345),
         &proof,
     );
 }
@@ -1598,7 +1576,6 @@ fn test_randomized_mixed_actions_preserve_invariants() {
                 &(i % 2 == 0),
                 &n,
                 &proposal.eligible_root,
-                &U256::from_u32(&env, 12345),
                 &proof,
             );
         }
@@ -1655,7 +1632,6 @@ fn test_nullifier_reusable_across_proposals() {
         &true,
         &nullifier,
         &prop1.eligible_root,
-        &U256::from_u32(&env, 12345),
         &proof,
     );
     voting_client.vote(
@@ -1664,7 +1640,6 @@ fn test_nullifier_reusable_across_proposals() {
         &false,
         &nullifier,
         &prop2.eligible_root,
-        &U256::from_u32(&env, 12345),
         &proof,
     );
 
@@ -1712,7 +1687,6 @@ fn test_multiple_unique_nullifiers_succeed() {
             &(i % 2 == 0),
             &nullifier,
             &proposal.eligible_root,
-            &U256::from_u32(&env, 12345),
             &proof,
         );
     }
@@ -1798,7 +1772,6 @@ fn test_vk_change_after_proposal_creation_resists_vk_change() {
         different_g1.clone(),
         different_g1.clone(),
         different_g1.clone(),
-        different_g1.clone(),
         different_g1
     ];
     voting_client.set_vk(&1u64, &vk2, &admin);
@@ -1814,7 +1787,6 @@ fn test_vk_change_after_proposal_creation_resists_vk_change() {
         &true,
         &nullifier,
         &proposal.eligible_root,
-        &U256::from_u32(&env, 12345),
         &proof,
     );
 }
@@ -1862,7 +1834,6 @@ fn test_vk_version_mismatch_rejected() {
         different_g1.clone(),
         different_g1.clone(),
         different_g1.clone(),
-        different_g1.clone(),
         different_g1
     ];
     voting_client.set_vk(&1u64, &vk2, &admin);
@@ -1882,7 +1853,6 @@ fn test_vk_version_mismatch_rejected() {
         &true,
         &nullifier,
         &proposal.eligible_root,
-        &U256::from_u32(&env, 12345),
         &proof,
     );
 }
@@ -1910,7 +1880,7 @@ fn test_create_proposal_with_specific_vk_version() {
     let mut first_ic_bytes = vk1.ic.get(0).unwrap().to_array();
     first_ic_bytes[31] = 0x05; // change x
     vk2_ic.push_back(BytesN::from_array(&env, &first_ic_bytes));
-    for _ in 1..7 {
+    for _ in 1..6 {
         vk2_ic.push_back(vk1.ic.get(0).unwrap());
     }
     vk2.ic = vk2_ic;
@@ -1946,7 +1916,6 @@ fn test_create_proposal_with_specific_vk_version() {
         &true,
         &nullifier,
         &proposal.eligible_root,
-        &U256::from_u32(&env, 12345),
         &proof,
     );
 }
@@ -1998,7 +1967,7 @@ fn test_vk_for_version_exposes_stored_key() {
     let mut first_ic_bytes = vk1.ic.get(0).unwrap().to_array();
     first_ic_bytes[31] = 0x05; // change x
     vk2_ic.push_back(BytesN::from_array(&env, &first_ic_bytes));
-    for _ in 1..7 {
+    for _ in 1..6 {
         vk2_ic.push_back(vk1.ic.get(0).unwrap());
     }
     vk2.ic = vk2_ic;
@@ -2046,7 +2015,7 @@ fn test_set_vk_empty_ic_fails() {
         ic: soroban_sdk::vec![&env], // Empty!
     };
 
-    // Should panic - IC length must be exactly 7
+    // Should panic - IC length must be exactly 6
     voting_client.set_vk(&1u64, &invalid_vk, &admin);
 }
 
@@ -2079,7 +2048,7 @@ fn test_set_vk_ic_too_large_fails() {
         ic: ic_vec,
     };
 
-    // Should panic - first check catches IC length != 7
+    // Should panic - first check catches IC length != 6
     voting_client.set_vk(&1u64, &invalid_vk, &admin);
 }
 
@@ -2093,7 +2062,7 @@ fn test_set_vk_ic_length_5_fails() {
     let admin = Address::generate(&env);
     registry_client.set_admin(&1u64, &admin);
 
-    // Create VK with IC length = 5 (need exactly 7 for vote circuit)
+    // Create VK with IC length = 5 (need exactly 6 for vote circuit: 5 public signals + 1)
     let g1 = bn254_g1_generator(&env);
     let g2 = bn254_g2_generator(&env);
     let invalid_vk = VerificationKey {
@@ -2111,39 +2080,7 @@ fn test_set_vk_ic_length_5_fails() {
         ],
     };
 
-    // Should panic - need exactly 7 elements
-    voting_client.set_vk(&1u64, &invalid_vk, &admin);
-}
-
-#[test]
-#[should_panic(expected = "HostError")]
-fn test_set_vk_ic_length_6_fails() {
-    let (env, voting_id, _tree_id, _sbt_id, registry_id, _member) = setup_env_with_registry();
-    let voting_client = VotingClient::new(&env, &voting_id);
-    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
-
-    let admin = Address::generate(&env);
-    registry_client.set_admin(&1u64, &admin);
-
-    // Create VK with IC length = 6 (need exactly 7 for vote circuit)
-    let g1 = bn254_g1_generator(&env);
-    let g2 = bn254_g2_generator(&env);
-    let invalid_vk = VerificationKey {
-        alpha: g1.clone(),
-        beta: g2.clone(),
-        gamma: g2.clone(),
-        delta: g2,
-        ic: soroban_sdk::vec![
-            &env,
-            g1.clone(),
-            g1.clone(),
-            g1.clone(),
-            g1.clone(),
-            g1.clone(),
-            g1.clone()
-        ],
-    };
-
+    // Should panic - need exactly 6 elements
     voting_client.set_vk(&1u64, &invalid_vk, &admin);
 }
 
@@ -2157,7 +2094,7 @@ fn test_set_vk_ic_length_7_fails() {
     let admin = Address::generate(&env);
     registry_client.set_admin(&1u64, &admin);
 
-    // Create VK with IC length = 8 (need exactly 7 for vote circuit)
+    // Create VK with IC length = 7 (need exactly 6 for vote circuit: 5 public signals + 1)
     let g1 = bn254_g1_generator(&env);
     let g2 = bn254_g2_generator(&env);
     let invalid_vk = VerificationKey {
@@ -2173,12 +2110,11 @@ fn test_set_vk_ic_length_7_fails() {
             g1.clone(),
             g1.clone(),
             g1.clone(),
-            g1.clone(),
             g1.clone()
         ],
     };
 
-    // Should panic - need exactly 7 elements
+    // Should panic - need exactly 6 elements
     voting_client.set_vk(&1u64, &invalid_vk, &admin);
 }
 

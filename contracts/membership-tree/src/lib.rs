@@ -4,12 +4,18 @@ use soroban_sdk::{
     Env, IntoVal, Symbol, Vec, U256,
 };
 
+mod poseidon_params;
+
 const SBT_CONTRACT: Symbol = symbol_short!("sbt");
 const MAX_ROOTS: u32 = 30;
 const MAX_TREE_DEPTH: u32 = 18; // Supports ~262K members (2^18 = 262,144)
 const ZEROS_CACHE: Symbol = symbol_short!("zeros");
 const VERSION: u32 = 1;
 const VERSION_KEY: Symbol = symbol_short!("ver");
+
+// Poseidon params cache keys (stored in persistent storage)
+const POSEIDON_MDS: Symbol = symbol_short!("pos_mds");
+const POSEIDON_RC: Symbol = symbol_short!("pos_rc");
 
 #[contracterror]
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -28,6 +34,7 @@ pub enum TreeError {
     MemberNotInTree = 12,
     RootNotFound = 13,
     AlreadyInitialized = 14,
+    MemberNotRevoked = 15,         // Member hasn't been revoked (for reinstatement)
 }
 
 #[contracttype]
@@ -44,6 +51,8 @@ pub enum DataKey {
     RootIndex(u64, U256),          // (dao_id, root) -> root index
     RevokedAt(u64, U256),          // (dao_id, commitment) -> timestamp when revoked
     ReinstatedAt(u64, U256),       // (dao_id, commitment) -> timestamp when reinstated
+    NodeHash(u64, u32, u32),       // (dao_id, level, node_index) -> hash value at that position
+    MinValidRootIdx(u64),          // dao_id -> minimum valid root index (after member removals)
 }
 
 // Typed Events
@@ -578,6 +587,9 @@ impl MembershipTree {
     /// Returns (pathElements, pathIndices) where:
     /// - pathElements[i] is the sibling hash at level i
     /// - pathIndices[i] is 0 if leaf is left child, 1 if right child
+    ///
+    /// This optimized version reads stored node hashes directly (O(depth) reads)
+    /// instead of reconstructing subtrees (which was O(n * log n) hashes).
     pub fn get_merkle_path(env: Env, dao_id: u64, leaf_index: u32) -> (Vec<U256>, Vec<u32>) {
         let depth: u32 = env
             .storage()
@@ -611,7 +623,7 @@ impl MembershipTree {
                 current_index - 1
             };
 
-            // Get sibling value
+            // Get sibling value from stored node hashes (O(1) lookup)
             let sibling = if level == 0 {
                 // Level 0: sibling is a raw leaf (commitment value)
                 if sibling_index < next_index {
@@ -625,18 +637,12 @@ impl MembershipTree {
                     Self::zero_value(&env)
                 }
             } else {
-                // Level > 0: sibling is an intermediate hash node
-                // Calculate which leaves this subtree covers
-                let leaves_per_subtree = 1u32 << level; // 2^level
-                let start_leaf = sibling_index * leaves_per_subtree;
-
-                if start_leaf >= next_index {
-                    // Entire subtree is empty
-                    Self::zero_at_level(&env, level)
-                } else {
-                    // Reconstruct the hash by hashing up from stored leaves
-                    Self::reconstruct_subtree(&env, dao_id, sibling_index, level, next_index)
-                }
+                // Level > 0: look up stored node hash (written during insert_leaf)
+                let node_key = DataKey::NodeHash(dao_id, level, sibling_index);
+                env.storage()
+                    .persistent()
+                    .get(&node_key)
+                    .unwrap_or_else(|| Self::zero_at_level(&env, level))
             };
 
             path_elements.push_back(sibling);
@@ -662,8 +668,7 @@ impl MembershipTree {
 
     /// Remove a member by zeroing their leaf and recomputing the root
     /// Only callable by DAO admin
-    /// Remove member by recording revocation timestamp (cheap, no tree update)
-    /// This prevents the member from voting on proposals created after this timestamp
+    /// This zeros the leaf in the Merkle tree, preventing proofs against new roots
     pub fn remove_member(env: Env, dao_id: u64, member: Address, admin: Address) {
         admin.require_auth();
 
@@ -702,24 +707,29 @@ impl MembershipTree {
             panic_with_error!(&env, TreeError::MemberRemoved);
         }
 
-        // Record revocation timestamp
-        let revoked_at = env.ledger().timestamp();
+        // Zero the leaf and recompute root
+        let zero = Self::zero_value(&env);
+        let (new_root, root_index) = Self::update_leaf(&env, dao_id, leaf_index, zero);
+
+        // Update min_valid_root_index - all roots before this are now invalid for Trailing mode
+        // This prevents removed members from using old proofs
         env.storage()
             .persistent()
-            .set(&DataKey::RevokedAt(dao_id, commitment.clone()), &revoked_at);
+            .set(&DataKey::MinValidRootIdx(dao_id), &root_index);
 
         RemovalEvent {
             dao_id,
             member,
             index: leaf_index,
-            new_root: U256::from_u32(&env, 0), // Not updating root
-            root_index: 0,                     // Not updating root
+            new_root,
+            root_index,
         }
         .publish(&env);
     }
 
     /// Reinstate a previously removed member
-    /// Records the reinstatement timestamp, allowing them to vote on future proposals
+    /// Clears their leaf index mapping so they can re-register with a new commitment
+    /// The admin should also re-mint their SBT via the membership-sbt contract
     pub fn reinstate_member(env: Env, dao_id: u64, member: Address, admin: Address) {
         admin.require_auth();
 
@@ -740,7 +750,7 @@ impl MembershipTree {
             panic_with_error!(&env, TreeError::NotAdmin);
         }
 
-        // Get member's commitment
+        // Get member's leaf index (they must have been registered before)
         let leaf_index_key = DataKey::MemberLeafIndex(dao_id, member.clone());
         let leaf_index: u32 = env
             .storage()
@@ -748,22 +758,22 @@ impl MembershipTree {
             .get(&leaf_index_key)
             .unwrap_or_else(|| panic_with_error!(&env, TreeError::MemberNotInTree));
 
-        let commitment: U256 = env
+        // Verify the member was actually removed (leaf should be zero)
+        let current_value: U256 = env
             .storage()
             .persistent()
             .get(&DataKey::LeafValue(dao_id, leaf_index))
             .unwrap_or_else(|| panic_with_error!(&env, TreeError::MemberNotInTree));
 
-        if commitment == Self::zero_value(&env) {
-            panic_with_error!(&env, TreeError::MemberNotInTree);
+        if current_value != Self::zero_value(&env) {
+            panic_with_error!(&env, TreeError::MemberNotRevoked);
         }
+
+        // Clear the leaf index mapping so they can re-register
+        env.storage().persistent().remove(&leaf_index_key);
 
         // Record reinstatement timestamp
         let reinstated_at = env.ledger().timestamp();
-        env.storage().persistent().set(
-            &DataKey::ReinstatedAt(dao_id, commitment.clone()),
-            &reinstated_at,
-        );
 
         // Emit event
         ReinstatementEvent {
@@ -790,45 +800,18 @@ impl MembershipTree {
             .get(&DataKey::ReinstatedAt(dao_id, commitment))
     }
 
-    // Internal: Reconstruct the hash of a subtree at a given level and index
-    // This recursively computes the hash from stored leaf values
-    fn reconstruct_subtree(
-        env: &Env,
-        dao_id: u64,
-        subtree_index: u32,
-        level: u32,
-        next_index: u32,
-    ) -> U256 {
-        if level == 0 {
-            // Base case: return the leaf value
-            let leaf_key = DataKey::LeafValue(dao_id, subtree_index);
-            return env
-                .storage()
-                .persistent()
-                .get(&leaf_key)
-                .unwrap_or_else(|| Self::zero_value(env));
-        }
-
-        // Recursive case: hash the two children
-        let left_index = subtree_index * 2;
-        let right_index = left_index + 1;
-
-        let leaves_per_child = 1u32 << (level - 1); // 2^(level-1)
-        let right_start_leaf = right_index * leaves_per_child;
-
-        let left_hash = Self::reconstruct_subtree(env, dao_id, left_index, level - 1, next_index);
-
-        let right_hash = if right_start_leaf >= next_index {
-            // Right subtree is empty
-            Self::zero_at_level(env, level - 1)
-        } else {
-            Self::reconstruct_subtree(env, dao_id, right_index, level - 1, next_index)
-        };
-
-        Self::hash_pair(env, &left_hash, &right_hash)
+    /// Get the minimum valid root index for a DAO
+    /// Roots with index < min_valid_root_index are invalid for Trailing mode proposals
+    /// Returns 0 if no members have been removed
+    pub fn min_root(env: Env, dao_id: u64) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::MinValidRootIdx(dao_id))
+            .unwrap_or(0)
     }
 
     // Internal: Insert leaf and update tree
+    // Also stores intermediate node hashes at each level for O(depth) merkle path lookups
     fn insert_leaf(env: &Env, dao_id: u64, leaf: U256, index: u32, depth: u32) -> (U256, u32) {
         let mut filled: Vec<U256> = env
             .storage()
@@ -842,9 +825,17 @@ impl MembershipTree {
         if index == 0 {
             filled.set(0, leaf.clone());
             let mut current_hash = leaf;
+            let mut current_index = index;
             for level in 0..depth {
                 let zero = Self::zero_at_level(env, level);
                 current_hash = Self::hash_pair(env, &current_hash, &zero);
+                // Store intermediate node hash at level+1 (since level 0 is leaves)
+                let parent_index = current_index / 2;
+                env.storage().persistent().set(
+                    &DataKey::NodeHash(dao_id, level + 1, parent_index),
+                    &current_hash,
+                );
+                current_index = parent_index;
             }
 
             env.storage()
@@ -904,7 +895,13 @@ impl MembershipTree {
                 let left = filled.get(level).unwrap();
                 current_hash = Self::hash_pair(env, &left, &current_hash);
             }
-            current_index /= 2;
+            // Store intermediate node hash at level+1 (since level 0 is leaves)
+            let parent_index = current_index / 2;
+            env.storage().persistent().set(
+                &DataKey::NodeHash(dao_id, level + 1, parent_index),
+                &current_hash,
+            );
+            current_index = parent_index;
         }
 
         // Save updated filled subtrees
@@ -953,11 +950,148 @@ impl MembershipTree {
         (current_hash, root_index)
     }
 
-    // Internal: Poseidon hash of two U256 values
+    /// Internal: Update an existing leaf value and recompute the path to root
+    /// Used for revocation (zeroing) and reinstatement (restoring commitment)
+    /// Returns (new_root, root_index)
+    fn update_leaf(env: &Env, dao_id: u64, leaf_index: u32, new_value: U256) -> (U256, u32) {
+        let depth: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::TreeDepth(dao_id))
+            .unwrap();
+
+        // Update the leaf value
+        env.storage()
+            .persistent()
+            .set(&DataKey::LeafValue(dao_id, leaf_index), &new_value);
+
+        // Recompute path from leaf to root
+        let mut current_index = leaf_index;
+        let mut current_hash = new_value;
+
+        for level in 0..depth {
+            let is_left = current_index % 2 == 0;
+            let sibling_index = if is_left {
+                current_index + 1
+            } else {
+                current_index - 1
+            };
+
+            // Get sibling hash from stored NodeHash or use zero if doesn't exist
+            let sibling: U256 = if level == 0 {
+                // At leaf level, sibling is another leaf value
+                env.storage()
+                    .persistent()
+                    .get(&DataKey::LeafValue(dao_id, sibling_index))
+                    .unwrap_or_else(|| Self::zero_at_level(env, level))
+            } else {
+                // At higher levels, sibling is stored in NodeHash
+                env.storage()
+                    .persistent()
+                    .get(&DataKey::NodeHash(dao_id, level, sibling_index))
+                    .unwrap_or_else(|| Self::zero_at_level(env, level))
+            };
+
+            // Hash pair
+            let (left, right) = if is_left {
+                (current_hash.clone(), sibling)
+            } else {
+                (sibling, current_hash.clone())
+            };
+            current_hash = Self::hash_pair(env, &left, &right);
+
+            // Store updated node hash at level+1
+            let parent_index = current_index / 2;
+            env.storage().persistent().set(
+                &DataKey::NodeHash(dao_id, level + 1, parent_index),
+                &current_hash,
+            );
+
+            current_index = parent_index;
+        }
+
+        // Update root history with FIFO cap
+        let mut roots: Vec<U256> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Roots(dao_id))
+            .unwrap();
+
+        roots.push_back(current_hash.clone());
+
+        // Maintain max roots cap (FIFO)
+        if roots.len() > MAX_ROOTS {
+            let mut new_roots = Vec::new(env);
+            for i in 1..roots.len() {
+                new_roots.push_back(roots.get(i).unwrap());
+            }
+            roots = new_roots;
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Roots(dao_id), &roots);
+
+        // Get and increment root index
+        let root_index: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::NextRootIndex(dao_id))
+            .unwrap();
+        env.storage()
+            .persistent()
+            .set(&DataKey::NextRootIndex(dao_id), &(root_index + 1));
+
+        // Store root index mapping
+        env.storage().persistent().set(
+            &DataKey::RootIndex(dao_id, current_hash.clone()),
+            &root_index,
+        );
+
+        (current_hash, root_index)
+    }
+
+    // Internal: Ensure Poseidon params are cached in persistent storage
+    // This is the key optimization - we only load params once and reuse
+    fn ensure_poseidon_params_cached(env: &Env) {
+        if env.storage().persistent().has(&POSEIDON_MDS) {
+            return;
+        }
+        // Load params from our local module (expensive - only do once)
+        let mds = poseidon_params::get_mds3(env);
+        let rc = poseidon_params::get_rc3(env);
+        env.storage().persistent().set(&POSEIDON_MDS, &mds);
+        env.storage().persistent().set(&POSEIDON_RC, &rc);
+    }
+
+    // Internal: Poseidon hash of two U256 values using cached params
+    // Uses poseidon_permutation directly with pre-cached MDS and round constants
     fn hash_pair(env: &Env, left: &U256, right: &U256) -> U256 {
+        Self::ensure_poseidon_params_cached(env);
+
+        // Load cached params from persistent storage
+        let mds: Vec<Vec<U256>> = env.storage().persistent().get(&POSEIDON_MDS).unwrap();
+        let rc: Vec<Vec<U256>> = env.storage().persistent().get(&POSEIDON_RC).unwrap();
+
+        // Sponge construction: state = [0, left, right]
+        let zero = U256::from_u32(env, 0);
+        let state = soroban_sdk::vec![env, zero, left.clone(), right.clone()];
         let field = Symbol::new(env, "BN254");
-        let inputs = soroban_sdk::vec![env, left.clone(), right.clone()];
-        env.crypto().poseidon_hash(&inputs, field)
+
+        // Single permutation call with cached params via hazmat API
+        let result = env.crypto_hazmat().poseidon_permutation(
+            &state,
+            field,
+            poseidon_params::T,
+            poseidon_params::SBOX_D,
+            poseidon_params::ROUNDS_F,
+            poseidon_params::ROUNDS_P,
+            &mds,
+            &rc,
+        );
+
+        // Output is first element of state
+        result.get(0).unwrap()
     }
 
     // Internal: Zero value (empty leaf)

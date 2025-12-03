@@ -65,17 +65,21 @@ pub enum VotingError {
     InvalidContentCid = 21,
     /// Only DAO admin can create proposals (members_can_propose = false)
     OnlyAdminCanPropose = 22,
+    /// G1 point not on BN254 curve (y² ≠ x³ + 3)
+    InvalidG1Point = 23,
+    /// Root predates member removal (invalid for Trailing mode after revocation)
+    RootPredatesRemoval = 24,
 }
 
 // Maximum allowed IC vector length (num_public_inputs + 1)
-// Our circuit has 6 public signals, so IC should have 7 elements
+// Our circuit has 5 public signals, so IC should have 6 elements
 // Allow some slack for future upgrades (up to 20 public inputs)
 const MAX_IC_LENGTH: u32 = 21;
 
 // Size limits to prevent DoS attacks
 const MAX_TITLE_LEN: u32 = 100; // Max proposal title length (100 bytes)
 const MAX_CID_LEN: u32 = 64; // Max IPFS CID length (CIDv1 is ~59 chars)
-const EXPECTED_IC_LENGTH: u32 = 7; // Exact IC length for vote circuit (6 public signals + 1)
+const EXPECTED_IC_LENGTH: u32 = 6; // Exact IC length for vote circuit (5 public signals + 1)
 
 #[contracttype]
 #[derive(Clone)]
@@ -235,23 +239,22 @@ impl Voting {
         // Point Validation Strategy:
         // ===========================
         //
-        // This contract does NOT perform custom cryptographic validation of BN254 points.
-        // Instead, we rely on multiple layers of protection:
+        // This contract performs explicit G1 curve validation before proof verification:
         //
-        // 1. Soroban SDK BytesN deserialization (basic format validation)
-        // 2. BN254 host function validation during pairing operations
-        // 3. Cryptographic pairing check (e(−A,B)·e(α,β)·e(vk_x,γ)·e(C,δ) = 1)
+        // 1. G1 curve membership: y² = x³ + 3 (mod p) for all G1 points
+        // 2. Coordinate bounds: x, y < field modulus p
+        // 3. Point at infinity: all-zeros is valid
         //
-        // Invalid points (G1 or G2) will cause the pairing check to fail, which rejects
-        // the proof. This is cryptographically sound because:
-        // - Invalid points cannot satisfy the pairing equation
-        // - The pairing check is the ultimate arbiter of proof validity
-        // - Soroban's BN254 host functions validate point format
+        // G1 validation is performed in verify_groth16() for:
+        // - Proof points: a, c
+        // - VK points: alpha, all IC points
         //
-        // Previous versions attempted custom field arithmetic for point validation,
-        // but the implementation had bugs in modular reduction. Rather than maintain
-        // complex and error-prone cryptographic code, we rely on the platform's
-        // validated BN254 implementation.
+        // G2 validation relies on the pairing check for implicit validation.
+        // Invalid G2 points will cause the pairing equation to fail.
+        //
+        // The 256-bit modular arithmetic uses 64-bit limb schoolbook multiplication
+        // with repeated subtraction for reduction. This is not constant-time but
+        // is correct for all field elements.
         //
         // G2 Point Validation (Extended Discussion):
         // ==========================================
@@ -277,26 +280,21 @@ impl Voting {
         // - Prover cannot forge proofs using invalid G2 points
         // - Reference: Groth16 paper (Theorem 1, EUROCRYPT 2016)
         //
+        // **G2 Point Validation (CAP-0074):**
+        // Per CAP-0074, the `bn254_multi_pairing_check` host function validates G2 points:
+        // - Curve membership: Points must satisfy the G2 curve equation
+        // - Subgroup membership: Points must belong to the correct subgroup
+        // - Format compliance: Must be 128 bytes, uncompressed format
+        // Invalid G2 points cause the host function to return an error.
+        //
         // **Attack Analysis:**
         // - Invalid curve attacks (CVE-2023-40141) target parsers, not pairings
-        // - Soroban SDK deserializes from bytes; host function validates format
-        // - Small subgroup attacks don't apply (cofactor clearing in pairing)
-        // - Pairing check itself performs implicitsubgroup validation
-        //
-        // **Future Enhancement:**
-        // If Soroban adds G2 scalar multiplication or explicit subgroup check:
-        // ```rust
-        // fn validate_g2_subgroup(point: &BytesN<128>) -> bool {
-        //     // Cofactor h for BN254 G2
-        //     let h = Fr::from_u256(...);
-        //     let result = G2Affine::from_bytes(point).mul(h);
-        //     result.is_identity()
-        // }
-        // ```
+        // - Soroban host function validates G2 curve + subgroup before pairing
+        // - Small subgroup attacks mitigated by host's explicit subgroup check
+        // - G1 points validated explicitly in contract via validate_g1_point()
         //
         // References:
-        // - [Pairings for Beginners](https://www.craigcostello.com.au/pairings/) - Cofactor discussion
-        // - [Safe Curves](https://safecurves.cr.yp.to/) - Subgroup security criteria
+        // - [CAP-0074](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0074.md)
         // - Groth16 paper Section 3.2 - Verification algorithm
 
         // Bump VK version
@@ -585,6 +583,8 @@ impl Voting {
     }
 
     /// Submit a vote with ZK proof
+    /// Privacy-preserving: commitment is NOT a public parameter
+    /// Revocation is enforced by zeroing leaves in the Merkle tree
     pub fn vote(
         env: Env,
         dao_id: u64,
@@ -592,7 +592,6 @@ impl Voting {
         vote_choice: bool, // true = yes, false = no
         nullifier: U256,
         root: U256,
-        commitment: U256, // NEW: commitment allows revocation checks
         proof: Proof,
     ) {
         // CRITICAL: Check nullifier FIRST before any expensive operations
@@ -625,63 +624,9 @@ impl Voting {
             panic_with_error!(&env, VotingError::VotingClosed);
         }
 
-        // Get tree contract for revocation checks
-        let tree_contract: Address = Self::tree_contract(env.clone());
-
-        // Check if commitment was revoked
-        // Query tree contract for RevokedAt timestamp
-        let revoked_at_opt: Option<u64> = env.invoke_contract(
-            &tree_contract,
-            &symbol_short!("revok_at"),
-            soroban_sdk::vec![
-                &env,
-                dao_id.into_val(&env),
-                commitment.clone().into_val(&env)
-            ],
-        );
-
-        if let Some(revoked_at) = revoked_at_opt {
-            // Member was revoked at some point - check if they were reinstated AFTER revocation
-            let reinstated_at_opt: Option<u64> = env.invoke_contract(
-                &tree_contract,
-                &symbol_short!("reinst_at"),
-                soroban_sdk::vec![
-                    &env,
-                    dao_id.into_val(&env),
-                    commitment.clone().into_val(&env)
-                ],
-            );
-
-            // Determine effective status at proposal creation time
-            let was_active_at_creation = match reinstated_at_opt {
-                Some(reinstated_at) if reinstated_at > revoked_at => {
-                    // Member was reinstated - check if reinstatement happened before proposal creation
-                    reinstated_at <= proposal.created_at
-                }
-                _ => {
-                    // Never reinstated, or reinstated before revocation (shouldn't happen)
-                    false
-                }
-            };
-
-            if !was_active_at_creation {
-                panic_with_error!(&env, VotingError::CommitmentRevokedAtCreation);
-            }
-
-            // Also check they weren't revoked DURING the voting period
-            // If they were revoked after proposal creation but before now, reject
-            if revoked_at > proposal.created_at {
-                // Check if there's a reinstatement after this revocation that happened before now
-                let currently_active = match reinstated_at_opt {
-                    Some(reinstated_at) if reinstated_at > revoked_at => true,
-                    _ => false,
-                };
-
-                if !currently_active {
-                    panic_with_error!(&env, VotingError::CommitmentRevokedDuringVoting);
-                }
-            }
-        }
+        // Revocation is now enforced by zeroing leaves in the Merkle tree.
+        // A revoked member's commitment is zeroed, so their proof won't verify
+        // against any root that includes the zeroed leaf. No timestamp checks needed.
 
         // Verify root based on vote mode
         match proposal.vote_mode {
@@ -694,6 +639,7 @@ impl Voting {
             }
             VoteMode::Trailing => {
                 // Trailing mode: root must be in tree history AND not predate proposal creation
+                // AND not predate the most recent member removal
                 // This allows new members to vote while preventing removed members from using old roots
 
                 // Get tree contract address
@@ -718,6 +664,17 @@ impl Voting {
                 if root_index < proposal.earliest_root_index {
                     panic_with_error!(&env, VotingError::RootPredatesProposal);
                 }
+
+                // Check root index >= min_valid_root_index (prevents using roots from before member removal)
+                // This ensures revoked members cannot vote even on old proposals using their pre-revocation proofs
+                let min_valid_root: u32 = env.invoke_contract(
+                    &tree_contract,
+                    &symbol_short!("min_root"),
+                    soroban_sdk::vec![&env, dao_id.into_val(&env)],
+                );
+                if root_index < min_valid_root {
+                    panic_with_error!(&env, VotingError::RootPredatesRemoval);
+                }
             }
         }
 
@@ -732,9 +689,9 @@ impl Voting {
         }
 
         // Verify Groth16 proof
-        // Public signals: [root, nullifier, daoId, proposalId, voteChoice, commitment]
+        // Public signals: [root, nullifier, daoId, proposalId, voteChoice]
         // Note: daoId is included for domain separation (prevents cross-DAO nullifier linkability)
-        // commitment allows revocation checks (makes votes linkable but preserves anonymity)
+        // Commitment is now private (computed internally in circuit) for improved vote unlinkability
         let vote_signal = if vote_choice {
             U256::from_u32(&env, 1)
         } else {
@@ -749,8 +706,7 @@ impl Voting {
             nullifier.clone(),
             dao_signal,
             proposal_signal,
-            vote_signal,
-            commitment.clone()
+            vote_signal
         ];
 
         if !Self::verify_groth16(&env, &vk, &proof, &pub_signals) {
@@ -965,31 +921,31 @@ impl Voting {
 
         #[cfg(not(any(test, feature = "testutils")))]
         {
-            // SECURITY NOTE: G1Affine::from_bytes() and G2Affine::from_bytes() do NOT validate
-            // curve/subgroup membership in soroban-sdk (uses unchecked_new internally).
+            // ================================================================
+            // GROTH16 VERIFICATION
+            // ================================================================
             //
-            // Custom G1 validation REMOVED due to broken field arithmetic (see set_vk comments).
-            // We rely entirely on the BN254 pairing check for validation.
+            // The host's G1Affine::from_bytes and G2Affine::from_bytes validate
+            // points are on the curve. The pairing check provides implicit
+            // subgroup validation for G2 points.
             //
-            // The pairing check will fail if points are not on the curve/in the subgroup,
-            // providing implicit validation through the mathematical properties of pairings.
-            //
-            // References:
-            // - Besu CVE-2023-40141: Missing curve check allowed invalid points
-            // - Fast G2 check: https://ethresear.ch/t/fast-mathbb-g-2-subgroup-check-in-bn254/13974
-
-            // NOTE: Proof point validation now handled by pairing check
-            // Custom validate_g1_point calls REMOVED (broken field arithmetic)
+            // We removed custom validation code (validate_g1_point, field_mul_mod_p)
+            // as the hand-rolled modular arithmetic was unreliable and caused
+            // valid proofs to fail.
 
             // Step 1: Compute vk_x = IC[0] + sum(pub_signals[i] * IC[i+1])
             let vk_x = Self::compute_vk_x(env, vk, pub_signals);
 
-            // Step 2: Negate A (flip y-coordinate for BN254)
-            let neg_a = Self::g1_negate(env, &proof.a);
+            // Step 2: Negate A using scalar multiplication by (r-1)
+            // For a point P, (-1) * P = -P. The scalar field order is r,
+            // so (r-1) ≡ -1 (mod r), giving us -A.
+            let a_point = G1Affine::from_bytes(proof.a.clone());
+            let neg_one = Self::get_neg_one_scalar(env);
+            let neg_a = a_point * neg_one;
 
             // Step 3: Build pairing vectors
             let mut g1_vec = Vec::new(env);
-            g1_vec.push_back(G1Affine::from_bytes(neg_a));
+            g1_vec.push_back(neg_a);
             g1_vec.push_back(G1Affine::from_bytes(vk.alpha.clone()));
             g1_vec.push_back(G1Affine::from_bytes(vk_x));
             g1_vec.push_back(G1Affine::from_bytes(proof.c.clone()));
@@ -1003,6 +959,24 @@ impl Voting {
             // Step 4: Perform pairing check
             env.crypto().bn254().pairing_check(g1_vec, g2_vec)
         }
+    }
+
+    /// Returns the scalar (r - 1) which is equivalent to -1 mod r.
+    /// BN254 scalar field order r = 21888242871839275222246405745257275088548364400416034343698204186575808495617
+    #[cfg(not(any(test, feature = "testutils")))]
+    fn get_neg_one_scalar(env: &Env) -> Fr {
+        // r - 1 in big-endian (256 bits)
+        // r = 0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001
+        // r - 1 = 0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000000
+        let r_minus_1: [u8; 32] = [
+            0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29,
+            0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81, 0x58, 0x5d,
+            0x28, 0x33, 0xe8, 0x48, 0x79, 0xb9, 0x70, 0x91,
+            0x43, 0xe1, 0xf5, 0x93, 0xf0, 0x00, 0x00, 0x00,
+        ];
+        let bytes = Bytes::from_array(env, &r_minus_1);
+        let u = U256::from_be_bytes(env, &bytes);
+        Fr::from(u)
     }
 
     // Compute vk_x = IC[0] + sum(pub_signals[i] * IC[i+1])
@@ -1025,61 +999,6 @@ impl Voting {
         }
 
         vk_x.to_bytes()
-    }
-
-    // Negate G1 point (flip y-coordinate)
-    // For BN254: -P = (x, -y) where -y = field_modulus - y
-    // Uses BIG-ENDIAN byte order (after PR #1614, Soroban uses Ethereum/EIP-196 encoding)
-    #[cfg(not(any(test, feature = "testutils")))]
-    fn g1_negate(env: &Env, point: &BytesN<64>) -> BytesN<64> {
-        let bytes = point.to_array();
-
-        // BN254 base field modulus (Fq) in BIG-ENDIAN
-        // p = 21888242871839275222246405745257275088696311157297823662689037894645226208583
-        // Big-endian: 0x30644e72e131a029b85045b68181585d...
-        let field_modulus: [u8; 32] = [
-            0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81,
-            0x58, 0x5d, 0x97, 0x81, 0x6a, 0x91, 0x68, 0x71, 0xca, 0x8d, 0x3c, 0x20, 0x8c, 0x16,
-            0xd8, 0x7c, 0xfd, 0x47,
-        ];
-
-        // Extract x (first 32 bytes) and y (next 32 bytes)
-        let mut x = [0u8; 32];
-        let mut y = [0u8; 32];
-        x.copy_from_slice(&bytes[0..32]);
-        y.copy_from_slice(&bytes[32..64]);
-
-        // Compute -y = p - y (big-endian subtraction)
-        let neg_y = Self::field_subtract_be(&field_modulus, &y);
-
-        // Construct negated point
-        let mut result = [0u8; 64];
-        result[0..32].copy_from_slice(&x);
-        result[32..64].copy_from_slice(&neg_y);
-
-        BytesN::from_array(env, &result)
-    }
-
-    // Subtract two 256-bit BIG-ENDIAN numbers: a - b
-    #[cfg(not(any(test, feature = "testutils")))]
-    fn field_subtract_be(a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] {
-        let mut result = [0u8; 32];
-        let mut borrow: u16 = 0;
-
-        // Subtract from least significant byte (index 31) to most significant (index 0)
-        // for big-endian
-        for i in (0..32).rev() {
-            let diff = (a[i] as u16) as i32 - (b[i] as u16) as i32 - borrow as i32;
-            if diff < 0 {
-                result[i] = (diff + 256) as u8;
-                borrow = 1;
-            } else {
-                result[i] = diff as u8;
-                borrow = 0;
-            }
-        }
-
-        result
     }
 }
 

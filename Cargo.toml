@@ -6,14 +6,12 @@ members = [
     "contracts/voting",
     "contracts/comments",
     "tests/integration",
-    "tests/p25-feature-check",
 ]
 resolver = "2"
 
 [workspace.dependencies]
-# P25 Preview SDK with BN254 + Poseidon + BIG-ENDIAN encoding (PR #1614)
-# This commit bumps env to cf58d535 which has the BE encoding fix
-soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "b122dc6cf1ac96c851efc252b370e5384cd973df" }
+# P25 Preview SDK with BN254 + Poseidon (release/v25-preview branch)
+soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "d64ed4c27f9d3c919d4c5369de40a9ba88163f2c" }
 num-bigint = "0.4"
 
 [profile.release]

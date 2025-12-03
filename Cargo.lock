@@ -363,18 +363,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "daovote-integration-tests"
-version = "0.1.0"
-dependencies = [
- "dao-registry",
- "hex",
- "membership-sbt",
- "membership-tree",
- "soroban-sdk",
- "voting",
-]
-
-[[package]]
 name = "darling"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -931,13 +919,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 
 [[package]]
-name = "p25-feature-check"
-version = "0.1.0"
-dependencies = [
- "soroban-sdk",
-]
-
-[[package]]
 name = "p256"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1361,7 +1342,7 @@ dependencies = [
 [[package]]
 name = "soroban-ledger-snapshot"
 version = "23.1.0"
-source = "git+https://github.com/stellar/rs-soroban-sdk?rev=b122dc6cf1ac96c851efc252b370e5384cd973df#b122dc6cf1ac96c851efc252b370e5384cd973df"
+source = "git+https://github.com/stellar/rs-soroban-sdk?rev=d64ed4c27f9d3c919d4c5369de40a9ba88163f2c#d64ed4c27f9d3c919d4c5369de40a9ba88163f2c"
 dependencies = [
  "serde",
  "serde_json",
@@ -1374,7 +1355,7 @@ dependencies = [
 [[package]]
 name = "soroban-sdk"
 version = "23.1.0"
-source = "git+https://github.com/stellar/rs-soroban-sdk?rev=b122dc6cf1ac96c851efc252b370e5384cd973df#b122dc6cf1ac96c851efc252b370e5384cd973df"
+source = "git+https://github.com/stellar/rs-soroban-sdk?rev=d64ed4c27f9d3c919d4c5369de40a9ba88163f2c#d64ed4c27f9d3c919d4c5369de40a9ba88163f2c"
 dependencies = [
  "arbitrary",
  "bytes-lit",
@@ -1396,7 +1377,7 @@ dependencies = [
 [[package]]
 name = "soroban-sdk-macros"
 version = "23.1.0"
-source = "git+https://github.com/stellar/rs-soroban-sdk?rev=b122dc6cf1ac96c851efc252b370e5384cd973df#b122dc6cf1ac96c851efc252b370e5384cd973df"
+source = "git+https://github.com/stellar/rs-soroban-sdk?rev=d64ed4c27f9d3c919d4c5369de40a9ba88163f2c#d64ed4c27f9d3c919d4c5369de40a9ba88163f2c"
 dependencies = [
  "darling 0.20.11",
  "heck",
@@ -1415,7 +1396,7 @@ dependencies = [
 [[package]]
 name = "soroban-spec"
 version = "23.1.0"
-source = "git+https://github.com/stellar/rs-soroban-sdk?rev=b122dc6cf1ac96c851efc252b370e5384cd973df#b122dc6cf1ac96c851efc252b370e5384cd973df"
+source = "git+https://github.com/stellar/rs-soroban-sdk?rev=d64ed4c27f9d3c919d4c5369de40a9ba88163f2c#d64ed4c27f9d3c919d4c5369de40a9ba88163f2c"
 dependencies = [
  "base64",
  "stellar-xdr",
@@ -1426,7 +1407,7 @@ dependencies = [
 [[package]]
 name = "soroban-spec-rust"
 version = "23.1.0"
-source = "git+https://github.com/stellar/rs-soroban-sdk?rev=b122dc6cf1ac96c851efc252b370e5384cd973df#b122dc6cf1ac96c851efc252b370e5384cd973df"
+source = "git+https://github.com/stellar/rs-soroban-sdk?rev=d64ed4c27f9d3c919d4c5369de40a9ba88163f2c#d64ed4c27f9d3c919d4c5369de40a9ba88163f2c"
 dependencies = [
  "prettyplease",
  "proc-macro2",
@@ -1793,4 +1774,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.110",
+]
+
+[[package]]
+name = "zkvote-integration-tests"
+version = "0.1.0"
+dependencies = [
+ "dao-registry",
+ "hex",
+ "membership-sbt",
+ "membership-tree",
+ "soroban-sdk",
+ "voting",
 ]
