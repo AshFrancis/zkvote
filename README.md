@@ -1,4 +1,4 @@
-# DaoVote - Anonymous DAO Voting on Stellar
+# ZKVote - Anonymous DAO Voting on Stellar
 
 Zero-knowledge anonymous DAO voting on Stellar Soroban using Protocol 25 (BN254 + Poseidon).
 
@@ -6,7 +6,7 @@ Zero-knowledge anonymous DAO voting on Stellar Soroban using Protocol 25 (BN254 
 
 ## Overview
 
-DaoVote enables anonymous voting for decentralized autonomous organizations (DAOs) on Stellar's Soroban platform:
+ZKVote enables anonymous voting for decentralized autonomous organizations (DAOs) on Stellar's Soroban platform:
 
 - **Multi-tenant architecture** - Anyone can create DAOs permissionlessly
 - **Soulbound NFT membership** - Non-transferable tokens for DAO membership
@@ -48,32 +48,41 @@ DaoVote enables anonymous voting for decentralized autonomous organizations (DAO
   - Maintains single source of truth
   - Negligible overhead from cross-contract calls
 
-### Contracts (65 tests passing)
+### Contracts (120 tests passing + 6 stress tests)
 
-| Contract | Description | Size | Tests |
-|----------|-------------|------|-------|
-| **dao-registry** | Permissionless DAO creation & admin management | 3.4KB | 8 |
-| **membership-sbt** | Multi-tenant Soulbound NFT membership (CAP-0058 constructor) | 2.3KB | 11 |
-| **membership-tree** | On-chain Poseidon Merkle tree (CAP-0058 constructor) | 27KB | 15 |
-| **voting** | Groth16 verification + vote tallying (CAP-0058 constructor) | 14KB | 18 |
-| **integration** | Cross-contract flow tests | - | 13 |
+| Contract | Description | Tests |
+|----------|-------------|-------|
+| **dao-registry** | Permissionless DAO creation & admin management | 15 |
+| **membership-sbt** | Multi-tenant Soulbound NFT membership (CAP-0058 constructor) | 18 |
+| **membership-tree** | On-chain Poseidon Merkle tree (CAP-0058 constructor) | 17 |
+| **voting** | Groth16 verification + vote tallying (CAP-0058 constructor) | 49 |
+| **comments** | ZK anonymous comments for proposals | 1 |
+| **integration** | Cross-contract flow tests | 20 |
+| **stress** | Performance and scalability tests (ignored by default) | 6 |
 
 ## Project Structure
 
 ```
-daovote/
+zkvote/
 ├── contracts/
 │   ├── dao-registry/      # DAO creation & admin management
 │   ├── membership-sbt/    # Soulbound membership NFTs
 │   ├── membership-tree/   # On-chain Poseidon Merkle tree
-│   └── voting/            # Groth16 verification + voting
+│   ├── voting/            # Groth16 verification + voting
+│   └── comments/          # Anonymous ZK comments
 ├── circuits/              # Circom ZK circuits
 │   ├── vote.circom        # Main vote proof circuit
 │   ├── merkle_tree.circom # Poseidon Merkle inclusion
 │   └── utils/             # VK/proof conversion tools
+├── frontend/              # React frontend with Passkey Kit
+├── backend/               # Relayer service for anonymous voting
 ├── tests/
-│   └── integration/       # Cross-contract integration tests
-└── backend/               # Relayer service for anonymous voting
+│   ├── integration/       # Cross-contract integration tests
+│   └── e2e/               # End-to-end system tests
+└── scripts/
+    ├── deploy/            # Deployment scripts
+    ├── test/              # Test scripts
+    └── utils/             # Utility scripts
 ```
 
 ## Prerequisites
@@ -95,25 +104,25 @@ cargo build --target wasm32v1-none --release
 ### 2. Run Tests
 
 ```bash
-# Run all 61 tests
+# Run all 120 tests
 cargo test --workspace
 
 # Run integration tests only
-cargo test -p daovote-integration-tests
+cargo test -p zkvote-integration-tests
+
+# Run stress tests (ignored by default)
+cargo test --test stress -- --ignored
 ```
 
-### 3. Deploy Contracts (Local P25 Network)
+### 3. Deploy Contracts (Futurenet)
 
-**Using helper scripts (recommended):**
+**Using helper scripts:**
 ```bash
-# Complete setup: start network, fund account, build, test
-./scripts/setup-local.sh
+# Deploy to futurenet
+./scripts/deploy/futurenet.sh
 
-# Deploy all contracts
-./scripts/deploy-local.sh
-
-# Initialize (generates backend/.env)
-./scripts/init-local.sh
+# Set verification key for a DAO
+./scripts/deploy/set-vk.sh
 ```
 
 **Manual deployment:**
@@ -161,7 +170,7 @@ pub fn __constructor(env: Env, tree_contract: Address) {
 }
 ```
 
-**Deployment with constructors** (see `scripts/deploy-local.sh`):
+**Deployment with constructors** (see `scripts/deploy/` for examples):
 ```bash
 # Deploy in dependency order, passing constructor args with '-- --argname value'
 stellar contract deploy --wasm dao_registry.wasm --source mykey --network local
@@ -178,7 +187,7 @@ stellar contract deploy --wasm voting.wasm --source mykey --network local \
 
 For testing, use the integration test suite which properly initializes contracts:
 ```bash
-cargo test -p daovote-integration-tests
+cargo test -p zkvote-integration-tests
 ```
 
 ## How It Works
@@ -357,7 +366,7 @@ env.crypto().bn254().pairing_check(g1_vec, g2_vec)
 ## Testing
 
 ```bash
-# All tests (61 total)
+# All tests (120 tests + 6 stress tests)
 cargo test --workspace
 
 # Specific contract
@@ -365,7 +374,11 @@ cargo test -p dao-registry
 cargo test -p membership-sbt
 cargo test -p membership-tree
 cargo test -p voting
-cargo test -p daovote-integration-tests
+cargo test -p comments
+cargo test -p zkvote-integration-tests
+
+# Run stress tests (ignored by default)
+cargo test --test stress -- --ignored --nocapture
 
 # Build release WASM
 cargo build --target wasm32v1-none --release
@@ -376,14 +389,11 @@ cargo build --target wasm32v1-none --release
 **MUST pass before production deployment** - verifies circuit and on-chain Poseidon match:
 
 ```bash
-# Generate circomlib test vectors
-node circuits/utils/poseidon_kat.js
+# Run Poseidon known-answer test
+./scripts/test/poseidon-kat.sh
 
-# Generate Merkle root expected values
-node scripts/poseidon-kat-verify.js
-
-# Run full E2E test on P25 testnet (requires Docker)
-./scripts/e2e-poseidon-kat.sh
+# Run full E2E zkproof test
+./scripts/test/e2e-zkproof.sh
 ```
 
 If KAT fails, circuit and on-chain Poseidon parameters don't match - system will not work.
@@ -394,12 +404,15 @@ If KAT fails, circuit and on-chain Poseidon parameters don't match - system will
 - [x] MembershipSBT contract (DAO-scoped SBTs)
 - [x] MembershipTree contract (on-chain Poseidon)
 - [x] Voting contract (Groth16 verification)
+- [x] Comments contract (anonymous ZK comments)
 - [x] Circom circuits (vote proof)
-- [x] Integration tests (12 cross-contract tests)
+- [x] Integration tests (20 cross-contract tests)
+- [x] Stress tests (6 performance tests)
 - [x] Real BN254 pairing verification
-- [x] Backend relayer (local relay service)
-- [ ] Frontend/CLI interface
-- [ ] Circuit integration testing (end-to-end with real proofs)
+- [x] Backend relayer with SQLite storage
+- [x] Frontend with React + Passkey Kit
+- [x] Security audit preparation
+- [ ] Production deployment to Stellar mainnet
 
 ## Resources
 

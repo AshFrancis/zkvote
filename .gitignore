@@ -65,3 +65,17 @@ PLAN-*.md
 
 # Backend runtime data
 backend/data/events.json
+backend/data/*.db
+
+# Stress test runtime data (keep scripts, ignore runtime files)
+scripts/test/stress-accounts/*.txt
+scripts/test/stress-accounts/*.csv
+!scripts/test/stress-accounts/accounts.csv
+!scripts/test/stress-accounts/commitments.csv
+
+# Test result files
+batch-zkproof-results-*.json
+frontend/test-results/
+
+# Proxy list
+Webshare 250 proxies.txt
