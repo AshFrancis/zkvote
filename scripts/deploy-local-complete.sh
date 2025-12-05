@@ -12,13 +12,12 @@ echo ""
 # Configuration
 # NOTE: We deploy to HOSTED FUTURENET, not local futurenet
 KEY_NAME="${KEY_NAME:-mykey}"
-RPC_URL="${RPC_URL:-https://rpc-futurenet.stellar.org}"
-NETWORK_PASSPHRASE="${NETWORK_PASSPHRASE:-Test SDF Future Network ; October 2022}"
 
 # Colors for output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 step() {
@@ -32,6 +31,47 @@ success() {
 warn() {
   echo -e "${YELLOW}⚠${NC} $1"
 }
+
+error() {
+  echo -e "${RED}✗${NC} $1"
+}
+
+# Step 0: Cleanup - Stop services and clear databases
+step "Stopping existing services and clearing databases..."
+
+# Kill any running relayer processes
+RELAYER_PIDS=$(pgrep -f "node.*relayer.js" || true)
+if [ -n "$RELAYER_PIDS" ]; then
+  echo "Stopping relayer processes: $RELAYER_PIDS"
+  kill $RELAYER_PIDS 2>/dev/null || true
+  sleep 2
+fi
+
+# Kill any running frontend dev server
+VITE_PIDS=$(pgrep -f "vite" || true)
+if [ -n "$VITE_PIDS" ]; then
+  echo "Stopping frontend dev server: $VITE_PIDS"
+  kill $VITE_PIDS 2>/dev/null || true
+  sleep 1
+fi
+
+# Clear all backend databases
+if [ -d "backend/data" ]; then
+  echo "Clearing backend databases..."
+  rm -f backend/data/*.db 2>/dev/null || true
+  rm -f backend/data/*.json 2>/dev/null || true
+fi
+
+# Clear frontend cache
+if [ -d "frontend/node_modules/.vite" ]; then
+  echo "Clearing frontend Vite cache..."
+  rm -rf frontend/node_modules/.vite
+fi
+
+success "Cleanup complete"
+
+RPC_URL="${RPC_URL:-https://rpc-futurenet.stellar.org}"
+NETWORK_PASSPHRASE="${NETWORK_PASSPHRASE:-Test SDF Future Network ; October 2022}"
 
 # Step 1: Build contracts
 step "Building all contracts..."
@@ -206,78 +246,195 @@ echo "Building Comments bindings..."
 (cd frontend/src/contracts/comments && npm install --silent && npm run build) > /dev/null 2>&1
 success "Comments bindings built"
 
-# Step 3.6: Create Public DAO (always DAO #1)
+# Step 3.6: Create Public DAO (always DAO #1) with verification and retries
 step "Creating Public DAO..."
 ADMIN_ADDRESS=$(stellar keys address "$KEY_NAME")
 
-# Create DAO with open membership and members can propose
-echo "Creating Public Votes DAO..."
-CREATE_OUTPUT=$(stellar contract invoke \
-  --id "$REGISTRY_ID" \
-  --rpc-url "$RPC_URL" \
-  --network-passphrase "$NETWORK_PASSPHRASE" \
-  --source "$KEY_NAME" \
-  -- create_dao \
-  --name "Public Votes" \
-  --creator "$ADMIN_ADDRESS" \
-  --membership_open true \
-  --members_can_propose true 2>&1)
-echo "$CREATE_OUTPUT"
-# Extract DAO ID - look for the number in the output
-DAO_ID=$(echo "$CREATE_OUTPUT" | grep -oE '^[0-9]+$' | head -1)
-if [ -z "$DAO_ID" ]; then
-  # Try parsing JSON-style output
-  DAO_ID=$(echo "$CREATE_OUTPUT" | grep -oE '"[0-9]+"' | tr -d '"' | head -1)
-fi
-if [ -z "$DAO_ID" ]; then
-  DAO_ID="1"  # Assume 1 for fresh deployment
-fi
+# Helper function to verify DAO exists by querying get_dao_count
+verify_dao_count() {
+  local expected=$1
+  local count_output
+  count_output=$(stellar contract invoke \
+    --id "$REGISTRY_ID" \
+    --rpc-url "$RPC_URL" \
+    --network-passphrase "$NETWORK_PASSPHRASE" \
+    --source "$KEY_NAME" \
+    -- get_dao_count 2>&1)
+  # Extract just the number from output
+  local count
+  count=$(echo "$count_output" | grep -oE '^[0-9]+$' | head -1)
+  [ "$count" = "$expected" ]
+}
 
-if [ "$DAO_ID" != "1" ]; then
-  warn "Expected DAO ID 1, got $DAO_ID. This may cause issues."
-fi
-success "Public DAO created (ID: $DAO_ID)"
+# Helper function to verify tree is initialized
+verify_tree_initialized() {
+  local dao_id=$1
+  local root_output
+  root_output=$(stellar contract invoke \
+    --id "$TREE_ID" \
+    --rpc-url "$RPC_URL" \
+    --network-passphrase "$NETWORK_PASSPHRASE" \
+    --source "$KEY_NAME" \
+    -- get_root \
+    --dao_id "$dao_id" 2>&1)
+  # If we get a hex string back (not an error), tree is initialized
+  echo "$root_output" | grep -qE '^[0-9]+$|^0x[a-fA-F0-9]+$'
+}
 
-# Initialize tree for public DAO
-echo "Initializing merkle tree..."
-TREE_OUTPUT=$(stellar contract invoke \
-  --id "$TREE_ID" \
-  --rpc-url "$RPC_URL" \
-  --network-passphrase "$NETWORK_PASSPHRASE" \
-  --source "$KEY_NAME" \
-  -- init_tree_from_registry \
-  --dao_id "$DAO_ID" \
-  --depth 18 2>&1)
-if echo "$TREE_OUTPUT" | grep -q "Success"; then
-  success "Merkle tree initialized (depth 18, capacity 262,144)"
-else
-  echo "$TREE_OUTPUT"
-  warn "Merkle tree initialization may have failed - check output above"
-fi
-
-# Set verification key for Public DAO
-echo "Setting verification key..."
-VK_FILE="frontend/src/lib/verification_key_soroban.json"
-if [ -f "$VK_FILE" ]; then
-  VK_JSON=$(cat "$VK_FILE")
-  VK_OUTPUT=$(stellar contract invoke \
+# Helper function to verify VK is set
+verify_vk_set() {
+  local dao_id=$1
+  local vk_output
+  vk_output=$(stellar contract invoke \
     --id "$VOTING_ID" \
     --rpc-url "$RPC_URL" \
     --network-passphrase "$NETWORK_PASSPHRASE" \
     --source "$KEY_NAME" \
-    -- set_vk \
-    --dao_id "$DAO_ID" \
-    --vk "$VK_JSON" \
-    --admin "$ADMIN_ADDRESS" 2>&1)
-  if echo "$VK_OUTPUT" | grep -q "Success"; then
-    success "Verification key set for Public DAO"
-  else
-    echo "$VK_OUTPUT"
-    warn "Verification key setting may have failed - check output above"
+    -- get_vk_version \
+    --dao_id "$dao_id" 2>&1)
+  local version
+  version=$(echo "$vk_output" | grep -oE '^[0-9]+$' | head -1)
+  [ -n "$version" ] && [ "$version" -gt 0 ]
+}
+
+# Create DAO with retries
+MAX_RETRIES=3
+DAO_CREATED=false
+DAO_ID=""
+
+for i in $(seq 1 $MAX_RETRIES); do
+  echo "Creating Public Votes DAO (attempt $i/$MAX_RETRIES)..."
+  CREATE_OUTPUT=$(stellar contract invoke \
+    --id "$REGISTRY_ID" \
+    --rpc-url "$RPC_URL" \
+    --network-passphrase "$NETWORK_PASSPHRASE" \
+    --source "$KEY_NAME" \
+    -- create_dao \
+    --name "Public Votes" \
+    --creator "$ADMIN_ADDRESS" \
+    --membership_open true \
+    --members_can_propose true 2>&1)
+
+  # Check for errors in output
+  if echo "$CREATE_OUTPUT" | grep -qi "error\|failed\|panic"; then
+    warn "DAO creation returned error: $CREATE_OUTPUT"
+    sleep 2
+    continue
   fi
-else
+
+  # Extract DAO ID from output
+  DAO_ID=$(echo "$CREATE_OUTPUT" | grep -oE '^[0-9]+$' | head -1)
+  if [ -z "$DAO_ID" ]; then
+    DAO_ID=$(echo "$CREATE_OUTPUT" | grep -oE '"[0-9]+"' | tr -d '"' | head -1)
+  fi
+
+  # Verify by querying dao count
+  sleep 2  # Wait for transaction to finalize
+  if verify_dao_count "1"; then
+    DAO_ID="1"
+    DAO_CREATED=true
+    break
+  else
+    warn "DAO count verification failed, retrying..."
+  fi
+done
+
+if [ "$DAO_CREATED" = false ]; then
+  error "Failed to create Public DAO after $MAX_RETRIES attempts"
+  error "Please check the contract deployment and try again"
+  exit 1
+fi
+
+success "Public DAO created and verified (ID: $DAO_ID)"
+
+# Initialize tree with retries
+TREE_INIT=false
+for i in $(seq 1 $MAX_RETRIES); do
+  echo "Initializing merkle tree (attempt $i/$MAX_RETRIES)..."
+  TREE_OUTPUT=$(stellar contract invoke \
+    --id "$TREE_ID" \
+    --rpc-url "$RPC_URL" \
+    --network-passphrase "$NETWORK_PASSPHRASE" \
+    --source "$KEY_NAME" \
+    -- init_tree_from_registry \
+    --dao_id "$DAO_ID" \
+    --depth 18 2>&1)
+
+  # Check for "already initialized" which is OK
+  if echo "$TREE_OUTPUT" | grep -qi "already initialized\|TreeAlreadyInit"; then
+    success "Merkle tree already initialized"
+    TREE_INIT=true
+    break
+  fi
+
+  # Check for errors
+  if echo "$TREE_OUTPUT" | grep -qi "error\|failed\|panic"; then
+    warn "Tree init returned: $TREE_OUTPUT"
+    sleep 2
+    continue
+  fi
+
+  # Verify tree is initialized
+  sleep 2
+  if verify_tree_initialized "$DAO_ID"; then
+    TREE_INIT=true
+    break
+  else
+    warn "Tree verification failed, retrying..."
+  fi
+done
+
+if [ "$TREE_INIT" = false ]; then
+  error "Failed to initialize merkle tree after $MAX_RETRIES attempts"
+  exit 1
+fi
+
+success "Merkle tree initialized (depth 18, capacity 262,144)"
+
+# Set verification key with retries
+VK_FILE="frontend/src/lib/verification_key_soroban.json"
+if [ ! -f "$VK_FILE" ]; then
   warn "Verification key file not found at $VK_FILE"
   warn "You'll need to set it manually through the frontend UI"
+else
+  VK_JSON=$(cat "$VK_FILE")
+  VK_SET=false
+
+  for i in $(seq 1 $MAX_RETRIES); do
+    echo "Setting verification key (attempt $i/$MAX_RETRIES)..."
+    VK_OUTPUT=$(stellar contract invoke \
+      --id "$VOTING_ID" \
+      --rpc-url "$RPC_URL" \
+      --network-passphrase "$NETWORK_PASSPHRASE" \
+      --source "$KEY_NAME" \
+      -- set_vk \
+      --dao_id "$DAO_ID" \
+      --vk "$VK_JSON" \
+      --admin "$ADMIN_ADDRESS" 2>&1)
+
+    # Check for errors
+    if echo "$VK_OUTPUT" | grep -qi "error\|failed\|panic"; then
+      warn "VK set returned: $VK_OUTPUT"
+      sleep 2
+      continue
+    fi
+
+    # Verify VK is set
+    sleep 2
+    if verify_vk_set "$DAO_ID"; then
+      VK_SET=true
+      break
+    else
+      warn "VK verification failed, retrying..."
+    fi
+  done
+
+  if [ "$VK_SET" = false ]; then
+    error "Failed to set verification key after $MAX_RETRIES attempts"
+    exit 1
+  fi
+
+  success "Verification key set for Public DAO"
 fi
 
 # Step 4: Update frontend configuration

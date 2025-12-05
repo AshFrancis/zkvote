@@ -1,5 +1,5 @@
 const {
-    toLE32ByteHex,
+    toBE32ByteHex,
     convertG1Point,
     convertG2Point,
     convertProofToSoroban,
@@ -8,36 +8,39 @@ const {
 } = require('./conversion-utils');
 
 describe('BN254 Point Conversion Utilities', () => {
-    describe('toLE32ByteHex', () => {
-        test('converts small number to 32-byte little-endian hex', () => {
-            const result = toLE32ByteHex(1n);
-            expect(result).toBe('0100000000000000000000000000000000000000000000000000000000000000');
+    describe('toBE32ByteHex', () => {
+        test('converts small number to 32-byte big-endian hex', () => {
+            const result = toBE32ByteHex(1n);
+            // Big-endian: most significant byte first, so 1 is at the end
+            expect(result).toBe('0000000000000000000000000000000000000000000000000000000000000001');
             expect(result.length).toBe(64); // 32 bytes = 64 hex chars
         });
 
         test('converts larger number correctly', () => {
-            const result = toLE32ByteHex(256n);
-            expect(result).toBe('0001000000000000000000000000000000000000000000000000000000000000');
+            const result = toBE32ByteHex(256n);
+            // 256 = 0x100 in big-endian
+            expect(result).toBe('0000000000000000000000000000000000000000000000000000000000000100');
         });
 
         test('converts max value (2^256-1)', () => {
             const maxValue = (1n << 256n) - 1n;
-            const result = toLE32ByteHex(maxValue);
+            const result = toBE32ByteHex(maxValue);
             expect(result).toBe('ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
         });
 
-        test('reverses byte order correctly for known value', () => {
-            // Big-endian: 0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20
-            // Little-endian: 0x201f1e1d1c1b1a191817161514131211100f0e0d0c0b0a090807060504030201
-            const be = BigInt('0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20');
-            const result = toLE32ByteHex(be);
-            expect(result).toBe('201f1e1d1c1b1a191817161514131211100f0e0d0c0b0a090807060504030201');
+        test('outputs big-endian format for known value', () => {
+            // Input: 0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20
+            // Big-endian output should be the same (direct hex representation)
+            const value = BigInt('0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20');
+            const result = toBE32ByteHex(value);
+            expect(result).toBe('0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20');
         });
 
         test('pads to 32 bytes for small values', () => {
-            const result = toLE32ByteHex(0x42n);
+            const result = toBE32ByteHex(0x42n);
             expect(result.length).toBe(64);
-            expect(result).toBe('4200000000000000000000000000000000000000000000000000000000000000');
+            // Big-endian: 0x42 at the end, padded with zeros at the front
+            expect(result).toBe('0000000000000000000000000000000000000000000000000000000000000042');
         });
     });
 
@@ -66,9 +69,9 @@ describe('BN254 Point Conversion Utilities', () => {
             const g1Generator = ['1', '2', '1'];
             const result = convertG1Point(g1Generator);
 
-            // Expected: x=1 (LE), y=2 (LE)
-            const expectedX = '0100000000000000000000000000000000000000000000000000000000000000';
-            const expectedY = '0200000000000000000000000000000000000000000000000000000000000000';
+            // Expected: x=1 (BE), y=2 (BE) - big-endian format per CAP-74
+            const expectedX = '0000000000000000000000000000000000000000000000000000000000000001';
+            const expectedY = '0000000000000000000000000000000000000000000000000000000000000002';
             expect(result).toBe(expectedX + expectedY);
             expect(result.length).toBe(128); // 64 bytes = 128 hex chars
         });
@@ -92,17 +95,18 @@ describe('BN254 Point Conversion Utilities', () => {
             // Verify they're different
             expect(x).not.toBe(y);
 
-            // Verify first coordinate starts with LE representation of the number
-            expect(x.slice(0, 2)).not.toBe('00'); // Should have non-zero low byte
+            // Verify coordinates end with non-zero bytes (big-endian format)
+            expect(x.slice(-2)).not.toBe('00'); // Should have non-zero low byte
         });
     });
 
     describe('convertG2Point', () => {
-        test('converts with natural Fq2 ordering (NOT reversed)', () => {
+        test('converts with CAP-74 Fq2 ordering (c1 before c0)', () => {
             // Test point with distinct values for each coordinate
+            // snarkjs format: [[c0, c1], [c0, c1]] where c0=real, c1=imaginary
             const point = [
-                ['1', '2'],  // x = x1 + x2·u
-                ['3', '4'],  // y = y1 + y2·u
+                ['1', '2'],  // x = 1 + 2·u (c0=1, c1=2)
+                ['3', '4'],  // y = 3 + 4·u (c0=3, c1=4)
                 ['1', '0']   // z = 1 + 0·u (affine)
             ];
 
@@ -111,50 +115,45 @@ describe('BN254 Point Conversion Utilities', () => {
             // Should be 256 hex chars (128 bytes)
             expect(result.length).toBe(256);
 
-            // Extract components
-            const x1 = result.slice(0, 64);
-            const x2 = result.slice(64, 128);
-            const y1 = result.slice(128, 192);
-            const y2 = result.slice(192, 256);
+            // CAP-74 format: X.c1 || X.c0 || Y.c1 || Y.c0 (imaginary before real)
+            const x_c1 = result.slice(0, 64);   // X imaginary = 2
+            const x_c0 = result.slice(64, 128); // X real = 1
+            const y_c1 = result.slice(128, 192); // Y imaginary = 4
+            const y_c0 = result.slice(192, 256); // Y real = 3
 
-            // Verify natural ordering: x1=1, x2=2, y1=3, y2=4
-            expect(x1).toBe('0100000000000000000000000000000000000000000000000000000000000000');
-            expect(x2).toBe('0200000000000000000000000000000000000000000000000000000000000000');
-            expect(y1).toBe('0300000000000000000000000000000000000000000000000000000000000000');
-            expect(y2).toBe('0400000000000000000000000000000000000000000000000000000000000000');
+            // Big-endian format
+            expect(x_c1).toBe('0000000000000000000000000000000000000000000000000000000000000002');
+            expect(x_c0).toBe('0000000000000000000000000000000000000000000000000000000000000001');
+            expect(y_c1).toBe('0000000000000000000000000000000000000000000000000000000000000004');
+            expect(y_c0).toBe('0000000000000000000000000000000000000000000000000000000000000003');
         });
 
-        test('does NOT use reversed Fq2 ordering', () => {
-            // This test documents the BUG we fixed
+        test('uses CAP-74 ordering (c1 before c0, imaginary before real)', () => {
             const point = [
-                ['100', '200'],  // x coordinates
-                ['300', '400'],  // y coordinates
+                ['100', '200'],  // x = 100 + 200·u (c0=100, c1=200)
+                ['300', '400'],  // y = 300 + 400·u (c0=300, c1=400)
                 ['1', '0']
             ];
 
             const result = convertG2Point(point);
 
-            // Extract x1 (should be first, not second)
-            const x1 = result.slice(0, 64);
-
-            // x1 should be 100 in little-endian
-            const x1Value = BigInt('0x' + reverseHexBytes(x1));
-            expect(x1Value).toBe(100n);
-
-            // NOT 200 (which would be the case if reversed)
-            expect(x1Value).not.toBe(200n);
+            // First 64 chars should be X.c1 (imaginary) = 200, not X.c0 = 100
+            const x_c1 = result.slice(0, 64);
+            const x_c1Value = BigInt('0x' + x_c1);
+            expect(x_c1Value).toBe(200n);
+            expect(x_c1Value).not.toBe(100n);
         });
 
         test('converts BN254 G2 generator coordinates', () => {
-            // BN254 G2 generator point
+            // BN254 G2 generator point (snarkjs format: [[c0, c1], [c0, c1]])
             const g2Generator = [
                 [
-                    '10857046999023057135944570762232829481370756359578518086990519993285655852781',
-                    '11559732032986387107991004021392285783925812861821192530917403151452391805634'
+                    '10857046999023057135944570762232829481370756359578518086990519993285655852781',  // x.c0
+                    '11559732032986387107991004021392285783925812861821192530917403151452391805634'   // x.c1
                 ],
                 [
-                    '8495653923123431417604973247489272438418190587263600148770280649306958101930',
-                    '4082367875863433681332203403145435568316851327593401208105741076214120093531'
+                    '8495653923123431417604973247489272438418190587263600148770280649306958101930',   // y.c0
+                    '4082367875863433681332203403145435568316851327593401208105741076214120093531'    // y.c1
                 ],
                 ['1', '0']
             ];
@@ -162,16 +161,17 @@ describe('BN254 Point Conversion Utilities', () => {
             const result = convertG2Point(g2Generator);
             expect(result.length).toBe(256);
 
-            // Correct little-endian values (verified by actual conversion)
-            const expectedX1 = 'edf692d95cbdde46ddda5ef7d422436779445c5e66006a42761e1f12efde0018';
-            const expectedX2 = 'c212f3aeb785e49712e7a9353349aaf1255dfb31b7bf60723a480d9293938e19';
-            const expectedY1 = 'aa7dfa6601cce64c7bd3430c69e7d1e38f40cb8d8071ab4aeb6d8cdba55ec812';
-            const expectedY2 = '5b9722d1dcdaac55f38eb37033314bbc95330c69ad999eec75f05f58d0890609';
+            // CAP-74 big-endian format: X.c1 || X.c0 || Y.c1 || Y.c0
+            // These are the correct big-endian hex values
+            const expectedX_c1 = '198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c2';  // x.c1
+            const expectedX_c0 = '1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed';  // x.c0
+            const expectedY_c1 = '090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b'; // y.c1
+            const expectedY_c0 = '12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa';  // y.c0
 
-            expect(result.slice(0, 64)).toBe(expectedX1);
-            expect(result.slice(64, 128)).toBe(expectedX2);
-            expect(result.slice(128, 192)).toBe(expectedY1);
-            expect(result.slice(192, 256)).toBe(expectedY2);
+            expect(result.slice(0, 64)).toBe(expectedX_c1);
+            expect(result.slice(64, 128)).toBe(expectedX_c0);
+            expect(result.slice(128, 192)).toBe(expectedY_c1);
+            expect(result.slice(192, 256)).toBe(expectedY_c0);
         });
     });
 
@@ -298,15 +298,12 @@ describe('BN254 Point Conversion Utilities', () => {
     });
 
     describe('Integration: Round-trip conversions', () => {
-        test('G1 point byte reversal is consistent', () => {
+        test('BE hex conversion is consistent with reversal', () => {
             const originalValue = 12345678901234567890n;
-            const leBytesHex = toLE32ByteHex(originalValue);
+            const beBytesHex = toBE32ByteHex(originalValue);
 
-            // Reverse back to big-endian
-            const beHex = reverseHexBytes(leBytesHex);
-
-            // Convert back to bigint
-            const recovered = BigInt('0x' + beHex);
+            // Convert directly back to bigint (BE format)
+            const recovered = BigInt('0x' + beBytesHex);
 
             expect(recovered).toBe(originalValue);
         });
@@ -329,7 +326,7 @@ describe('BN254 Point Conversion Utilities', () => {
 
     describe('Edge cases', () => {
         test('handles zero values', () => {
-            const result = toLE32ByteHex(0n);
+            const result = toBE32ByteHex(0n);
             expect(result).toBe('0000000000000000000000000000000000000000000000000000000000000000');
         });
 
@@ -347,11 +344,11 @@ describe('BN254 Point Conversion Utilities', () => {
         test('handles maximum field element', () => {
             // BN254 field modulus - 1
             const fieldModulusMinus1 = BigInt('0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd46');
-            const result = toLE32ByteHex(fieldModulusMinus1);
+            const result = toBE32ByteHex(fieldModulusMinus1);
 
-            // Should reverse correctly
+            // Big-endian output should be the direct hex representation
             expect(result.length).toBe(64);
-            expect(reverseHexBytes(result)).toBe('30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd46');
+            expect(result).toBe('30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd46');
         });
     });
 });
