@@ -29,12 +29,16 @@ import { startIndexer, stopIndexer } from './services/indexer.js';
 import { csrfGuard, requestLogger, errorHandler } from './middleware/index.js';
 
 // Routes
-import healthRoutes, { initHealthRoutes } from './routes/health.js';
-import votingRoutes from './routes/voting.js';
-import daoRoutes from './routes/daos.js';
-import ipfsRoutes from './routes/ipfs.js';
-import commentsRoutes from './routes/comments.js';
-import indexerRoutes, { initIndexerRoutes } from './routes/indexer.js';
+import {
+  healthRoutes,
+  initHealthRoutes,
+  votingRoutes,
+  daoRoutes,
+  ipfsRoutes,
+  commentsRoutes,
+  indexerRoutes,
+  initIndexerRoutes,
+} from './routes/index.js';
 
 // ============================================
 // ENVIRONMENT VALIDATION
