@@ -60,16 +60,35 @@ fn dummy_vk(env: &Env) -> voting::VerificationKey {
 
 /// Helper to set up a basic DAO with contracts initialized
 /// open_membership: true allows self_register without admin
-fn setup_dao(env: &Env) -> (RegistryClient<'_>, SbtClient<'_>, TreeClient<'_>, VotingClient<'_>, Address, u64) {
+fn setup_dao(
+    env: &Env,
+) -> (
+    RegistryClient<'_>,
+    SbtClient<'_>,
+    TreeClient<'_>,
+    VotingClient<'_>,
+    Address,
+    u64,
+) {
     setup_dao_with_options(env, true) // Default to open membership
 }
 
 /// Helper to set up a DAO with configurable options
-fn setup_dao_with_options(env: &Env, open_membership: bool) -> (RegistryClient<'_>, SbtClient<'_>, TreeClient<'_>, VotingClient<'_>, Address, u64) {
+fn setup_dao_with_options(
+    env: &Env,
+    open_membership: bool,
+) -> (
+    RegistryClient<'_>,
+    SbtClient<'_>,
+    TreeClient<'_>,
+    VotingClient<'_>,
+    Address,
+    u64,
+) {
     let registry_id = env.register(dao_registry::WASM, ());
     let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
     let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(),));
+    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
 
     let registry = RegistryClient::new(env, &registry_id);
     let sbt = SbtClient::new(env, &sbt_id);
@@ -77,7 +96,13 @@ fn setup_dao_with_options(env: &Env, open_membership: bool) -> (RegistryClient<'
     let voting = VotingClient::new(env, &voting_id);
 
     let admin = Address::generate(env);
-    let dao_id = registry.create_dao(&String::from_str(env, "Stress DAO"), &admin, &open_membership, &true, &None);
+    let dao_id = registry.create_dao(
+        &String::from_str(env, "Stress DAO"),
+        &admin,
+        &open_membership,
+        &true,
+        &None,
+    );
     tree.init_tree(&dao_id, &18, &admin);
     sbt.mint(&dao_id, &admin, &admin, &None);
     voting.set_vk(&dao_id, &dummy_vk(env), &admin);
@@ -120,7 +145,14 @@ fn stress_many_members_and_proposals() {
     for i in 0..200u32 {
         let title = String::from_str(&env, &format!("Prop {}", i));
         let content_cid = String::from_str(&env, "QmTest");
-        let _ = voting.create_proposal(&dao_id, &title, &content_cid, &0u64, &admin, &voting::VoteMode::Fixed);
+        let _ = voting.create_proposal(
+            &dao_id,
+            &title,
+            &content_cid,
+            &0u64,
+            &admin,
+            &voting::VoteMode::Fixed,
+        );
         if i % 50 == 0 {
             println!("  Created {} proposals", i);
         }
@@ -142,7 +174,7 @@ fn stress_many_daos() {
     let registry_id = env.register(dao_registry::WASM, ());
     let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
     let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(),));
+    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
 
     let registry = RegistryClient::new(&env, &registry_id);
     let sbt = SbtClient::new(&env, &sbt_id);
@@ -297,7 +329,7 @@ fn stress_mixed_operations() {
     let registry_id = env.register(dao_registry::WASM, ());
     let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
     let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(),));
+    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
 
     let registry = RegistryClient::new(&env, &registry_id);
     let sbt = SbtClient::new(&env, &sbt_id);
@@ -343,7 +375,14 @@ fn stress_mixed_operations() {
             } else {
                 voting::VoteMode::Trailing
             };
-            let _ = voting.create_proposal(&dao_id, &title, &String::from_str(&env, ""), &0u64, &admin, &mode);
+            let _ = voting.create_proposal(
+                &dao_id,
+                &title,
+                &String::from_str(&env, ""),
+                &0u64,
+                &admin,
+                &mode,
+            );
         }
 
         if i % 5 == 0 {

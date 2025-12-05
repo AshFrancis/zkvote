@@ -45,32 +45,41 @@ const bn254Field = z.string().refine(
 
 /**
  * Groth16 proof component validators
- * a, c: 64 bytes (128 hex chars) - G1 points
- * b: 128 bytes (256 hex chars) - G2 point
+ *
+ * BN254 Point Encoding (CAP-74 / EIP-196/197):
+ * - G1 (a, c): 64 bytes (128 hex chars) = be_bytes(X) || be_bytes(Y)
+ * - G2 (b): 128 bytes (256 hex chars) = be_bytes(X_c1) || be_bytes(X_c0) || be_bytes(Y_c1) || be_bytes(Y_c0)
+ *
+ * Point at infinity is (0, 0) for both G1 and G2, serialized as all zeros.
+ * In a valid Groth16 proof, A, B, and C must NOT be the point at infinity.
+ * Additional curve membership validation is performed on-chain by the host functions.
  */
 const proofA = hexString(128).refine(
   (val) => {
     const hex = val.startsWith('0x') ? val.slice(2) : val;
-    // Must not be all zeros (invalid proof)
+    // G1 point at infinity (all zeros) is invalid for proof.a
     return !/^0*$/.test(hex.padStart(128, '0'));
   },
-  { message: 'proof.a cannot be all zeros' }
+  { message: 'proof.a cannot be all zeros (point at infinity)' }
 );
 
 const proofB = hexString(256).refine(
   (val) => {
     const hex = val.startsWith('0x') ? val.slice(2) : val;
+    // G2 point at infinity (all zeros) is invalid for proof.b
+    // Note: G2 has 4 field elements (X_c1, X_c0, Y_c1, Y_c0), all must be non-zero collectively
     return !/^0*$/.test(hex.padStart(256, '0'));
   },
-  { message: 'proof.b cannot be all zeros' }
+  { message: 'proof.b cannot be all zeros (point at infinity)' }
 );
 
 const proofC = hexString(128).refine(
   (val) => {
     const hex = val.startsWith('0x') ? val.slice(2) : val;
+    // G1 point at infinity (all zeros) is invalid for proof.c
     return !/^0*$/.test(hex.padStart(128, '0'));
   },
-  { message: 'proof.c cannot be all zeros' }
+  { message: 'proof.c cannot be all zeros (point at infinity)' }
 );
 
 /**

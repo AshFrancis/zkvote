@@ -950,6 +950,14 @@
                     "storage": [
                       {
                         "key": {
+                          "symbol": "registry"
+                        },
+                        "val": {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                        }
+                      },
+                      {
+                        "key": {
                           "symbol": "tree"
                         },
                         "val": {

@@ -12,7 +12,7 @@ set -e
 # Load deployed contract addresses
 if [ ! -f .deployed-contracts ]; then
   echo "Error: .deployed-contracts file not found"
-  echo "Please run scripts/deploy-local-complete.sh first"
+  echo "Please run scripts/deploy/deploy-hosted-futurenet.sh first"
   exit 1
 fi
 

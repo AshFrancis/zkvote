@@ -245,6 +245,7 @@ export default function ProposalPage({ publicKey, kit, isInitializing: _isInitia
 
     try {
       // Use contract client like ProposalList does
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Contract client types not fully exported
       const votingClient: any = publicKey
         ? initializeContractClients(publicKey).voting
         : getReadOnlyVoting();
@@ -722,6 +723,11 @@ export default function ProposalPage({ publicKey, kit, isInitializing: _isInitia
                 <LoadingSpinner size="sm" />
                 <span>Loading content...</span>
               </div>
+            )}
+            {metadataFailed && hasRichContent && (
+              <p className="text-sm text-muted-foreground italic">
+                Content unavailable from IPFS
+              </p>
             )}
 
             <div className="clearfix">

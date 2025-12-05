@@ -161,6 +161,7 @@ function loadContractsFromEnv() {
     return {
       REGISTRY_ID: extract('DAO_REGISTRY_CONTRACT_ID'),
       SBT_ID: extract('MEMBERSHIP_SBT_CONTRACT_ID'),
+      VOTING_ID: extract('VOTING_CONTRACT_ID'),
     };
   } catch {
     return null;
@@ -197,43 +198,44 @@ async function findOrCreateTestDao() {
         }
       }
     }
-    console.log('  mykey is not a member of any existing DAO, will create new one');
-  }
+    // Use the first available DAO if mykey not a member - mint SBT for mykey
+    const firstDaoId = data.daos[0].id;
+    console.log(`  mykey is not a member of any DAO, will join DAO ${firstDaoId}`);
 
-  // Create a new DAO with mykey as creator (auto-mints SBT)
-  if (!testAuthor || !contracts?.REGISTRY_ID) {
-    console.log('  Cannot create DAO: missing mykey or registry contract');
-    return data?.daos?.[0]?.id || 1;
-  }
-
-  try {
-    console.log('  Creating test DAO with mykey as creator...');
-    const daoName = `CommentTest${Date.now() % 10000}`;
-    const result = execSync(
-      `stellar contract invoke --id ${contracts.REGISTRY_ID} --source mykey ${networkFlag} -- create_dao --name "${daoName}" --creator ${testAuthor} --membership_open true --members_can_propose true`,
-      { cwd: PROJECT_ROOT, encoding: 'utf-8', timeout: 60000 }
-    );
-    const daoId = parseInt(result.trim(), 10);
-    if (!isNaN(daoId)) {
-      console.log(`  Created test DAO ID: ${daoId}`);
-      return daoId;
+    if (testAuthor && contracts?.SBT_ID) {
+      console.log('  Minting SBT for mykey on existing DAO...');
+      try {
+        execSync(
+          `stellar contract invoke --id ${contracts.SBT_ID} --source mykey ${networkFlag} -- mint --dao_id ${firstDaoId} --to ${testAuthor} --admin ${testAuthor}`,
+          { cwd: PROJECT_ROOT, encoding: 'utf-8', timeout: 60000 }
+        );
+        console.log('  SBT minted successfully');
+      } catch (mintError) {
+        // May fail if mykey is not admin - that's okay, might be open membership
+        console.log(`  SBT mint attempt: ${mintError.message.split('\n')[0]}`);
+      }
     }
-  } catch (error) {
-    console.log(`  Failed to create DAO: ${error.message}`);
+    return firstDaoId;
   }
 
-  return data?.daos?.[0]?.id || 1;
+  // No DAOs found - this shouldn't happen on a properly deployed network
+  console.log('  No existing DAOs found. Using DAO ID 1.');
+  return 1;
 }
 
 // Find or create a test proposal
 async function findOrCreateTestProposal(daoId) {
-  // Try to find existing proposals
+  // Try to find existing proposals via relayer
   const { data, ok } = await fetchRelayer(`/proposals/${daoId}`);
   if (ok && data.proposals && data.proposals.length > 0) {
+    console.log(`  Found existing proposal ${data.proposals[0].id} for DAO ${daoId}`);
     return data.proposals[0].id;
   }
 
-  // For now, just use proposal ID 1 and let tests handle 404s gracefully
+  // No proposals found - this is expected for newly created DAOs
+  // Creating proposals requires VK to be set, which is complex via CLI
+  console.log('  No existing proposals found. Will use proposal ID 1.');
+  console.log('  Note: Comment tests may skip if proposal does not exist.');
   return 1;
 }
 

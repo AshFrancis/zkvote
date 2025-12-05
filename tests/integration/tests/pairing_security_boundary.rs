@@ -41,25 +41,26 @@ fn hex_str_to_u256(env: &Env, hex: &str) -> U256 {
 }
 
 fn get_real_proof(env: &Env) -> voting::Proof {
-    // Real proof from circuits/build/proof_soroban_be.json (BIG-ENDIAN)
+    // Real proof from circuits/build/proof_soroban.json (BIG-ENDIAN)
+    // Generated for 5 public signals: root, nullifier, daoId, proposalId, voteChoice
     voting::Proof {
         a: hex_to_bytes(
             env,
-            "2d806e0094f82e4826cbaf1c55d9411c99cbd4724a06b3636343e9b4662101d027f2ac0e90e5abf5c8eb68bc544720783089cac24d53f97b4ccb23997ee1bef1",
+            "02de5951501fe4408ea8bf4960106738d190525a270fe0b035139aac2fa762302bbb2f3f1d001d99b919a34b93a9aed831e7bd1f960d5981ae328dfd1845b8a8",
         ),
         b: hex_to_bytes(
             env,
-            "079a9e010f261129556108ece03d72f2241446001f4867236ee62d0cdd165a2d1f4155f6d442b0f8eb5dd5562119b9efad6c51f52923beb9122e1ef8479c45d508d8febd3f8a15ce920ab23fa2228a56e2af681b9b1aec9071dce66801c5fa810d51353b9164be959e736cd071d642bf3f7cbbeab73eb6dadd02471fc0000fac",
+            "2a47ed5deedaad3fe569ea39131c2800f9eead79402a3fc02a6a03e8871d0ae5186d064bc81ecb41f386eb427b70f18fb42e088eb477042681fc926ce75dc4de1cb57584e640e98d0cc2a33cdfd2403bd97cd17b6018549a6c2fd34941b19f1219e3d80a0f9f99c5f74a36d2903ef10d3ba6bbb2f61e6be2072c606510f71e4d",
         ),
         c: hex_to_bytes(
             env,
-            "1417617b66c6217dfd3d37a2949f230cd2126c8edebf73cd6fe9912c56e4b69e050323a90b08147b46079f4f0e359ee504da2082dda2ab112b8099fc064f4a6a",
+            "04dac3300843dbeef12b08362d2a98110fa9080346cff63cc8698fb97d48adcb2faeacd5f1e4b5c37664f6fcb7c67ead0cd789e2db580867dcca345799517ca2",
         ),
     }
 }
 
 fn get_valid_vk(env: &Env) -> voting::VerificationKey {
-    // Valid VK from circuits/build/verification_key_soroban_be.json (BIG-ENDIAN)
+    // Valid VK from circuits/build/verification_key_soroban.json (BIG-ENDIAN)
     // Updated for 5 public signals (commitment removed) - 6 IC elements
     let mut ic = Vec::new(env);
     ic.push_back(hex_to_bytes(env, "0386c87c5f77037451fea91c60759229ca390a30e60d564e5ff0f0f95ffbd18207683040dab753f41635f947d3d13e057c73cb92a38d83400af26019ce24d54f"));
@@ -68,13 +69,12 @@ fn get_valid_vk(env: &Env) -> voting::VerificationKey {
     ic.push_back(hex_to_bytes(env, "2a7f1a9e3de9411015b1c5652856bc7a467110344153252026c44ca55f5dca632f0db38e6d0268092cba5ea0b5db9610e45bd8b4aac852527aeb6323c8f09804"));
     ic.push_back(hex_to_bytes(env, "09c5b9b793a6f8098f0ac918aa0a19a75b74e7f1428f726194a48af37da8ac14122edc5b3704f106fa3c095ac74f524032e460179c3e8ecd562ef050c884336a"));
     ic.push_back(hex_to_bytes(env, "143c06565aad1cacd0ddbc0cfc6dd131c70392d29c16d8c80ed7f62ada52587b13e189e68fe2fe8806b272da3c5762a18b23680cdeda63faef014b7dd6806f21"));
-    // Removed 7th IC element (was for commitment public signal)
 
     voting::VerificationKey {
         alpha: hex_to_bytes(env, "2d4d9aa7e302d9df41749d5507949d05dbea33fbb16c643b22f599a2be6df2e214bedd503c37ceb061d8ec60209fe345ce89830a19230301f076caff004d1926"),
         beta: hex_to_bytes(env, "0967032fcbf776d1afc985f88877f182d38480a653f2decaa9794cbc3bf3060c0e187847ad4c798374d0d6732bf501847dd68bc0e071241e0213bc7fc13db7ab304cfbd1e08a704a99f5e847d93f8c3caafddec46b7a0d379da69a4d112346a71739c1b1a457a8c7313123d24d2f9192f896b7c63eea05a9d57f06547ad0cec8"),
         gamma: hex_to_bytes(env, "198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c21800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa"),
-        delta: hex_to_bytes(env, "23bbe71cdbd371ce93879c1920554716ce89ee4e21f9a8aad6e7deb311f460381e3ed1aca9278a56e254d910b89f806fb308f538efd16563538b0b1ddb6d64be28ce9a5f31d7716460220c7e42e96ffa61608228d9a7a55186129cd138e47e590e2874e9d1bae76cbd0cf7081a5b178a34d8a218f7d139830922411a9fbca6c6"),
+        delta: hex_to_bytes(env, "0d633d289456016e0c0e975e7da2d19153ca3b6a74dd83331df6407a68d9e9f81ff0cfb2f48375ed6c03370d8a55e25777a3fb3f6c748bb9e83116bf19ef6385062ce3e273c849fdc51bb2cf34308828862f248134512541fde080ed08d0eb4016cef3c53afe73c871cd493e46139da661ed0d2875fd63c8044c38a68b4caec5"),
         ic,
     }
 }
@@ -86,14 +86,13 @@ fn get_invalid_vk(env: &Env) -> voting::VerificationKey {
     // 100 ≠ 128 → Invalid point
     let mut ic = Vec::new(env);
     // Keep valid IC points (they're not used in alpha computation) - BE encoded
-    // Updated for 5 public signals (commitment removed) - 6 IC elements
+    // 6 IC elements for 5 public signals
     ic.push_back(hex_to_bytes(env, "0386c87c5f77037451fea91c60759229ca390a30e60d564e5ff0f0f95ffbd18207683040dab753f41635f947d3d13e057c73cb92a38d83400af26019ce24d54f"));
     ic.push_back(hex_to_bytes(env, "0b8de6c132c626e6aa4676f7ca94d9ebeb93375ea3584b6337f9f823ac4157dd0b3de52288f2f4473c0c5041cf9a754decd57e2c0f6b2979d3467a30570c01ea"));
     ic.push_back(hex_to_bytes(env, "139bde66aa5aa4311aca037419840a70fed606a0ed112e6686e1feb44183672d0e56114fa301c02ab1f0baac0973de2759bf26ccbbc594f8627054001f8ad27a"));
     ic.push_back(hex_to_bytes(env, "2a7f1a9e3de9411015b1c5652856bc7a467110344153252026c44ca55f5dca632f0db38e6d0268092cba5ea0b5db9610e45bd8b4aac852527aeb6323c8f09804"));
     ic.push_back(hex_to_bytes(env, "09c5b9b793a6f8098f0ac918aa0a19a75b74e7f1428f726194a48af37da8ac14122edc5b3704f106fa3c095ac74f524032e460179c3e8ecd562ef050c884336a"));
     ic.push_back(hex_to_bytes(env, "143c06565aad1cacd0ddbc0cfc6dd131c70392d29c16d8c80ed7f62ada52587b13e189e68fe2fe8806b272da3c5762a18b23680cdeda63faef014b7dd6806f21"));
-    // Removed 7th IC element (was for commitment public signal)
 
     voting::VerificationKey {
         // Invalid alpha point: (5, 10) encoded as 64 bytes (x || y) in BE
@@ -101,17 +100,13 @@ fn get_invalid_vk(env: &Env) -> voting::VerificationKey {
         // Use valid BE-encoded beta/gamma/delta
         beta: hex_to_bytes(env, "0967032fcbf776d1afc985f88877f182d38480a653f2decaa9794cbc3bf3060c0e187847ad4c798374d0d6732bf501847dd68bc0e071241e0213bc7fc13db7ab304cfbd1e08a704a99f5e847d93f8c3caafddec46b7a0d379da69a4d112346a71739c1b1a457a8c7313123d24d2f9192f896b7c63eea05a9d57f06547ad0cec8"),
         gamma: hex_to_bytes(env, "198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c21800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa"),
-        delta: hex_to_bytes(env, "23bbe71cdbd371ce93879c1920554716ce89ee4e21f9a8aad6e7deb311f460381e3ed1aca9278a56e254d910b89f806fb308f538efd16563538b0b1ddb6d64be28ce9a5f31d7716460220c7e42e96ffa61608228d9a7a55186129cd138e47e590e2874e9d1bae76cbd0cf7081a5b178a34d8a218f7d139830922411a9fbca6c6"),
+        delta: hex_to_bytes(env, "0d633d289456016e0c0e975e7da2d19153ca3b6a74dd83331df6407a68d9e9f81ff0cfb2f48375ed6c03370d8a55e25777a3fb3f6c748bb9e83116bf19ef6385062ce3e273c849fdc51bb2cf34308828862f248134512541fde080ed08d0eb4016cef3c53afe73c871cd493e46139da661ed0d2875fd63c8044c38a68b4caec5"),
         ic,
     }
 }
 
-// NOTE: This test requires real proofs generated with the current circuit.
-// The old proofs were generated with 6 public signals (including commitment).
-// The new circuit has 5 public signals (commitment removed for privacy).
-// This test should be re-enabled after regenerating proof fixtures.
+// Test validates pairing-based security boundary with updated 5-public-signal circuit
 #[test]
-#[ignore = "requires proof regeneration after circuit update (commitment removed from public signals)"]
 fn test_pairing_security_boundary() {
     println!("\n==========================================");
     println!("Pairing-Based Security Boundary Test");
@@ -134,7 +129,10 @@ fn test_pairing_security_boundary() {
     let tree_address = env.register(membership_tree::WASM, (sbt_address.clone(),));
     let tree_client = membership_tree::Client::new(&env, &tree_address);
 
-    let voting_address = env.register(voting::WASM, (tree_address.clone(),));
+    let voting_address = env.register(
+        voting::WASM,
+        (tree_address.clone(), registry_address.clone()),
+    );
     let voting_client = voting::Client::new(&env, &voting_address);
 
     println!("Creating DAO...\n");
@@ -148,17 +146,19 @@ fn test_pairing_security_boundary() {
     tree_client.init_tree(&dao_id, &18, &admin);
 
     println!("Registering commitment...\n");
+    // Commitment: Poseidon(999888777666, 111222333444)
     let commitment = hex_str_to_u256(
         &env,
-        "2536d01521137bf7b39e3fd26c1376f456ce46a45993a5d7c3c158a450fd7329",
+        "28ac4fff6999c3c6612028b0dc2e34c0fa5c1c1760f44fc765cdb4b577ef2999",
     );
     tree_client.register_with_caller(&dao_id, &commitment, &admin);
 
     let root = tree_client.current_root(&dao_id);
     let proof = get_real_proof(&env);
+    // Nullifier for daoId=1, proposalId=1
     let nullifier = hex_str_to_u256(
         &env,
-        "0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a50",
+        "13a7e6da6794bd6f61ffeba529ec3f1c97c52bf862c4c63bcda069f435be8267",
     );
 
     println!("==========================================");
@@ -184,14 +184,7 @@ fn test_pairing_security_boundary() {
     println!("✅ Proposal created: {}\n", proposal_id1);
 
     println!("Submitting vote with real proof...");
-    voting_client.vote(
-        &dao_id,
-        &proposal_id1,
-        &true,
-        &nullifier,
-        &root,
-        &proof,
-    );
+    voting_client.vote(&dao_id, &proposal_id1, &true, &nullifier, &root, &proof);
     println!("✅ PASS: Valid VK accepted real proof");
     println!("       Pairing check succeeded\n");
 
@@ -220,21 +213,15 @@ fn test_pairing_security_boundary() {
     println!("✅ Proposal created: {}\n", proposal_id2);
 
     println!("Submitting vote with real proof (should fail)...");
+    // Different nullifier to avoid double-vote error (this test is about invalid VK)
     let nullifier2 = hex_str_to_u256(
         &env,
-        "0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a51",
+        "13a7e6da6794bd6f61ffeba529ec3f1c97c52bf862c4c63bcda069f435be8268",
     );
 
     // This should panic due to pairing check failure
     let should_panic = std::panic::AssertUnwindSafe(|| {
-        voting_client.vote(
-            &dao_id,
-            &proposal_id2,
-            &true,
-            &nullifier2,
-            &root,
-            &proof,
-        );
+        voting_client.vote(&dao_id, &proposal_id2, &true, &nullifier2, &root, &proof);
     });
 
     let result = std::panic::catch_unwind(should_panic);

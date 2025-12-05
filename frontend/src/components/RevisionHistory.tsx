@@ -55,6 +55,7 @@ export default function RevisionHistory({
       });
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: one-time revision list initialization
     setRevisions(initialRevisions);
     setSelectedIndex(initialRevisions.length - 1);
 

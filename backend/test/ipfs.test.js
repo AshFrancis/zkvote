@@ -7,6 +7,7 @@
  * Run with: npm test -- test/ipfs.test.js
  */
 
+import 'dotenv/config';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { initPinata, pinJSON, pinFile, fetchContent, isValidCid, isHealthy } from '../src/services/ipfs.ts';

@@ -65,8 +65,13 @@ fn test_poseidon_kat_single_commitment() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create test DAO
-    let dao_id =
-        registry_client.create_dao(&String::from_str(&env, "Poseidon KAT Test"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Poseidon KAT Test"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
 
     // Initialize tree with depth 18
     tree_client.init_tree(&dao_id, &18, &admin);

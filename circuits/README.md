@@ -30,7 +30,7 @@ Without revealing:
 ## Circuit Structure
 
 ### `vote.circom` (Main Circuit)
-- Tree depth: 20 levels (supports ~1M members)
+- Tree depth: 18 levels (supports ~262K members)
 - Public signals: `[root, nullifier, daoId, proposalId, voteChoice]`
 - Private inputs: `[secret, salt, pathElements, pathIndices]`
 - Constraints: ~3,500 (well under pot14 limit of 16,384)

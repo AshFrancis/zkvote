@@ -31,11 +31,6 @@ async function deriveKeyFromSignatureAsync(
   // Convert signature to Uint8Array if it's not already
   let sigBytes: Uint8Array;
 
-  console.log('Signature type:', typeof signature);
-  console.log('Signature value:', signature);
-  console.log('Is Uint8Array?', signature instanceof Uint8Array);
-  console.log('Is Array?', Array.isArray(signature));
-
   if (signature instanceof Uint8Array) {
     sigBytes = signature;
   } else if (Array.isArray(signature)) {

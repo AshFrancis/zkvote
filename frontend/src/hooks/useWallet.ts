@@ -89,6 +89,7 @@ export function useWallet() {
       });
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: one-time kit initialization
     setWallet(prev => ({ ...prev, kit: globalKit }));
 
     // Only attempt auto-reconnect if user previously connected

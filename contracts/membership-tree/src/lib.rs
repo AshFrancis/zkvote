@@ -7,8 +7,10 @@ use soroban_sdk::{
 mod poseidon_params;
 
 const SBT_CONTRACT: Symbol = symbol_short!("sbt");
-const MAX_ROOTS: u32 = 30;
-const MAX_TREE_DEPTH: u32 = 18; // Supports ~262K members (2^18 = 262,144)
+// FIFO history of Merkle roots - older roots are evicted. See THREAT_MODEL.md for impact.
+const MAX_ROOT_HISTORY: u32 = 30;
+// Circuit depth must match vote.circom. Supports ~262K members (2^18 = 262,144)
+const MAX_TREE_DEPTH: u32 = 18;
 const ZEROS_CACHE: Symbol = symbol_short!("zeros");
 const VERSION: u32 = 1;
 const VERSION_KEY: Symbol = symbol_short!("ver");
@@ -34,7 +36,7 @@ pub enum TreeError {
     MemberNotInTree = 12,
     RootNotFound = 13,
     AlreadyInitialized = 14,
-    MemberNotRevoked = 15,         // Member hasn't been revoked (for reinstatement)
+    MemberNotRevoked = 15, // Member hasn't been revoked (for reinstatement)
 }
 
 #[contracttype]
@@ -870,7 +872,7 @@ impl MembershipTree {
                 .get(&DataKey::Roots(dao_id))
                 .unwrap_or_else(|| panic_with_error!(env, TreeError::TreeNotInitialized));
             roots.push_back(current_hash.clone());
-            if roots.len() > MAX_ROOTS {
+            if roots.len() > MAX_ROOT_HISTORY {
                 let mut new_roots = Vec::new(env);
                 for i in 1..roots.len() {
                     if let Some(r) = roots.get(i) {
@@ -944,7 +946,7 @@ impl MembershipTree {
         roots.push_back(current_hash.clone());
 
         // Maintain max roots cap (FIFO)
-        if roots.len() > MAX_ROOTS {
+        if roots.len() > MAX_ROOT_HISTORY {
             let mut new_roots = Vec::new(env);
             for i in 1..roots.len() {
                 if let Some(r) = roots.get(i) {
@@ -1047,7 +1049,7 @@ impl MembershipTree {
         roots.push_back(current_hash.clone());
 
         // Maintain max roots cap (FIFO)
-        if roots.len() > MAX_ROOTS {
+        if roots.len() > MAX_ROOT_HISTORY {
             let mut new_roots = Vec::new(env);
             for i in 1..roots.len() {
                 if let Some(r) = roots.get(i) {

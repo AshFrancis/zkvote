@@ -84,17 +84,18 @@ const fs = require('fs');
   console.log('  proposalId:', publicSignals[3]);
   console.log('  voteChoice:', publicSignals[4]);
   
-  // Convert proof to Soroban format
-  const toHexLE = (value) => {
+  // Convert proof to Soroban format (BIG-ENDIAN as per CAP-74)
+  const toHexBE = (value) => {
     const bigInt = BigInt(value);
-    const hex = bigInt.toString(16).padStart(64, '0');
-    return hex.match(/.{2}/g).reverse().join('');
+    return bigInt.toString(16).padStart(64, '0');
   };
-  
-  const proof_a = toHexLE(proof.pi_a[0]) + toHexLE(proof.pi_a[1]);
-  const proof_b = toHexLE(proof.pi_b[0][0]) + toHexLE(proof.pi_b[0][1]) +
-                  toHexLE(proof.pi_b[1][0]) + toHexLE(proof.pi_b[1][1]);
-  const proof_c = toHexLE(proof.pi_c[0]) + toHexLE(proof.pi_c[1]);
+
+  // G1 point: X || Y (big-endian)
+  const proof_a = toHexBE(proof.pi_a[0]) + toHexBE(proof.pi_a[1]);
+  // G2 point: X_c1 || X_c0 || Y_c1 || Y_c0 (imaginary first, big-endian)
+  const proof_b = toHexBE(proof.pi_b[0][1]) + toHexBE(proof.pi_b[0][0]) +
+                  toHexBE(proof.pi_b[1][1]) + toHexBE(proof.pi_b[1][0]);
+  const proof_c = toHexBE(proof.pi_c[0]) + toHexBE(proof.pi_c[1]);
   
   const sorobanProof = { a: proof_a, b: proof_b, c: proof_c };
   fs.writeFileSync('build/proof_soroban.json', JSON.stringify(sorobanProof, null, 2));

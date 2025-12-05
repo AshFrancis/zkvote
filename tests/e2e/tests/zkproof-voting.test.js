@@ -59,7 +59,7 @@ async function withRetry(fn, description) {
   throw lastError;
 }
 
-test('ZK Proof Voting E2E', { concurrency: false }, async (t) => {
+test('ZK Proof Voting E2E', { concurrency: false, timeout: 120000 }, async (t) => {
   console.log('\n=== ZK Proof Voting E2E Tests ===\n');
 
   // Check prerequisites
@@ -68,10 +68,16 @@ test('ZK Proof Voting E2E', { concurrency: false }, async (t) => {
     throw new Error(`Circuit artifacts not found at ${circuitsPath}`);
   }
 
+  // Check RELAYER_AUTH_TOKEN is set
+  if (!AUTH_TOKEN) {
+    throw new Error('RELAYER_AUTH_TOKEN environment variable is required. Set it before running tests.');
+  }
+
   const relayerOk = await checkRelayer();
   if (!relayerOk) {
-    throw new Error('Relayer not running. Start with: cd backend && npm run relayer');
+    throw new Error(`Relayer not running at ${RELAYER_URL}. Start with: cd backend && npm run relayer`);
   }
+  console.log('✓ Relayer is running');
 
   const contracts = loadContracts();
   const adminAddress = getAddress(ADMIN_KEY);
@@ -305,19 +311,24 @@ test('ZK Proof Voting E2E', { concurrency: false }, async (t) => {
       headers['Authorization'] = `Bearer ${AUTH_TOKEN}`;
     }
 
+    // Convert decimal strings to hex for the relayer
+    const nullifierHex = BigInt(testNullifier).toString(16).padStart(64, '0');
+    const rootHex = BigInt(merkleRoot).toString(16).padStart(64, '0');
+
     const response = await fetch(`${RELAYER_URL}/vote`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        dao_id: daoId,
-        proposal_id: proposalId,
-        vote_choice: 1, // YES
-        nullifier: testNullifier,
-        root: merkleRoot,
-        proof_a: sorobanProof.a,
-        proof_b: sorobanProof.b,
-        proof_c: sorobanProof.c,
-        public_signals: testPublicSignals,
+        daoId: daoId,
+        proposalId: proposalId,
+        choice: true, // YES (boolean)
+        nullifier: nullifierHex,
+        root: rootHex,
+        proof: {
+          a: sorobanProof.a,
+          b: sorobanProof.b,
+          c: sorobanProof.c,
+        },
       }),
     });
 

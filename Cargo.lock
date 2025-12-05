@@ -256,6 +256,7 @@ name = "comments"
 version = "0.1.0"
 dependencies = [
  "soroban-sdk",
+ "zkvote-groth16",
 ]
 
 [[package]]
@@ -1589,6 +1590,7 @@ name = "voting"
 version = "0.1.0"
 dependencies = [
  "soroban-sdk",
+ "zkvote-groth16",
 ]
 
 [[package]]
@@ -1774,6 +1776,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.110",
+]
+
+[[package]]
+name = "zkvote-groth16"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
 ]
 
 [[package]]

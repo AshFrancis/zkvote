@@ -38,7 +38,7 @@ fn setup_contracts(env: &Env) -> (Address, Address, Address, Address, Address) {
     let registry_id = env.register(dao_registry::WASM, ());
     let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
     let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(),));
+    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
 
     let admin = Address::generate(env);
 
@@ -58,7 +58,13 @@ fn test_create_proposal_with_future_deadline() {
     let voting = VotingClient::new(&env, &voting_id);
 
     // Create DAO with admin
-    let dao_id = registry.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
+    let dao_id = registry.create_dao(
+        &String::from_str(&env, "Test DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
 
     // Mint SBT for admin (required for init_tree)
     sbt.mint(&dao_id, &admin, &admin, &None);
@@ -127,7 +133,13 @@ fn test_create_proposal_with_past_deadline_fails() {
     let voting = VotingClient::new(&env, &voting_id);
 
     // Create DAO with admin
-    let dao_id = registry.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
+    let dao_id = registry.create_dao(
+        &String::from_str(&env, "Test DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
 
     // Mint SBT for admin (required for init_tree)
     sbt.mint(&dao_id, &admin, &admin, &None);
@@ -198,7 +210,13 @@ fn test_create_proposal_with_no_deadline() {
     let voting = VotingClient::new(&env, &voting_id);
 
     // Create DAO with admin
-    let dao_id = registry.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
+    let dao_id = registry.create_dao(
+        &String::from_str(&env, "Test DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
 
     // Mint SBT for admin (required for init_tree)
     sbt.mint(&dao_id, &admin, &admin, &None);

@@ -69,8 +69,6 @@ export async function generateVoteProof(
       pathIndices: input.pathIndices,
     };
 
-    console.log("Vote circuit input:", circuitInput);
-
     // Generate proof using snarkjs
     const { proof, publicSignals } = await groth16.fullProve(
       circuitInput,
@@ -113,8 +111,6 @@ export async function generateCommentProof(
       pathElements: input.pathElements,
       pathIndices: input.pathIndices,
     };
-
-    console.log("Comment circuit input:", circuitInput);
 
     // Generate proof using snarkjs
     const { proof, publicSignals } = await groth16.fullProve(

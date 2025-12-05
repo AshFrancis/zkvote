@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "contracts/zkvote-groth16",
     "contracts/dao-registry",
     "contracts/membership-sbt",
     "contracts/membership-tree",

@@ -23,7 +23,11 @@ use soroban_sdk::{
     U256,
 };
 
+// Re-export shared Groth16 types and utilities
+pub use zkvote_groth16::{Groth16Error, Proof, VerificationKey};
+
 const TREE_CONTRACT: Symbol = symbol_short!("tree");
+const REGISTRY: Symbol = symbol_short!("registry");
 const VERSION: u32 = 2;
 const VERSION_KEY: Symbol = symbol_short!("ver");
 
@@ -44,8 +48,14 @@ pub enum CommentsError {
     InvalidParentComment = 25,
     CommentContentTooLong = 27,
     ProposalNotFound = 28,
-    RootMismatch = 29,        // Fixed mode: root must match proposal snapshot
+    RootMismatch = 29,         // Fixed mode: root must match proposal snapshot
     RootPredatesProposal = 30, // Trailing mode: root is too old
+    /// Public signal value >= BN254 scalar field modulus (invalid field element)
+    SignalNotInField = 31,
+    /// Nullifier is zero (invalid)
+    InvalidNullifier = 32,
+    /// Root predates member removal (invalid for Trailing mode after revocation)
+    RootPredatesRemoval = 33,
 }
 
 /// Vote mode for proposal eligibility (mirrors voting contract)
@@ -63,11 +73,11 @@ const MAX_REVISIONS: u32 = 50;
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
-    Comment(u64, u64, u64),           // (dao_id, proposal_id, comment_id) -> CommentInfo
-    CommentCount(u64, u64),           // (dao_id, proposal_id) -> comment count
+    Comment(u64, u64, u64), // (dao_id, proposal_id, comment_id) -> CommentInfo
+    CommentCount(u64, u64), // (dao_id, proposal_id) -> comment count
     CommentNullifier(u64, u64, U256), // (dao_id, proposal_id, nullifier) -> bool (for duplicate detection)
-    CommitmentNonce(u64, u64, U256),  // (dao_id, proposal_id, commitment) -> next nonce for this commitment
-    VotingContract,                   // Address of voting contract for proposal lookups and VK
+    CommitmentNonce(u64, u64, U256), // (dao_id, proposal_id, commitment) -> next nonce for this commitment
+    VotingContract,                  // Address of voting contract for proposal lookups and VK
 }
 
 /// Who deleted a comment
@@ -92,26 +102,6 @@ pub struct CommentInfo {
     pub deleted_by: u32,
     pub nullifier: Option<U256>,
     pub comment_nonce: Option<u64>, // For anonymous comments, tracks which nonce was used
-}
-
-/// Groth16 Verification Key for BN254
-#[contracttype]
-#[derive(Clone)]
-pub struct VerificationKey {
-    pub alpha: BytesN<64>,
-    pub beta: BytesN<128>,
-    pub gamma: BytesN<128>,
-    pub delta: BytesN<128>,
-    pub ic: Vec<BytesN<64>>,
-}
-
-/// Groth16 Proof
-#[contracttype]
-#[derive(Clone)]
-pub struct Proof {
-    pub a: BytesN<64>,
-    pub b: BytesN<128>,
-    pub c: BytesN<64>,
 }
 
 // Events
@@ -159,8 +149,13 @@ pub struct Comments;
 
 #[contractimpl]
 impl Comments {
-    /// Constructor: Initialize contract with MembershipTree and Voting contract addresses
-    pub fn __constructor(env: Env, tree_contract: Address, voting_contract: Address) {
+    /// Constructor: Initialize contract with MembershipTree, Voting, and Registry contract addresses
+    pub fn __constructor(
+        env: Env,
+        tree_contract: Address,
+        voting_contract: Address,
+        registry: Address,
+    ) {
         if env.storage().instance().has(&VERSION_KEY) {
             panic_with_error!(&env, CommentsError::AlreadyInitialized);
         }
@@ -173,7 +168,19 @@ impl Comments {
         .publish(&env);
 
         env.storage().instance().set(&TREE_CONTRACT, &tree_contract);
-        env.storage().instance().set(&DataKey::VotingContract, &voting_contract);
+        env.storage()
+            .instance()
+            .set(&DataKey::VotingContract, &voting_contract);
+        // Cache registry address to reduce cross-contract call chain from 3 to 1
+        env.storage().instance().set(&REGISTRY, &registry);
+    }
+
+    /// Validate that a U256 value is within the BN254 scalar field (< r)
+    /// Panics with CommentsError::SignalNotInField if value >= r
+    fn assert_in_field(env: &Env, value: &U256) {
+        if zkvote_groth16::assert_in_field(env, value).is_err() {
+            panic_with_error!(env, CommentsError::SignalNotInField);
+        }
     }
 
     /// Get VK from voting contract (single source of truth)
@@ -191,18 +198,12 @@ impl Comments {
     fn get_proposal_eligibility(env: &Env, dao_id: u64, proposal_id: u64) -> (VoteMode, U256, u32) {
         let voting_contract: Address = Self::voting_contract(env.clone());
 
-        // Get vote_mode from proposal
-        let vote_mode_val: u32 = env.invoke_contract(
+        // Get vote_mode from proposal (returns VoteMode enum directly)
+        let vote_mode: VoteMode = env.invoke_contract(
             &voting_contract,
             &Symbol::new(env, "get_vote_mode"),
             soroban_sdk::vec![env, dao_id.into_val(env), proposal_id.into_val(env)],
         );
-
-        let vote_mode = if vote_mode_val == 0 {
-            VoteMode::Fixed
-        } else {
-            VoteMode::Trailing
-        };
 
         // Get eligible_root from proposal
         let eligible_root: U256 = env.invoke_contract(
@@ -255,22 +256,25 @@ impl Comments {
                 if root_index < earliest_root_index {
                     panic_with_error!(env, CommentsError::RootPredatesProposal);
                 }
+
+                // SECURITY: Check root index >= min_valid_root_index
+                // This prevents revoked members from commenting using pre-revocation roots
+                let min_valid_root: u32 = env.invoke_contract(
+                    &tree_contract,
+                    &symbol_short!("min_root"),
+                    soroban_sdk::vec![env, dao_id.into_val(env)],
+                );
+                if root_index < min_valid_root {
+                    panic_with_error!(env, CommentsError::RootPredatesRemoval);
+                }
             }
         }
     }
 
     fn assert_admin(env: &Env, dao_id: u64, admin: &Address) {
-        let tree_contract: Address = Self::tree_contract(env.clone());
-        let sbt_contract: Address = env.invoke_contract(
-            &tree_contract,
-            &symbol_short!("sbt_contr"),
-            soroban_sdk::vec![env],
-        );
-        let registry: Address = env.invoke_contract(
-            &sbt_contract,
-            &symbol_short!("registry"),
-            soroban_sdk::vec![env],
-        );
+        // Use cached registry address (set at constructor) - only 1 cross-contract call
+        let registry: Address = env.storage().instance().get(&REGISTRY).unwrap();
+
         let dao_admin: Address = env.invoke_contract(
             &registry,
             &symbol_short!("get_admin"),
@@ -359,6 +363,16 @@ impl Comments {
         vote_choice: bool, // From vote circuit - we ignore the value, just verify the proof
         proof: Proof,
     ) -> u64 {
+        // SECURITY: Validate public signals are within BN254 scalar field FIRST
+        // This prevents modular reduction attacks where values >= r verify identically
+        Self::assert_in_field(&env, &nullifier);
+        Self::assert_in_field(&env, &root);
+
+        // Check nullifier is non-zero
+        if nullifier == U256::from_u32(&env, 0) {
+            panic_with_error!(&env, CommentsError::InvalidNullifier);
+        }
+
         if content_cid.len() > MAX_CID_LEN {
             panic_with_error!(&env, CommentsError::CommentContentTooLong);
         }
@@ -509,6 +523,10 @@ impl Comments {
         vote_choice: bool, // From vote circuit - we ignore the value
         proof: Proof,
     ) {
+        // SECURITY: Validate public signals are within BN254 scalar field FIRST
+        Self::assert_in_field(&env, &nullifier);
+        Self::assert_in_field(&env, &root);
+
         if new_content_cid.len() > MAX_CID_LEN {
             panic_with_error!(&env, CommentsError::CommentContentTooLong);
         }
@@ -635,6 +653,10 @@ impl Comments {
         vote_choice: bool, // From vote circuit - we ignore the value
         proof: Proof,
     ) {
+        // SECURITY: Validate public signals are within BN254 scalar field FIRST
+        Self::assert_in_field(&env, &nullifier);
+        Self::assert_in_field(&env, &root);
+
         let key = DataKey::Comment(dao_id, proposal_id, comment_id);
         let mut comment: CommentInfo = env
             .storage()
@@ -856,113 +878,14 @@ impl Comments {
         }
     }
 
-    // Groth16 verification (same as voting contract)
+    /// Verify Groth16 proof using shared verification library.
     fn verify_groth16(
         env: &Env,
         vk: &VerificationKey,
         proof: &Proof,
         pub_signals: &Vec<U256>,
     ) -> bool {
-        if pub_signals.len() + 1 != vk.ic.len() {
-            return false;
-        }
-
-        #[cfg(any(test, feature = "testutils"))]
-        {
-            let _ = (vk, proof, pub_signals);
-            return true;
-        }
-
-        #[cfg(not(any(test, feature = "testutils")))]
-        {
-            let vk_x = Self::compute_vk_x(env, vk, pub_signals);
-            let neg_a = Self::g1_negate(env, &proof.a);
-
-            let mut g1_vec = Vec::new(env);
-            g1_vec.push_back(G1Affine::from_bytes(neg_a));
-            g1_vec.push_back(G1Affine::from_bytes(vk.alpha.clone()));
-            g1_vec.push_back(G1Affine::from_bytes(vk_x));
-            g1_vec.push_back(G1Affine::from_bytes(proof.c.clone()));
-
-            let mut g2_vec = Vec::new(env);
-            g2_vec.push_back(G2Affine::from_bytes(proof.b.clone()));
-            g2_vec.push_back(G2Affine::from_bytes(vk.beta.clone()));
-            g2_vec.push_back(G2Affine::from_bytes(vk.gamma.clone()));
-            g2_vec.push_back(G2Affine::from_bytes(vk.delta.clone()));
-
-            env.crypto().bn254().pairing_check(g1_vec, g2_vec)
-        }
-    }
-
-    #[cfg(not(any(test, feature = "testutils")))]
-    fn compute_vk_x(env: &Env, vk: &VerificationKey, pub_signals: &Vec<U256>) -> BytesN<64> {
-        // Start with IC[0]
-        let ic0 = vk
-            .ic
-            .get(0)
-            .unwrap_or_else(|| panic_with_error!(env, CommentsError::InvalidProof));
-        let mut vk_x = G1Affine::from_bytes(ic0);
-
-        // Add each pub_signal[i] * IC[i+1]
-        for i in 0..pub_signals.len() {
-            let signal = pub_signals
-                .get(i)
-                .unwrap_or_else(|| panic_with_error!(env, CommentsError::InvalidProof));
-            let ic_point_bytes = vk
-                .ic
-                .get(i + 1)
-                .unwrap_or_else(|| panic_with_error!(env, CommentsError::InvalidProof));
-            let ic_point = G1Affine::from_bytes(ic_point_bytes);
-
-            let scalar = Fr::from(signal);
-            let scaled_point = ic_point * scalar;
-            vk_x = vk_x + scaled_point;
-        }
-
-        vk_x.to_bytes()
-    }
-
-    #[cfg(not(any(test, feature = "testutils")))]
-    fn g1_negate(env: &Env, point: &BytesN<64>) -> BytesN<64> {
-        let bytes = point.to_array();
-
-        let field_modulus: [u8; 32] = [
-            0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81,
-            0x58, 0x5d, 0x97, 0x81, 0x6a, 0x91, 0x68, 0x71, 0xca, 0x8d, 0x3c, 0x20, 0x8c, 0x16,
-            0xd8, 0x7c, 0xfd, 0x47,
-        ];
-
-        let mut x = [0u8; 32];
-        let mut y = [0u8; 32];
-        x.copy_from_slice(&bytes[0..32]);
-        y.copy_from_slice(&bytes[32..64]);
-
-        let neg_y = Self::field_subtract_be(&field_modulus, &y);
-
-        let mut result = [0u8; 64];
-        result[0..32].copy_from_slice(&x);
-        result[32..64].copy_from_slice(&neg_y);
-
-        BytesN::from_array(env, &result)
-    }
-
-    #[cfg(not(any(test, feature = "testutils")))]
-    fn field_subtract_be(a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] {
-        let mut result = [0u8; 32];
-        let mut borrow: u16 = 0;
-
-        for i in (0..32).rev() {
-            let diff = (a[i] as u16) as i32 - (b[i] as u16) as i32 - borrow as i32;
-            if diff < 0 {
-                result[i] = (diff + 256) as u8;
-                borrow = 1;
-            } else {
-                result[i] = diff as u8;
-                borrow = 0;
-            }
-        }
-
-        result
+        zkvote_groth16::verify_groth16(env, vk, proof, pub_signals)
     }
 }
 
@@ -971,11 +894,1084 @@ mod test {
     use super::*;
     use soroban_sdk::testutils::Address as _;
 
+    // ========================================================================
+    // Mock Contracts
+    // ========================================================================
+
+    mod mock_tree {
+        use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, U256};
+
+        #[contracttype]
+        pub enum DataKey {
+            SbtContract,
+            CurrentRoot(u64),
+            RootValid(u64, U256),
+            RootIndex(u64, U256),
+            MinRoot(u64),
+        }
+
+        #[contract]
+        pub struct MockTree;
+
+        #[contractimpl]
+        impl MockTree {
+            pub fn set_sbt_contract(env: Env, sbt: Address) {
+                env.storage().persistent().set(&DataKey::SbtContract, &sbt);
+            }
+
+            pub fn sbt_contr(env: Env) -> Address {
+                env.storage()
+                    .persistent()
+                    .get(&DataKey::SbtContract)
+                    .unwrap()
+            }
+
+            pub fn set_root(env: Env, dao_id: u64, root: U256) {
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::CurrentRoot(dao_id), &root);
+                // Also mark this root as valid with index 0
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::RootValid(dao_id, root.clone()), &true);
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::RootIndex(dao_id, root), &0u32);
+            }
+
+            pub fn set_root_valid(env: Env, dao_id: u64, root: U256, valid: bool, index: u32) {
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::RootValid(dao_id, root.clone()), &valid);
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::RootIndex(dao_id, root), &index);
+            }
+
+            pub fn set_min_root(env: Env, dao_id: u64, min_root: u32) {
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::MinRoot(dao_id), &min_root);
+            }
+
+            pub fn root_ok(env: Env, dao_id: u64, root: U256) -> bool {
+                env.storage()
+                    .persistent()
+                    .get(&DataKey::RootValid(dao_id, root))
+                    .unwrap_or(false)
+            }
+
+            pub fn root_idx(env: Env, dao_id: u64, root: U256) -> u32 {
+                env.storage()
+                    .persistent()
+                    .get(&DataKey::RootIndex(dao_id, root))
+                    .unwrap_or(0)
+            }
+
+            pub fn min_root(env: Env, dao_id: u64) -> u32 {
+                env.storage()
+                    .persistent()
+                    .get(&DataKey::MinRoot(dao_id))
+                    .unwrap_or(0)
+            }
+        }
+    }
+
+    mod mock_sbt {
+        use soroban_sdk::{
+            contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol,
+        };
+
+        const REGISTRY: Symbol = symbol_short!("registry");
+
+        #[contracttype]
+        pub enum DataKey {
+            Member(u64, Address),
+        }
+
+        #[contract]
+        pub struct MockSbt;
+
+        #[contractimpl]
+        impl MockSbt {
+            pub fn set_registry(env: Env, registry: Address) {
+                env.storage().instance().set(&REGISTRY, &registry);
+            }
+
+            pub fn registry(env: Env) -> Address {
+                env.storage().instance().get(&REGISTRY).unwrap()
+            }
+
+            pub fn set_member(env: Env, dao_id: u64, member: Address, has: bool) {
+                let key = DataKey::Member(dao_id, member);
+                env.storage().persistent().set(&key, &has);
+            }
+
+            pub fn has(env: Env, dao_id: u64, of: Address) -> bool {
+                let key = DataKey::Member(dao_id, of);
+                env.storage().persistent().get(&key).unwrap_or(false)
+            }
+        }
+    }
+
+    mod mock_registry {
+        use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
+
+        #[contracttype]
+        pub enum DataKey {
+            Admin(u64),
+        }
+
+        #[contract]
+        pub struct MockRegistry;
+
+        #[contractimpl]
+        impl MockRegistry {
+            pub fn set_admin(env: Env, dao_id: u64, admin: Address) {
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::Admin(dao_id), &admin);
+            }
+
+            pub fn get_admin(env: Env, dao_id: u64) -> Address {
+                env.storage()
+                    .persistent()
+                    .get(&DataKey::Admin(dao_id))
+                    .unwrap()
+            }
+        }
+    }
+
+    mod mock_voting {
+        use soroban_sdk::{contract, contractimpl, contracttype, BytesN, Env, U256};
+
+        use crate::{VerificationKey, VoteMode};
+
+        #[contracttype]
+        pub enum DataKey {
+            VK(u64),
+            ProposalCount(u64),
+            VoteMode(u64, u64),
+            EligibleRoot(u64, u64),
+            EarliestRootIndex(u64, u64),
+        }
+
+        #[contract]
+        pub struct MockVoting;
+
+        #[contractimpl]
+        impl MockVoting {
+            pub fn set_vk(env: Env, dao_id: u64, vk: VerificationKey) {
+                env.storage().persistent().set(&DataKey::VK(dao_id), &vk);
+            }
+
+            pub fn get_vk(env: Env, dao_id: u64) -> VerificationKey {
+                env.storage()
+                    .persistent()
+                    .get(&DataKey::VK(dao_id))
+                    .unwrap()
+            }
+
+            pub fn set_proposal_count(env: Env, dao_id: u64, count: u64) {
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::ProposalCount(dao_id), &count);
+            }
+
+            pub fn proposal_count(env: Env, dao_id: u64) -> u64 {
+                env.storage()
+                    .persistent()
+                    .get(&DataKey::ProposalCount(dao_id))
+                    .unwrap_or(0)
+            }
+
+            pub fn set_vote_mode(env: Env, dao_id: u64, proposal_id: u64, mode: VoteMode) {
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::VoteMode(dao_id, proposal_id), &mode);
+            }
+
+            pub fn get_vote_mode(env: Env, dao_id: u64, proposal_id: u64) -> VoteMode {
+                env.storage()
+                    .persistent()
+                    .get(&DataKey::VoteMode(dao_id, proposal_id))
+                    .unwrap_or(VoteMode::Fixed)
+            }
+
+            pub fn set_eligible_root(env: Env, dao_id: u64, proposal_id: u64, root: U256) {
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::EligibleRoot(dao_id, proposal_id), &root);
+            }
+
+            pub fn get_eligible_root(env: Env, dao_id: u64, proposal_id: u64) -> U256 {
+                env.storage()
+                    .persistent()
+                    .get(&DataKey::EligibleRoot(dao_id, proposal_id))
+                    .unwrap()
+            }
+
+            pub fn set_earliest_idx(env: Env, dao_id: u64, proposal_id: u64, idx: u32) {
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::EarliestRootIndex(dao_id, proposal_id), &idx);
+            }
+
+            pub fn get_earliest_idx(env: Env, dao_id: u64, proposal_id: u64) -> u32 {
+                env.storage()
+                    .persistent()
+                    .get(&DataKey::EarliestRootIndex(dao_id, proposal_id))
+                    .unwrap_or(0)
+            }
+        }
+
+        // Helper to create dummy VK for tests
+        pub fn create_dummy_vk(env: &Env) -> VerificationKey {
+            let g1 = bn254_g1_generator(env);
+            let g2 = bn254_g2_generator(env);
+            VerificationKey {
+                alpha: g1.clone(),
+                beta: g2.clone(),
+                gamma: g2.clone(),
+                delta: g2.clone(),
+                ic: soroban_sdk::vec![
+                    env,
+                    g1.clone(),
+                    g1.clone(),
+                    g1.clone(),
+                    g1.clone(),
+                    g1.clone(),
+                    g1.clone()
+                ],
+            }
+        }
+
+        fn bn254_g1_generator(env: &Env) -> BytesN<64> {
+            let mut bytes = [0u8; 64];
+            bytes[31] = 1;
+            bytes[63] = 2;
+            BytesN::from_array(env, &bytes)
+        }
+
+        fn bn254_g2_generator(env: &Env) -> BytesN<128> {
+            let bytes: [u8; 128] = [
+                0x18, 0x00, 0x50, 0x6a, 0x06, 0x12, 0x86, 0xeb, 0x6a, 0x84, 0xa5, 0x73, 0x0b, 0x8f,
+                0x10, 0x29, 0x3e, 0x29, 0x81, 0x6c, 0xd1, 0x91, 0x3d, 0x53, 0x38, 0xf7, 0x15, 0xde,
+                0x3e, 0x98, 0xf9, 0xad, 0x19, 0x83, 0x90, 0x42, 0x11, 0xa5, 0x3f, 0x6e, 0x0b, 0x08,
+                0x53, 0xa9, 0x0a, 0x00, 0xef, 0xbf, 0xf1, 0x70, 0x0c, 0x7b, 0x1d, 0xc0, 0x06, 0x32,
+                0x4d, 0x85, 0x9d, 0x75, 0xe3, 0xca, 0xa5, 0xa2, 0x12, 0xc8, 0x5e, 0xa5, 0xdb, 0x8c,
+                0x6d, 0xeb, 0x4a, 0xab, 0x71, 0x8e, 0x80, 0x6a, 0x51, 0xa5, 0x66, 0x08, 0x21, 0x4c,
+                0x3f, 0x62, 0x8b, 0x96, 0x2c, 0xf1, 0x91, 0xea, 0xcd, 0xc8, 0x0e, 0x7a, 0x09, 0x0d,
+                0x97, 0xc0, 0x9c, 0xe1, 0x48, 0x60, 0x63, 0xb3, 0x59, 0xf3, 0xdd, 0x89, 0xb7, 0xc4,
+                0x3c, 0x5f, 0x18, 0x95, 0x8f, 0xb3, 0xe6, 0xb9, 0x6d, 0xb5, 0x5e, 0x19, 0xa3, 0xb7,
+                0xc0, 0xfb,
+            ];
+            BytesN::from_array(env, &bytes)
+        }
+    }
+
+    // ========================================================================
+    // Test Setup Helpers
+    // ========================================================================
+
+    fn setup_env() -> (Env, Address, Address, Address, Address, Address, Address) {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        // Register mock contracts
+        let registry_id = env.register(mock_registry::MockRegistry, ());
+        let sbt_id = env.register(mock_sbt::MockSbt, ());
+        let tree_id = env.register(mock_tree::MockTree, ());
+        let voting_id = env.register(mock_voting::MockVoting, ());
+        // Pass registry to constructor (cached to reduce cross-contract calls)
+        let comments_id = env.register(Comments, (&tree_id, &voting_id, &registry_id));
+
+        // Link tree -> sbt
+        let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+        tree_client.set_sbt_contract(&sbt_id);
+
+        // Link sbt -> registry
+        let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+        sbt_client.set_registry(&registry_id);
+
+        let member = Address::generate(&env);
+
+        (
+            env,
+            comments_id,
+            voting_id,
+            tree_id,
+            sbt_id,
+            registry_id,
+            member,
+        )
+    }
+
+    fn setup_dao_and_proposal(
+        env: &Env,
+        voting_id: &Address,
+        tree_id: &Address,
+        registry_id: &Address,
+        admin: &Address,
+        dao_id: u64,
+        proposal_id: u64,
+        vote_mode: VoteMode,
+    ) -> U256 {
+        let root = U256::from_u32(env, 12345);
+
+        // Setup mock voting contract
+        let voting_client = mock_voting::MockVotingClient::new(env, voting_id);
+        voting_client.set_vk(&dao_id, &mock_voting::create_dummy_vk(env));
+        voting_client.set_proposal_count(&dao_id, &proposal_id);
+        voting_client.set_vote_mode(&dao_id, &proposal_id, &vote_mode);
+        voting_client.set_eligible_root(&dao_id, &proposal_id, &root);
+        voting_client.set_earliest_idx(&dao_id, &proposal_id, &0u32);
+
+        // Setup mock tree contract
+        let tree_client = mock_tree::MockTreeClient::new(env, tree_id);
+        tree_client.set_root(&dao_id, &root);
+
+        // Setup admin in registry
+        let registry_client = mock_registry::MockRegistryClient::new(env, registry_id);
+        registry_client.set_admin(&dao_id, admin);
+
+        root
+    }
+
+    fn create_dummy_proof(env: &Env) -> Proof {
+        let g1 = {
+            let mut bytes = [0u8; 64];
+            bytes[31] = 1;
+            bytes[63] = 2;
+            BytesN::from_array(env, &bytes)
+        };
+        let g2 = {
+            let bytes: [u8; 128] = [
+                0x18, 0x00, 0x50, 0x6a, 0x06, 0x12, 0x86, 0xeb, 0x6a, 0x84, 0xa5, 0x73, 0x0b, 0x8f,
+                0x10, 0x29, 0x3e, 0x29, 0x81, 0x6c, 0xd1, 0x91, 0x3d, 0x53, 0x38, 0xf7, 0x15, 0xde,
+                0x3e, 0x98, 0xf9, 0xad, 0x19, 0x83, 0x90, 0x42, 0x11, 0xa5, 0x3f, 0x6e, 0x0b, 0x08,
+                0x53, 0xa9, 0x0a, 0x00, 0xef, 0xbf, 0xf1, 0x70, 0x0c, 0x7b, 0x1d, 0xc0, 0x06, 0x32,
+                0x4d, 0x85, 0x9d, 0x75, 0xe3, 0xca, 0xa5, 0xa2, 0x12, 0xc8, 0x5e, 0xa5, 0xdb, 0x8c,
+                0x6d, 0xeb, 0x4a, 0xab, 0x71, 0x8e, 0x80, 0x6a, 0x51, 0xa5, 0x66, 0x08, 0x21, 0x4c,
+                0x3f, 0x62, 0x8b, 0x96, 0x2c, 0xf1, 0x91, 0xea, 0xcd, 0xc8, 0x0e, 0x7a, 0x09, 0x0d,
+                0x97, 0xc0, 0x9c, 0xe1, 0x48, 0x60, 0x63, 0xb3, 0x59, 0xf3, 0xdd, 0x89, 0xb7, 0xc4,
+                0x3c, 0x5f, 0x18, 0x95, 0x8f, 0xb3, 0xe6, 0xb9, 0x6d, 0xb5, 0x5e, 0x19, 0xa3, 0xb7,
+                0xc0, 0xfb,
+            ];
+            BytesN::from_array(env, &bytes)
+        };
+        Proof {
+            a: g1.clone(),
+            b: g2,
+            c: g1,
+        }
+    }
+
+    /// BN254 scalar field modulus r (big-endian) for tests
+    const BN254_FR_MODULUS_TEST: [u8; 32] = [
+        0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81, 0x58,
+        0x5d, 0x28, 0x33, 0xe8, 0x48, 0x79, 0xb9, 0x70, 0x91, 0x43, 0xe1, 0xf5, 0x93, 0xf0, 0x00,
+        0x00, 0x01,
+    ];
+
+    fn u256_from_be(env: &Env, bytes: &[u8; 32]) -> U256 {
+        U256::from_be_bytes(env, &Bytes::from_array(env, bytes))
+    }
+
+    fn modulus_plus(env: &Env, offset: u8) -> U256 {
+        let mut bytes = BN254_FR_MODULUS_TEST;
+        let mut carry = offset as u16;
+        for i in (0..32).rev() {
+            let sum = bytes[i] as u16 + carry;
+            bytes[i] = (sum & 0xFF) as u8;
+            carry = sum >> 8;
+            if carry == 0 {
+                break;
+            }
+        }
+        u256_from_be(env, &bytes)
+    }
+
+    // ========================================================================
+    // Basic Tests
+    // ========================================================================
+
     #[test]
     fn test_contract_creation() {
         let env = Env::default();
         let tree = Address::generate(&env);
         let voting = Address::generate(&env);
-        let _contract = env.register(Comments, (&tree, &voting));
+        let registry = Address::generate(&env);
+        let contract = env.register(Comments, (&tree, &voting, &registry));
+        let client = CommentsClient::new(&env, &contract);
+
+        assert_eq!(client.tree_contract(), tree);
+        assert_eq!(client.voting_contract(), voting);
+    }
+
+    #[test]
+    fn test_add_public_comment() {
+        let (env, comments_id, voting_id, tree_id, sbt_id, registry_id, member) = setup_env();
+        let comments_client = CommentsClient::new(&env, &comments_id);
+        let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+
+        let dao_id = 1u64;
+        let proposal_id = 1u64;
+        let admin = Address::generate(&env);
+
+        // Setup DAO and proposal
+        setup_dao_and_proposal(
+            &env,
+            &voting_id,
+            &tree_id,
+            &registry_id,
+            &admin,
+            dao_id,
+            proposal_id,
+            VoteMode::Fixed,
+        );
+
+        // Give member SBT
+        sbt_client.set_member(&dao_id, &member, &true);
+
+        // Add comment
+        let content_cid = String::from_str(&env, "QmTestComment123");
+        let comment_id =
+            comments_client.add_comment(&dao_id, &proposal_id, &content_cid, &None, &member);
+
+        assert_eq!(comment_id, 1);
+        assert_eq!(comments_client.comment_count(&dao_id, &proposal_id), 1);
+
+        let comment = comments_client.get_comment(&dao_id, &proposal_id, &comment_id);
+        assert_eq!(comment.author, Some(member));
+        assert_eq!(comment.content_cid, content_cid);
+        assert_eq!(comment.deleted, false);
+        assert_eq!(comment.nullifier, None);
+    }
+
+    #[test]
+    fn test_add_anonymous_comment() {
+        let (env, comments_id, voting_id, tree_id, _sbt_id, registry_id, _member) = setup_env();
+        let comments_client = CommentsClient::new(&env, &comments_id);
+
+        let dao_id = 1u64;
+        let proposal_id = 1u64;
+        let admin = Address::generate(&env);
+
+        // Setup DAO and proposal (Trailing mode to allow any valid root)
+        let root = setup_dao_and_proposal(
+            &env,
+            &voting_id,
+            &tree_id,
+            &registry_id,
+            &admin,
+            dao_id,
+            proposal_id,
+            VoteMode::Trailing,
+        );
+
+        let content_cid = String::from_str(&env, "QmAnonComment");
+        let nullifier = U256::from_u32(&env, 99999);
+        let commitment = U256::from_u32(&env, 11111);
+        let proof = create_dummy_proof(&env);
+
+        // Add anonymous comment (verify_groth16 returns true in test mode)
+        let comment_id = comments_client.add_anonymous_comment(
+            &dao_id,
+            &proposal_id,
+            &content_cid,
+            &None,
+            &nullifier,
+            &root,
+            &commitment,
+            &true,
+            &proof,
+        );
+
+        assert_eq!(comment_id, 1);
+
+        let comment = comments_client.get_comment(&dao_id, &proposal_id, &comment_id);
+        assert_eq!(comment.author, None);
+        assert_eq!(comment.content_cid, content_cid);
+        assert_eq!(comment.nullifier, Some(nullifier));
+    }
+
+    #[test]
+    fn test_edit_public_comment() {
+        let (env, comments_id, voting_id, tree_id, sbt_id, registry_id, member) = setup_env();
+        let comments_client = CommentsClient::new(&env, &comments_id);
+        let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+
+        let dao_id = 1u64;
+        let proposal_id = 1u64;
+        let admin = Address::generate(&env);
+
+        setup_dao_and_proposal(
+            &env,
+            &voting_id,
+            &tree_id,
+            &registry_id,
+            &admin,
+            dao_id,
+            proposal_id,
+            VoteMode::Fixed,
+        );
+        sbt_client.set_member(&dao_id, &member, &true);
+
+        // Add comment
+        let content_cid = String::from_str(&env, "QmOriginal");
+        let comment_id =
+            comments_client.add_comment(&dao_id, &proposal_id, &content_cid, &None, &member);
+
+        // Edit comment
+        let new_cid = String::from_str(&env, "QmEdited");
+        comments_client.edit_comment(&dao_id, &proposal_id, &comment_id, &new_cid, &member);
+
+        let comment = comments_client.get_comment(&dao_id, &proposal_id, &comment_id);
+        assert_eq!(comment.content_cid, new_cid);
+        assert_eq!(comment.revision_cids.len(), 1);
+    }
+
+    #[test]
+    fn test_delete_public_comment() {
+        let (env, comments_id, voting_id, tree_id, sbt_id, registry_id, member) = setup_env();
+        let comments_client = CommentsClient::new(&env, &comments_id);
+        let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+
+        let dao_id = 1u64;
+        let proposal_id = 1u64;
+        let admin = Address::generate(&env);
+
+        setup_dao_and_proposal(
+            &env,
+            &voting_id,
+            &tree_id,
+            &registry_id,
+            &admin,
+            dao_id,
+            proposal_id,
+            VoteMode::Fixed,
+        );
+        sbt_client.set_member(&dao_id, &member, &true);
+
+        // Add comment
+        let content_cid = String::from_str(&env, "QmToDelete");
+        let comment_id =
+            comments_client.add_comment(&dao_id, &proposal_id, &content_cid, &None, &member);
+
+        // Delete comment
+        comments_client.delete_comment(&dao_id, &proposal_id, &comment_id, &member);
+
+        let comment = comments_client.get_comment(&dao_id, &proposal_id, &comment_id);
+        assert_eq!(comment.deleted, true);
+        assert_eq!(comment.deleted_by, DELETED_BY_USER);
+    }
+
+    #[test]
+    fn test_admin_can_delete_any_comment() {
+        let (env, comments_id, voting_id, tree_id, sbt_id, registry_id, member) = setup_env();
+        let comments_client = CommentsClient::new(&env, &comments_id);
+        let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+
+        let dao_id = 1u64;
+        let proposal_id = 1u64;
+        let admin = Address::generate(&env);
+
+        setup_dao_and_proposal(
+            &env,
+            &voting_id,
+            &tree_id,
+            &registry_id,
+            &admin,
+            dao_id,
+            proposal_id,
+            VoteMode::Fixed,
+        );
+        sbt_client.set_member(&dao_id, &member, &true);
+
+        // Add comment as member
+        let content_cid = String::from_str(&env, "QmMemberComment");
+        let comment_id =
+            comments_client.add_comment(&dao_id, &proposal_id, &content_cid, &None, &member);
+
+        // Admin deletes member's comment
+        comments_client.admin_delete_comment(&dao_id, &proposal_id, &comment_id, &admin);
+
+        let comment = comments_client.get_comment(&dao_id, &proposal_id, &comment_id);
+        assert_eq!(comment.deleted, true);
+        assert_eq!(comment.deleted_by, DELETED_BY_ADMIN);
+    }
+
+    #[test]
+    fn test_reply_to_comment() {
+        let (env, comments_id, voting_id, tree_id, sbt_id, registry_id, member) = setup_env();
+        let comments_client = CommentsClient::new(&env, &comments_id);
+        let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+
+        let dao_id = 1u64;
+        let proposal_id = 1u64;
+        let admin = Address::generate(&env);
+
+        setup_dao_and_proposal(
+            &env,
+            &voting_id,
+            &tree_id,
+            &registry_id,
+            &admin,
+            dao_id,
+            proposal_id,
+            VoteMode::Fixed,
+        );
+        sbt_client.set_member(&dao_id, &member, &true);
+
+        // Add parent comment
+        let parent_cid = String::from_str(&env, "QmParent");
+        let parent_id =
+            comments_client.add_comment(&dao_id, &proposal_id, &parent_cid, &None, &member);
+
+        // Add reply
+        let reply_cid = String::from_str(&env, "QmReply");
+        let reply_id = comments_client.add_comment(
+            &dao_id,
+            &proposal_id,
+            &reply_cid,
+            &Some(parent_id),
+            &member,
+        );
+
+        let reply = comments_client.get_comment(&dao_id, &proposal_id, &reply_id);
+        assert_eq!(reply.parent_id, Some(parent_id));
+    }
+
+    // ========================================================================
+    // Error Tests
+    // ========================================================================
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #5)")]
+    fn test_add_comment_without_membership_fails() {
+        // NotDaoMember = 5
+        let (env, comments_id, voting_id, tree_id, _sbt_id, registry_id, member) = setup_env();
+        let comments_client = CommentsClient::new(&env, &comments_id);
+
+        let dao_id = 1u64;
+        let proposal_id = 1u64;
+        let admin = Address::generate(&env);
+
+        setup_dao_and_proposal(
+            &env,
+            &voting_id,
+            &tree_id,
+            &registry_id,
+            &admin,
+            dao_id,
+            proposal_id,
+            VoteMode::Fixed,
+        );
+        // Don't give member SBT
+
+        let content_cid = String::from_str(&env, "QmNoMembership");
+        comments_client.add_comment(&dao_id, &proposal_id, &content_cid, &None, &member);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #25)")]
+    fn test_reply_to_nonexistent_comment_fails() {
+        // InvalidParentComment = 25
+        let (env, comments_id, voting_id, tree_id, sbt_id, registry_id, member) = setup_env();
+        let comments_client = CommentsClient::new(&env, &comments_id);
+        let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+
+        let dao_id = 1u64;
+        let proposal_id = 1u64;
+        let admin = Address::generate(&env);
+
+        setup_dao_and_proposal(
+            &env,
+            &voting_id,
+            &tree_id,
+            &registry_id,
+            &admin,
+            dao_id,
+            proposal_id,
+            VoteMode::Fixed,
+        );
+        sbt_client.set_member(&dao_id, &member, &true);
+
+        // Try to reply to nonexistent comment
+        let content_cid = String::from_str(&env, "QmReply");
+        comments_client.add_comment(&dao_id, &proposal_id, &content_cid, &Some(999), &member);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #27)")]
+    fn test_content_cid_too_long_fails() {
+        // CommentContentTooLong = 27
+        let (env, comments_id, voting_id, tree_id, sbt_id, registry_id, member) = setup_env();
+        let comments_client = CommentsClient::new(&env, &comments_id);
+        let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+
+        let dao_id = 1u64;
+        let proposal_id = 1u64;
+        let admin = Address::generate(&env);
+
+        setup_dao_and_proposal(
+            &env,
+            &voting_id,
+            &tree_id,
+            &registry_id,
+            &admin,
+            dao_id,
+            proposal_id,
+            VoteMode::Fixed,
+        );
+        sbt_client.set_member(&dao_id, &member, &true);
+
+        // CID longer than 64 chars
+        let long_cid = String::from_str(
+            &env,
+            "QmTooLong12345678901234567890123456789012345678901234567890123456789",
+        );
+        comments_client.add_comment(&dao_id, &proposal_id, &long_cid, &None, &member);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #1)")]
+    fn test_non_admin_cannot_admin_delete() {
+        // NotAdmin = 1
+        let (env, comments_id, voting_id, tree_id, sbt_id, registry_id, member) = setup_env();
+        let comments_client = CommentsClient::new(&env, &comments_id);
+        let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+
+        let dao_id = 1u64;
+        let proposal_id = 1u64;
+        let admin = Address::generate(&env);
+        let non_admin = Address::generate(&env);
+
+        setup_dao_and_proposal(
+            &env,
+            &voting_id,
+            &tree_id,
+            &registry_id,
+            &admin,
+            dao_id,
+            proposal_id,
+            VoteMode::Fixed,
+        );
+        sbt_client.set_member(&dao_id, &member, &true);
+
+        let content_cid = String::from_str(&env, "QmComment");
+        let comment_id =
+            comments_client.add_comment(&dao_id, &proposal_id, &content_cid, &None, &member);
+
+        // Non-admin tries to admin-delete
+        comments_client.admin_delete_comment(&dao_id, &proposal_id, &comment_id, &non_admin);
+    }
+
+    // ========================================================================
+    // Field Modulus Validation Tests
+    // ========================================================================
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #31)")]
+    fn test_anonymous_comment_rejects_nullifier_at_modulus() {
+        // SignalNotInField = 31
+        let (env, comments_id, voting_id, tree_id, _sbt_id, registry_id, _member) = setup_env();
+        let comments_client = CommentsClient::new(&env, &comments_id);
+
+        let dao_id = 1u64;
+        let proposal_id = 1u64;
+        let admin = Address::generate(&env);
+
+        let root = setup_dao_and_proposal(
+            &env,
+            &voting_id,
+            &tree_id,
+            &registry_id,
+            &admin,
+            dao_id,
+            proposal_id,
+            VoteMode::Trailing,
+        );
+
+        let content_cid = String::from_str(&env, "QmTest");
+        let nullifier_at_modulus = u256_from_be(&env, &BN254_FR_MODULUS_TEST);
+        let commitment = U256::from_u32(&env, 11111);
+        let proof = create_dummy_proof(&env);
+
+        comments_client.add_anonymous_comment(
+            &dao_id,
+            &proposal_id,
+            &content_cid,
+            &None,
+            &nullifier_at_modulus,
+            &root,
+            &commitment,
+            &true,
+            &proof,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #31)")]
+    fn test_anonymous_comment_rejects_nullifier_above_modulus() {
+        // SignalNotInField = 31
+        let (env, comments_id, voting_id, tree_id, _sbt_id, registry_id, _member) = setup_env();
+        let comments_client = CommentsClient::new(&env, &comments_id);
+
+        let dao_id = 1u64;
+        let proposal_id = 1u64;
+        let admin = Address::generate(&env);
+
+        let root = setup_dao_and_proposal(
+            &env,
+            &voting_id,
+            &tree_id,
+            &registry_id,
+            &admin,
+            dao_id,
+            proposal_id,
+            VoteMode::Trailing,
+        );
+
+        let content_cid = String::from_str(&env, "QmTest");
+        let nullifier_above_modulus = modulus_plus(&env, 1);
+        let commitment = U256::from_u32(&env, 11111);
+        let proof = create_dummy_proof(&env);
+
+        comments_client.add_anonymous_comment(
+            &dao_id,
+            &proposal_id,
+            &content_cid,
+            &None,
+            &nullifier_above_modulus,
+            &root,
+            &commitment,
+            &true,
+            &proof,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #31)")]
+    fn test_anonymous_comment_rejects_root_at_modulus() {
+        // SignalNotInField = 31
+        let (env, comments_id, voting_id, tree_id, _sbt_id, registry_id, _member) = setup_env();
+        let comments_client = CommentsClient::new(&env, &comments_id);
+
+        let dao_id = 1u64;
+        let proposal_id = 1u64;
+        let admin = Address::generate(&env);
+
+        setup_dao_and_proposal(
+            &env,
+            &voting_id,
+            &tree_id,
+            &registry_id,
+            &admin,
+            dao_id,
+            proposal_id,
+            VoteMode::Trailing,
+        );
+
+        let content_cid = String::from_str(&env, "QmTest");
+        let nullifier = U256::from_u32(&env, 99999);
+        let root_at_modulus = u256_from_be(&env, &BN254_FR_MODULUS_TEST);
+        let commitment = U256::from_u32(&env, 11111);
+        let proof = create_dummy_proof(&env);
+
+        comments_client.add_anonymous_comment(
+            &dao_id,
+            &proposal_id,
+            &content_cid,
+            &None,
+            &nullifier,
+            &root_at_modulus,
+            &commitment,
+            &true,
+            &proof,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #32)")]
+    fn test_anonymous_comment_rejects_zero_nullifier() {
+        // InvalidNullifier = 32
+        let (env, comments_id, voting_id, tree_id, _sbt_id, registry_id, _member) = setup_env();
+        let comments_client = CommentsClient::new(&env, &comments_id);
+
+        let dao_id = 1u64;
+        let proposal_id = 1u64;
+        let admin = Address::generate(&env);
+
+        let root = setup_dao_and_proposal(
+            &env,
+            &voting_id,
+            &tree_id,
+            &registry_id,
+            &admin,
+            dao_id,
+            proposal_id,
+            VoteMode::Trailing,
+        );
+
+        let content_cid = String::from_str(&env, "QmTest");
+        let zero_nullifier = U256::from_u32(&env, 0);
+        let commitment = U256::from_u32(&env, 11111);
+        let proof = create_dummy_proof(&env);
+
+        comments_client.add_anonymous_comment(
+            &dao_id,
+            &proposal_id,
+            &content_cid,
+            &None,
+            &zero_nullifier,
+            &root,
+            &commitment,
+            &true,
+            &proof,
+        );
+    }
+
+    // ========================================================================
+    // Root Validation Tests (Fixed vs Trailing Mode)
+    // ========================================================================
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #29)")]
+    fn test_fixed_mode_rejects_wrong_root() {
+        // RootMismatch = 29
+        let (env, comments_id, voting_id, tree_id, _sbt_id, registry_id, _member) = setup_env();
+        let comments_client = CommentsClient::new(&env, &comments_id);
+
+        let dao_id = 1u64;
+        let proposal_id = 1u64;
+        let admin = Address::generate(&env);
+
+        // Setup with Fixed mode (0)
+        let _eligible_root = setup_dao_and_proposal(
+            &env,
+            &voting_id,
+            &tree_id,
+            &registry_id,
+            &admin,
+            dao_id,
+            proposal_id,
+            VoteMode::Fixed,
+        );
+
+        let content_cid = String::from_str(&env, "QmTest");
+        let nullifier = U256::from_u32(&env, 99999);
+        let wrong_root = U256::from_u32(&env, 54321); // Different from eligible_root
+        let commitment = U256::from_u32(&env, 11111);
+        let proof = create_dummy_proof(&env);
+
+        comments_client.add_anonymous_comment(
+            &dao_id,
+            &proposal_id,
+            &content_cid,
+            &None,
+            &nullifier,
+            &wrong_root,
+            &commitment,
+            &true,
+            &proof,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #12)")]
+    fn test_trailing_mode_rejects_invalid_root() {
+        // RootNotInHistory = 12
+        let (env, comments_id, voting_id, tree_id, _sbt_id, registry_id, _member) = setup_env();
+        let comments_client = CommentsClient::new(&env, &comments_id);
+        let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+
+        let dao_id = 1u64;
+        let proposal_id = 1u64;
+        let admin = Address::generate(&env);
+
+        // Setup with Trailing mode (1)
+        setup_dao_and_proposal(
+            &env,
+            &voting_id,
+            &tree_id,
+            &registry_id,
+            &admin,
+            dao_id,
+            proposal_id,
+            VoteMode::Trailing,
+        );
+
+        // Set a root that's NOT valid
+        let invalid_root = U256::from_u32(&env, 99999);
+        tree_client.set_root_valid(&dao_id, &invalid_root, &false, &0);
+
+        let content_cid = String::from_str(&env, "QmTest");
+        let nullifier = U256::from_u32(&env, 88888);
+        let commitment = U256::from_u32(&env, 11111);
+        let proof = create_dummy_proof(&env);
+
+        comments_client.add_anonymous_comment(
+            &dao_id,
+            &proposal_id,
+            &content_cid,
+            &None,
+            &nullifier,
+            &invalid_root,
+            &commitment,
+            &true,
+            &proof,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #33)")]
+    fn test_trailing_mode_rejects_root_predating_removal() {
+        // RootPredatesRemoval = 33
+        let (env, comments_id, voting_id, tree_id, _sbt_id, registry_id, _member) = setup_env();
+        let comments_client = CommentsClient::new(&env, &comments_id);
+        let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+
+        let dao_id = 1u64;
+        let proposal_id = 1u64;
+        let admin = Address::generate(&env);
+
+        // Setup with Trailing mode
+        setup_dao_and_proposal(
+            &env,
+            &voting_id,
+            &tree_id,
+            &registry_id,
+            &admin,
+            dao_id,
+            proposal_id,
+            VoteMode::Trailing,
+        );
+
+        // Create a root that's valid but predates removal (index 5)
+        let old_root = U256::from_u32(&env, 54321);
+        tree_client.set_root_valid(&dao_id, &old_root, &true, &5);
+
+        // Set min_root to 10 (simulating member was revoked at index 10)
+        tree_client.set_min_root(&dao_id, &10);
+
+        let content_cid = String::from_str(&env, "QmTest");
+        let nullifier = U256::from_u32(&env, 88888);
+        let commitment = U256::from_u32(&env, 11111);
+        let proof = create_dummy_proof(&env);
+
+        // This should fail because root index (5) < min_root (10)
+        comments_client.add_anonymous_comment(
+            &dao_id,
+            &proposal_id,
+            &content_cid,
+            &None,
+            &nullifier,
+            &old_root,
+            &commitment,
+            &true,
+            &proof,
+        );
     }
 }

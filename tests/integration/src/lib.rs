@@ -31,7 +31,8 @@ mod tests {
             let registry = env.register(dao_registry::DaoRegistry, ());
             let sbt = env.register(membership_sbt::MembershipSbt, (registry.clone(),));
             let tree = env.register(membership_tree::MembershipTree, (sbt.clone(),));
-            let voting = env.register(voting::Voting, (tree.clone(),));
+            // Pass both tree and registry to voting constructor (registry cached to reduce cross-contract calls)
+            let voting = env.register(voting::Voting, (tree.clone(), registry.clone()));
 
             Self {
                 env,
@@ -485,14 +486,9 @@ mod tests {
         let nullifier = U256::from_u32(&system.env, 99999);
 
         // First vote succeeds
-        system.voting_client().vote(
-            &dao_id,
-            &proposal_id,
-            &true,
-            &nullifier,
-            &root,
-            &proof,
-        );
+        system
+            .voting_client()
+            .vote(&dao_id, &proposal_id, &true, &nullifier, &root, &proof);
 
         // Second vote with same nullifier fails
         system.voting_client().vote(
@@ -726,7 +722,7 @@ mod tests {
             &proposal_id,
             &true,
             &nullifier,
-            &new_root,    // This won't match eligible_root
+            &new_root, // This won't match eligible_root
             &proof,
         );
     }
@@ -863,14 +859,9 @@ mod tests {
         let proof = system.create_test_proof();
         let nullifier = U256::from_u32(&system.env, 99999);
 
-        system.voting_client().vote(
-            &dao_id,
-            &proposal_id,
-            &true,
-            &nullifier,
-            &old_root,
-            &proof,
-        );
+        system
+            .voting_client()
+            .vote(&dao_id, &proposal_id, &true, &nullifier, &old_root, &proof);
     }
 
     // NOTE: The current voting contract has strict revocation checks that prevent
@@ -1007,24 +998,14 @@ mod tests {
         // Votes still succeed on both proposals after rotation
         let proof = system.create_test_proof();
         let nullifier1 = U256::from_u32(&system.env, 111);
-        system.voting_client().vote(
-            &dao_id,
-            &proposal1,
-            &true,
-            &nullifier1,
-            &root,
-            &proof,
-        );
+        system
+            .voting_client()
+            .vote(&dao_id, &proposal1, &true, &nullifier1, &root, &proof);
 
         let nullifier2 = U256::from_u32(&system.env, 222);
-        system.voting_client().vote(
-            &dao_id,
-            &proposal2,
-            &false,
-            &nullifier2,
-            &root,
-            &proof,
-        );
+        system
+            .voting_client()
+            .vote(&dao_id, &proposal2, &false, &nullifier2, &root, &proof);
     }
 
     #[test]
@@ -1097,7 +1078,7 @@ mod tests {
             &dao_id,
             &String::from_str(&system.env, "Proposal A"),
             &String::from_str(&system.env, ""),
-            &0, // no deadline
+            &0,      // no deadline
             &member, // Member has SBT, so they can create proposal
             &VoteMode::Fixed,
         );
@@ -1120,14 +1101,9 @@ mod tests {
 
         let cpu_before = system.env.cost_estimate().budget().cpu_instruction_cost();
         let mem_before = system.env.cost_estimate().budget().memory_bytes_cost();
-        system.voting_client().vote(
-            &dao_id,
-            &proposal_id,
-            &true,
-            &nullifier,
-            &root,
-            &proof,
-        );
+        system
+            .voting_client()
+            .vote(&dao_id, &proposal_id, &true, &nullifier, &root, &proof);
         let cpu_after = system.env.cost_estimate().budget().cpu_instruction_cost();
         let mem_after = system.env.cost_estimate().budget().memory_bytes_cost();
         let cpu_delta = cpu_after.saturating_sub(cpu_before);
@@ -1162,9 +1138,14 @@ mod tests {
         let root1 = system.tree_client().current_root(&dao1);
         let vk1 = system.create_test_vk();
         system.voting_client().set_vk(&dao1, &vk1, &admin1);
-        let p1 = system
-            .voting_client()
-            .create_proposal(&dao1, &String::from_str(&system.env, "P1"), &String::from_str(&system.env, ""), &0, &member, &VoteMode::Fixed);
+        let p1 = system.voting_client().create_proposal(
+            &dao1,
+            &String::from_str(&system.env, "P1"),
+            &String::from_str(&system.env, ""),
+            &0,
+            &member,
+            &VoteMode::Fixed,
+        );
 
         // DAO 2
         let dao2 = system.registry_client().create_dao(
@@ -1182,29 +1163,24 @@ mod tests {
         let root2 = system.tree_client().current_root(&dao2);
         let vk2 = system.create_test_vk();
         system.voting_client().set_vk(&dao2, &vk2, &admin2);
-        let p2 = system
-            .voting_client()
-            .create_proposal(&dao2, &String::from_str(&system.env, "P2"), &String::from_str(&system.env, ""), &0, &member, &VoteMode::Fixed);
+        let p2 = system.voting_client().create_proposal(
+            &dao2,
+            &String::from_str(&system.env, "P2"),
+            &String::from_str(&system.env, ""),
+            &0,
+            &member,
+            &VoteMode::Fixed,
+        );
 
         // Same nullifier scoped per dao/proposal should work
         let proof = system.create_test_proof();
         let nullifier = U256::from_u32(&system.env, 555);
-        system.voting_client().vote(
-            &dao1,
-            &p1,
-            &true,
-            &nullifier,
-            &root1,
-            &proof,
-        );
-        system.voting_client().vote(
-            &dao2,
-            &p2,
-            &false,
-            &nullifier,
-            &root2,
-            &proof,
-        );
+        system
+            .voting_client()
+            .vote(&dao1, &p1, &true, &nullifier, &root1, &proof);
+        system
+            .voting_client()
+            .vote(&dao2, &p2, &false, &nullifier, &root2, &proof);
     }
 
     #[test]

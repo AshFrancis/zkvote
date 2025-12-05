@@ -162,7 +162,8 @@ fn setup_env_with_registry() -> (Env, Address, Address, Address, Address, Addres
     let registry_id = env.register(mock_registry::MockRegistry, ());
     let sbt_id = env.register(mock_sbt::MockSbt, ());
     let tree_id = env.register(mock_tree::MockTree, ());
-    let voting_id = env.register(Voting, (tree_id.clone(),));
+    // Pass both tree_id and registry_id to constructor (registry cached to reduce cross-contract calls)
+    let voting_id = env.register(Voting, (tree_id.clone(), registry_id.clone()));
 
     // Link tree to sbt
     let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
@@ -284,11 +285,13 @@ fn test_constructor() {
     let env = Env::default();
     env.mock_all_auths();
 
+    let registry_id = env.register(mock_registry::MockRegistry, ());
     let tree_id = env.register(mock_tree::MockTree, ());
-    let voting_id = env.register(Voting, (tree_id.clone(),));
+    let voting_id = env.register(Voting, (tree_id.clone(), registry_id.clone()));
     let client = VotingClient::new(&env, &voting_id);
 
     assert_eq!(client.tree_contract(), tree_id);
+    assert_eq!(client.registry(), registry_id);
 }
 
 #[test]
@@ -347,7 +350,11 @@ fn test_create_proposal_without_sbt_fails() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    voting_client.create_proposal(&1u64, &String::from_str(&env, "Test"), &String::from_str(&env, ""), &(now + 3600),
+    voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Test"),
+        &String::from_str(&env, ""),
+        &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
@@ -372,11 +379,19 @@ fn test_multiple_proposals() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    let p1 = voting_client.create_proposal(&1u64, &String::from_str(&env, "Proposal 1"), &String::from_str(&env, ""), &(now + 3600),
+    let p1 = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Proposal 1"),
+        &String::from_str(&env, ""),
+        &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
-    let p2 = voting_client.create_proposal(&1u64, &String::from_str(&env, "Proposal 2"), &String::from_str(&env, ""), &(now + 7200),
+    let p2 = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Proposal 2"),
+        &String::from_str(&env, ""),
+        &(now + 7200),
         &member,
         &VoteMode::Fixed,
     );
@@ -405,7 +420,11 @@ fn test_vote_success() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    let proposal_id = voting_client.create_proposal(&1u64, &String::from_str(&env, "Test"), &String::from_str(&env, ""), &(now + 3600),
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Test"),
+        &String::from_str(&env, ""),
+        &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
@@ -449,7 +468,11 @@ fn test_double_vote_fails() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    let proposal_id = voting_client.create_proposal(&1u64, &String::from_str(&env, "Test"), &String::from_str(&env, ""), &(now + 3600),
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Test"),
+        &String::from_str(&env, ""),
+        &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
@@ -509,7 +532,11 @@ fn test_nullifier_zero_rejected() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    let proposal_id = voting_client.create_proposal(&1u64, &String::from_str(&env, "Nullifier zero"), &String::from_str(&env, ""), &(now + 3600),
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Nullifier zero"),
+        &String::from_str(&env, ""),
+        &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
@@ -546,7 +573,11 @@ fn test_vote_after_close_fails() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    let proposal_id = voting_client.create_proposal(&1u64, &String::from_str(&env, "Close me"), &String::from_str(&env, ""), &(now + 3600),
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Close me"),
+        &String::from_str(&env, ""),
+        &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
@@ -584,7 +615,11 @@ fn test_close_proposal_emits_event_once() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    let proposal_id = voting_client.create_proposal(&1u64, &String::from_str(&env, "Close event"), &String::from_str(&env, ""), &(now + 3600),
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Close event"),
+        &String::from_str(&env, ""),
+        &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
@@ -617,7 +652,11 @@ fn test_vote_after_archive_fails() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    let proposal_id = voting_client.create_proposal(&1u64, &String::from_str(&env, "Archive me"), &String::from_str(&env, ""), &(now + 3600),
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Archive me"),
+        &String::from_str(&env, ""),
+        &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
@@ -660,7 +699,8 @@ fn test_archive_without_close_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Archive without close"), &String::from_str(&env, ""),
+        &String::from_str(&env, "Archive without close"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -690,7 +730,8 @@ fn test_close_after_archive_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Archive then close"), &String::from_str(&env, ""),
+        &String::from_str(&env, "Archive then close"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -722,7 +763,8 @@ fn test_nullifier_duplicate_panics_in_stream() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Duplicate nullifier stream"), &String::from_str(&env, ""),
+        &String::from_str(&env, "Duplicate nullifier stream"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -732,9 +774,7 @@ fn test_nullifier_duplicate_panics_in_stream() {
     let proof = create_dummy_proof(&env);
 
     // Sequence with a duplicate nullifier at the end
-    let nullifiers = [
-        1u32, 2u32, 3u32, 4u32, 5u32, 6u32, 3u32,
-    ];
+    let nullifiers = [1u32, 2u32, 3u32, 4u32, 5u32, 6u32, 3u32];
 
     for n in nullifiers.iter() {
         let n_u = U256::from_u32(&env, *n);
@@ -768,7 +808,8 @@ fn test_reopen_not_allowed() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "No reopen"), &String::from_str(&env, ""),
+        &String::from_str(&env, "No reopen"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -810,7 +851,8 @@ fn test_randomized_nullifier_sequence_no_duplicates() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Randomized nullifiers"), &String::from_str(&env, ""),
+        &String::from_str(&env, "Randomized nullifiers"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -835,7 +877,10 @@ fn test_randomized_nullifier_sequence_no_duplicates() {
     }
 
     let updated = voting_client.get_proposal(&1u64, &proposal_id);
-    assert_eq!(updated.yes_votes + updated.no_votes, nullifiers.len() as u64);
+    assert_eq!(
+        updated.yes_votes + updated.no_votes,
+        nullifiers.len() as u64
+    );
 }
 
 #[test]
@@ -857,7 +902,8 @@ fn test_tampered_vk_hash_rejected() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "VK hash tamper"), &String::from_str(&env, ""),
+        &String::from_str(&env, "VK hash tamper"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -872,7 +918,9 @@ fn test_tampered_vk_hash_rejected() {
             .unwrap();
         let bogus_hash = BytesN::from_array(&env, &[1u8; 32]);
         p.vk_hash = bogus_hash;
-        env.storage().persistent().set(&DataKey::Proposal(1, proposal_id), &p);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Proposal(1, proposal_id), &p);
     });
 
     let proposal = voting_client.get_proposal(&1u64, &proposal_id);
@@ -910,7 +958,8 @@ fn test_close_proposal_non_admin_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Non-admin close"), &String::from_str(&env, ""),
+        &String::from_str(&env, "Non-admin close"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -938,7 +987,11 @@ fn test_vote_with_invalid_root_fails() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    let proposal_id = voting_client.create_proposal(&1u64, &String::from_str(&env, "Test"), &String::from_str(&env, ""), &(now + 3600),
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Test"),
+        &String::from_str(&env, ""),
+        &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
@@ -983,14 +1036,16 @@ fn test_different_daos_isolated() {
     let now = env.ledger().timestamp();
     let p1 = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "DAO 1 Proposal"), &String::from_str(&env, ""),
+        &String::from_str(&env, "DAO 1 Proposal"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
     let p2 = voting_client.create_proposal(
         &2u64,
-        &String::from_str(&env, "DAO 2 Proposal"), &String::from_str(&env, ""),
+        &String::from_str(&env, "DAO 2 Proposal"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1038,7 +1093,11 @@ fn test_get_results() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    let proposal_id = voting_client.create_proposal(&1u64, &String::from_str(&env, "Test"), &String::from_str(&env, ""), &(now + 3600),
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Test"),
+        &String::from_str(&env, ""),
+        &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
@@ -1090,7 +1149,11 @@ fn test_create_proposal_with_past_end_time_fails() {
 
     let now = env.ledger().timestamp();
     // Create proposal with end time in the past
-    voting_client.create_proposal(&1u64, &String::from_str(&env, "Test"), &String::from_str(&env, ""), &(now - 1), // end time in the past
+    voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Test"),
+        &String::from_str(&env, ""),
+        &(now - 1), // end time in the past
         &member,
         &VoteMode::Fixed,
     );
@@ -1115,7 +1178,8 @@ fn test_vote_with_malformed_proof_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Malformed proof"), &String::from_str(&env, ""),
+        &String::from_str(&env, "Malformed proof"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1161,7 +1225,8 @@ fn test_vote_with_swapped_pub_signals_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Swap pub signals"), &String::from_str(&env, ""),
+        &String::from_str(&env, "Swap pub signals"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1208,7 +1273,8 @@ fn test_vote_with_swapped_dao_proposal_ids_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Swap dao/proposal"), &String::from_str(&env, ""),
+        &String::from_str(&env, "Swap dao/proposal"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1225,7 +1291,7 @@ fn test_vote_with_swapped_dao_proposal_ids_fails() {
 
     // Use wrong dao_id and proposal_id in signals (by calling with swapped IDs)
     voting_client.vote(
-        &2u64, // wrong dao_id
+        &2u64,               // wrong dao_id
         &(&proposal_id + 1), // wrong proposal_id
         &true,
         &nullifier,
@@ -1253,7 +1319,8 @@ fn test_vote_with_all_zero_proof_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Zero proof"), &String::from_str(&env, ""),
+        &String::from_str(&env, "Zero proof"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1269,14 +1336,7 @@ fn test_vote_with_all_zero_proof_fails() {
     let nullifier = U256::from_u32(&env, 2020);
     let proof = create_all_zero_proof(&env);
 
-    voting_client.vote(
-        &1u64,
-        &proposal_id,
-        &true,
-        &nullifier,
-        &root,
-        &proof,
-    );
+    voting_client.vote(&1u64, &proposal_id, &true, &nullifier, &root, &proof);
 }
 
 #[test]
@@ -1298,7 +1358,8 @@ fn test_vote_with_off_curve_proof_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Off-curve proof"), &String::from_str(&env, ""),
+        &String::from_str(&env, "Off-curve proof"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1314,14 +1375,7 @@ fn test_vote_with_off_curve_proof_fails() {
     let nullifier = U256::from_u32(&env, 3030);
     let proof = create_off_curve_proof(&env);
 
-    voting_client.vote(
-        &1u64,
-        &proposal_id,
-        &true,
-        &nullifier,
-        &root,
-        &proof,
-    );
+    voting_client.vote(&1u64, &proposal_id, &true, &nullifier, &root, &proof);
 }
 
 #[test]
@@ -1341,7 +1395,11 @@ fn test_vote_after_expiry_fails() {
     voting_client.set_vk(&1u64, &create_dummy_vk(&env), &admin);
 
     let now = env.ledger().timestamp();
-    let proposal_id = voting_client.create_proposal(&1u64, &String::from_str(&env, "Test"), &String::from_str(&env, ""), &(now + 3600), // 1 hour
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Test"),
+        &String::from_str(&env, ""),
+        &(now + 3600), // 1 hour
         &member,
         &VoteMode::Fixed,
     );
@@ -1390,7 +1448,8 @@ fn test_vote_with_commitment_from_other_dao_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &2u64,
-        &String::from_str(&env, "Cross-DAO vote"), &String::from_str(&env, ""),
+        &String::from_str(&env, "Cross-DAO vote"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1431,7 +1490,8 @@ fn test_vote_with_mismatched_vk_hash_in_proposal_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "VK hash mismatch"), &String::from_str(&env, ""),
+        &String::from_str(&env, "VK hash mismatch"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1446,7 +1506,9 @@ fn test_vote_with_mismatched_vk_hash_in_proposal_fails() {
             .unwrap();
         let bogus_hash = BytesN::from_array(&env, &[9u8; 32]);
         p.vk_hash = bogus_hash;
-        env.storage().persistent().set(&DataKey::Proposal(1, proposal_id), &p);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Proposal(1, proposal_id), &p);
         env.storage()
             .instance()
             .set(&DataKey::VerifyOverride, &false);
@@ -1487,7 +1549,9 @@ fn test_vote_with_vk_ic_length_mismatch_fails() {
 
     // Bypass validation and install mismatched VK/version directly
     env.as_contract(&voting_id, || {
-        env.storage().persistent().set(&DataKey::VkVersion(1), &1u32);
+        env.storage()
+            .persistent()
+            .set(&DataKey::VkVersion(1), &1u32);
         env.storage()
             .persistent()
             .set(&DataKey::VkByVersion(1, 1), &vk);
@@ -1496,7 +1560,8 @@ fn test_vote_with_vk_ic_length_mismatch_fails() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Bad VK"), &String::from_str(&env, ""),
+        &String::from_str(&env, "Bad VK"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1609,11 +1674,19 @@ fn test_nullifier_reusable_across_proposals() {
 
     // Create two proposals
     let now = env.ledger().timestamp();
-    let proposal1 = voting_client.create_proposal(&1u64, &String::from_str(&env, "Proposal 1"), &String::from_str(&env, ""), &(now + 3600),
+    let proposal1 = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Proposal 1"),
+        &String::from_str(&env, ""),
+        &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
-    let proposal2 = voting_client.create_proposal(&1u64, &String::from_str(&env, "Proposal 2"), &String::from_str(&env, ""), &(now + 7200),
+    let proposal2 = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Proposal 2"),
+        &String::from_str(&env, ""),
+        &(now + 7200),
         &member,
         &VoteMode::Fixed,
     );
@@ -1670,7 +1743,8 @@ fn test_multiple_unique_nullifiers_succeed() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "Batch votes"), &String::from_str(&env, ""),
+        &String::from_str(&env, "Batch votes"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1751,7 +1825,11 @@ fn test_vk_change_after_proposal_creation_resists_vk_change() {
 
     // Create proposal (snapshots VK hash)
     let now = env.ledger().timestamp();
-    let proposal_id = voting_client.create_proposal(&1u64, &String::from_str(&env, "Test"), &String::from_str(&env, ""), &(now + 3600),
+    let proposal_id = voting_client.create_proposal(
+        &1u64,
+        &String::from_str(&env, "Test"),
+        &String::from_str(&env, ""),
+        &(now + 3600),
         &member,
         &VoteMode::Fixed,
     );
@@ -1813,7 +1891,8 @@ fn test_vk_version_mismatch_rejected() {
     let now = env.ledger().timestamp();
     let proposal_id = voting_client.create_proposal(
         &1u64,
-        &String::from_str(&env, "VK version snapshot"), &String::from_str(&env, ""),
+        &String::from_str(&env, "VK version snapshot"),
+        &String::from_str(&env, ""),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -1840,7 +1919,9 @@ fn test_vk_version_mismatch_rejected() {
 
     // Remove stored VK v1 to simulate missing history and ensure vote fails
     env.as_contract(&voting_id, || {
-        env.storage().persistent().remove(&DataKey::VkByVersion(1, 1));
+        env.storage()
+            .persistent()
+            .remove(&DataKey::VkByVersion(1, 1));
     });
 
     let proposal = voting_client.get_proposal(&1u64, &proposal_id);
@@ -2183,7 +2264,10 @@ fn test_create_proposal_max_title_length_succeeds() {
     let proposal_id = voting_client.create_proposal(
         &1u64,
         &String::from_str(&env, &max_title),
-        &String::from_str(&env, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi"),
+        &String::from_str(
+            &env,
+            "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
+        ),
         &(now + 3600),
         &member,
         &VoteMode::Fixed,
@@ -2437,4 +2521,215 @@ fn add_big_endian_256(a: &[u8], b: &[u8]) -> [u8; 32] {
         carry = sum >> 8;
     }
     result
+}
+
+// ============================================================================
+// Field Modulus Validation Tests
+// ============================================================================
+// These tests verify that public signals >= BN254 scalar field modulus r are
+// rejected. This prevents modular reduction attacks where different U256 values
+// that are congruent mod r (e.g., nullifier=1 vs nullifier=r+1) would verify
+// identically but be stored as different keys, allowing double-voting.
+
+/// BN254 scalar field modulus r (big-endian)
+/// r = 21888242871839275222246405745257275088548364400416034343698204186575808495617
+const BN254_FR_MODULUS_TEST: [u8; 32] = [
+    0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81, 0x58, 0x5d,
+    0x28, 0x33, 0xe8, 0x48, 0x79, 0xb9, 0x70, 0x91, 0x43, 0xe1, 0xf5, 0x93, 0xf0, 0x00, 0x00, 0x01,
+];
+
+/// Helper to create U256 from big-endian bytes
+fn u256_from_be(env: &Env, bytes: &[u8; 32]) -> U256 {
+    U256::from_be_bytes(env, &soroban_sdk::Bytes::from_array(env, bytes))
+}
+
+/// Helper to create r + offset (wrapping addition in big-endian)
+fn modulus_plus(env: &Env, offset: u8) -> U256 {
+    let mut bytes = BN254_FR_MODULUS_TEST;
+    // Add offset to the last byte with carry propagation
+    let mut carry = offset as u16;
+    for i in (0..32).rev() {
+        let sum = bytes[i] as u16 + carry;
+        bytes[i] = (sum & 0xFF) as u8;
+        carry = sum >> 8;
+        if carry == 0 {
+            break;
+        }
+    }
+    u256_from_be(env, &bytes)
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #25)")]
+fn test_vote_rejects_nullifier_at_modulus() {
+    // SignalNotInField = 25
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+
+    let dao_id = 1u64;
+    registry_client.set_admin(&dao_id, &member);
+    sbt_client.set_member(&dao_id, &member, &true);
+    registry_client.set_members_can_propose(&dao_id, &true);
+
+    // Set up VK and create proposal
+    let vk = create_dummy_vk(&env);
+    voting_client.set_vk(&dao_id, &vk, &member);
+    let root = U256::from_u32(&env, 12345);
+    tree_client.set_root(&dao_id, &root);
+
+    let now = env.ledger().timestamp();
+    let proposal_id = voting_client.create_proposal(
+        &dao_id,
+        &String::from_str(&env, "Test"),
+        &String::from_str(&env, "QmTest"),
+        &(now + 3600),
+        &member,
+        &VoteMode::Trailing,
+    );
+
+    // Try to vote with nullifier = r (the field modulus itself)
+    let nullifier_at_modulus = u256_from_be(&env, &BN254_FR_MODULUS_TEST);
+    let proof = create_dummy_proof(&env);
+
+    // This should panic with SignalNotInField
+    voting_client.vote(
+        &dao_id,
+        &proposal_id,
+        &true,
+        &nullifier_at_modulus,
+        &root,
+        &proof,
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #25)")]
+fn test_vote_rejects_nullifier_above_modulus() {
+    // SignalNotInField = 25
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+
+    let dao_id = 1u64;
+    registry_client.set_admin(&dao_id, &member);
+    sbt_client.set_member(&dao_id, &member, &true);
+    registry_client.set_members_can_propose(&dao_id, &true);
+
+    let vk = create_dummy_vk(&env);
+    voting_client.set_vk(&dao_id, &vk, &member);
+    let root = U256::from_u32(&env, 12345);
+    tree_client.set_root(&dao_id, &root);
+
+    let now = env.ledger().timestamp();
+    let proposal_id = voting_client.create_proposal(
+        &dao_id,
+        &String::from_str(&env, "Test"),
+        &String::from_str(&env, "QmTest"),
+        &(now + 3600),
+        &member,
+        &VoteMode::Trailing,
+    );
+
+    // Try to vote with nullifier = r + 1 (would reduce to 1 mod r)
+    let nullifier_above_modulus = modulus_plus(&env, 1);
+    let proof = create_dummy_proof(&env);
+
+    // This should panic with SignalNotInField
+    voting_client.vote(
+        &dao_id,
+        &proposal_id,
+        &true,
+        &nullifier_above_modulus,
+        &root,
+        &proof,
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #25)")]
+fn test_vote_rejects_root_at_modulus() {
+    // SignalNotInField = 25
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+
+    let dao_id = 1u64;
+    registry_client.set_admin(&dao_id, &member);
+    sbt_client.set_member(&dao_id, &member, &true);
+    registry_client.set_members_can_propose(&dao_id, &true);
+
+    let vk = create_dummy_vk(&env);
+    voting_client.set_vk(&dao_id, &vk, &member);
+
+    // Set root to a value at the modulus (invalid)
+    let root_at_modulus = u256_from_be(&env, &BN254_FR_MODULUS_TEST);
+    tree_client.set_root(&dao_id, &root_at_modulus);
+
+    let now = env.ledger().timestamp();
+    let proposal_id = voting_client.create_proposal(
+        &dao_id,
+        &String::from_str(&env, "Test"),
+        &String::from_str(&env, "QmTest"),
+        &(now + 3600),
+        &member,
+        &VoteMode::Trailing,
+    );
+
+    let nullifier = U256::from_u32(&env, 42);
+    let proof = create_dummy_proof(&env);
+
+    // This should panic with SignalNotInField for root
+    voting_client.vote(
+        &dao_id,
+        &proposal_id,
+        &true,
+        &nullifier,
+        &root_at_modulus,
+        &proof,
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #26)")]
+fn test_vote_rejects_zero_nullifier() {
+    // InvalidNullifier = 26
+    let (env, voting_id, tree_id, sbt_id, registry_id, member) = setup_env_with_registry();
+    let voting_client = VotingClient::new(&env, &voting_id);
+    let tree_client = mock_tree::MockTreeClient::new(&env, &tree_id);
+    let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
+    let registry_client = mock_registry::MockRegistryClient::new(&env, &registry_id);
+
+    let dao_id = 1u64;
+    registry_client.set_admin(&dao_id, &member);
+    sbt_client.set_member(&dao_id, &member, &true);
+    registry_client.set_members_can_propose(&dao_id, &true);
+
+    let vk = create_dummy_vk(&env);
+    voting_client.set_vk(&dao_id, &vk, &member);
+    let root = U256::from_u32(&env, 12345);
+    tree_client.set_root(&dao_id, &root);
+
+    let now = env.ledger().timestamp();
+    let proposal_id = voting_client.create_proposal(
+        &dao_id,
+        &String::from_str(&env, "Test"),
+        &String::from_str(&env, "QmTest"),
+        &(now + 3600),
+        &member,
+        &VoteMode::Trailing,
+    );
+
+    // Try to vote with nullifier = 0 (invalid)
+    let zero_nullifier = U256::from_u32(&env, 0);
+    let proof = create_dummy_proof(&env);
+
+    // This should panic with InvalidNullifier
+    voting_client.vote(&dao_id, &proposal_id, &true, &zero_nullifier, &root, &proof);
 }

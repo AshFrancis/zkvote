@@ -72,7 +72,7 @@ fn setup_contracts(env: &Env) -> (Address, Address, Address, Address, Address) {
     let registry_id = env.register(dao_registry::WASM, ());
     let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
     let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(),));
+    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
 
     let admin = Address::generate(env);
 
@@ -101,7 +101,13 @@ fn test_admin_can_revoke_member() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Test DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -121,10 +127,16 @@ fn test_admin_can_revoke_member() {
 
     let root_after = tree_client.current_root(&dao_id);
     // With Merkle leaf zeroing, root DOES change after removal
-    assert_ne!(root_before, root_after, "Root should change after removal (leaf zeroed)");
+    assert_ne!(
+        root_before, root_after,
+        "Root should change after removal (leaf zeroed)"
+    );
 
     // Verify the old root is still valid (in history)
-    assert!(tree_client.root_ok(&dao_id, &root_before), "Old root should still be in history");
+    assert!(
+        tree_client.root_ok(&dao_id, &root_before),
+        "Old root should still be in history"
+    );
 
     println!("✅ Admin can successfully revoke member (leaf zeroed, new root created)");
 }
@@ -144,7 +156,13 @@ fn test_admin_can_reinstate_member() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Test DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
 
     tree_client.init_tree(&dao_id, &18, &admin);
 
@@ -160,7 +178,10 @@ fn test_admin_can_reinstate_member() {
     tree_client.remove_member(&dao_id, &member, &admin);
 
     let root_after_removal = tree_client.current_root(&dao_id);
-    assert_ne!(root_before_removal, root_after_removal, "Root should change after removal");
+    assert_ne!(
+        root_before_removal, root_after_removal,
+        "Root should change after removal"
+    );
 
     // Reinstate member (clears mapping so they can re-register)
     // Note: This does NOT restore the leaf, root stays the same
@@ -169,7 +190,10 @@ fn test_admin_can_reinstate_member() {
     let root_after_reinstate = tree_client.current_root(&dao_id);
 
     // Root does NOT change after reinstatement (leaf is still zeroed)
-    assert_eq!(root_after_removal, root_after_reinstate, "Root should NOT change after reinstatement (leaf stays zeroed)");
+    assert_eq!(
+        root_after_removal, root_after_reinstate,
+        "Root should NOT change after reinstatement (leaf stays zeroed)"
+    );
 
     // Admin must re-mint SBT before member can re-register
     // (remove_member also revokes SBT, reinstate_member does NOT restore it)
@@ -180,11 +204,20 @@ fn test_admin_can_reinstate_member() {
     tree_client.register_with_caller(&dao_id, &new_commitment, &member);
 
     let root_after_reregister = tree_client.current_root(&dao_id);
-    assert_ne!(root_after_reinstate, root_after_reregister, "Root should change after re-registration");
+    assert_ne!(
+        root_after_reinstate, root_after_reregister,
+        "Root should change after re-registration"
+    );
 
     // All roots should be valid in history
-    assert!(tree_client.root_ok(&dao_id, &root_before_removal), "Original root should still be in history");
-    assert!(tree_client.root_ok(&dao_id, &root_after_reregister), "New root should be valid");
+    assert!(
+        tree_client.root_ok(&dao_id, &root_before_removal),
+        "Original root should still be in history"
+    );
+    assert!(
+        tree_client.root_ok(&dao_id, &root_after_reregister),
+        "New root should be valid"
+    );
 
     println!("✅ Admin can reinstate revoked member (can re-register with new commitment)");
 }
@@ -203,7 +236,13 @@ fn test_multiple_revoke_reinstate_cycles() {
     let sbt_client = SbtClient::new(&env, &sbt_id);
     let tree_client = TreeClient::new(&env, &tree_id);
 
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Test DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
 
     tree_client.init_tree(&dao_id, &18, &admin);
 
@@ -218,12 +257,18 @@ fn test_multiple_revoke_reinstate_cycles() {
     // First revoke (zeros the leaf)
     tree_client.remove_member(&dao_id, &member, &admin);
     let root_after_revoke_1 = tree_client.current_root(&dao_id);
-    assert_ne!(original_root, root_after_revoke_1, "Root should change after first revoke");
+    assert_ne!(
+        original_root, root_after_revoke_1,
+        "Root should change after first revoke"
+    );
 
     // First reinstate (just clears mapping, root stays same)
     tree_client.reinstate_member(&dao_id, &member, &admin);
     let root_after_reinstate_1 = tree_client.current_root(&dao_id);
-    assert_eq!(root_after_revoke_1, root_after_reinstate_1, "Root should NOT change after reinstate");
+    assert_eq!(
+        root_after_revoke_1, root_after_reinstate_1,
+        "Root should NOT change after reinstate"
+    );
 
     // Re-mint SBT (remove_member revokes SBT, reinstate doesn't restore it)
     sbt_client.mint(&dao_id, &member, &admin, &None);
@@ -232,17 +277,26 @@ fn test_multiple_revoke_reinstate_cycles() {
     let commitment2 = U256::from_u32(&env, 67890);
     tree_client.register_with_caller(&dao_id, &commitment2, &member);
     let root_after_reregister = tree_client.current_root(&dao_id);
-    assert_ne!(root_after_reinstate_1, root_after_reregister, "Root should change after re-registration");
+    assert_ne!(
+        root_after_reinstate_1, root_after_reregister,
+        "Root should change after re-registration"
+    );
 
     // Second revoke
     tree_client.remove_member(&dao_id, &member, &admin);
     let root_after_revoke_2 = tree_client.current_root(&dao_id);
-    assert_ne!(root_after_reregister, root_after_revoke_2, "Root should change after second revoke");
+    assert_ne!(
+        root_after_reregister, root_after_revoke_2,
+        "Root should change after second revoke"
+    );
 
     // Second reinstate (clears mapping again)
     tree_client.reinstate_member(&dao_id, &member, &admin);
     let root_after_reinstate_2 = tree_client.current_root(&dao_id);
-    assert_eq!(root_after_revoke_2, root_after_reinstate_2, "Root should NOT change after second reinstate");
+    assert_eq!(
+        root_after_revoke_2, root_after_reinstate_2,
+        "Root should NOT change after second reinstate"
+    );
 
     // Re-mint SBT again for second cycle
     sbt_client.mint(&dao_id, &member, &admin, &None);
@@ -251,11 +305,20 @@ fn test_multiple_revoke_reinstate_cycles() {
     let commitment3 = U256::from_u32(&env, 11111);
     tree_client.register_with_caller(&dao_id, &commitment3, &member);
     let final_root = tree_client.current_root(&dao_id);
-    assert_ne!(root_after_reinstate_2, final_root, "Root should change after third registration");
+    assert_ne!(
+        root_after_reinstate_2, final_root,
+        "Root should change after third registration"
+    );
 
     // All historical roots should be valid
-    assert!(tree_client.root_ok(&dao_id, &original_root), "Original root should be in history");
-    assert!(tree_client.root_ok(&dao_id, &final_root), "Final root should be valid");
+    assert!(
+        tree_client.root_ok(&dao_id, &original_root),
+        "Original root should be in history"
+    );
+    assert!(
+        tree_client.root_ok(&dao_id, &final_root),
+        "Final root should be valid"
+    );
 
     println!("✅ Multiple revoke/reinstate/re-register cycles work correctly");
 }
@@ -277,7 +340,13 @@ fn test_only_admin_can_remove_member() {
     let non_admin = Address::generate(&env);
     let member = Address::generate(&env);
 
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Test DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
 
     tree_client.init_tree(&dao_id, &18, &admin);
 
@@ -306,7 +375,13 @@ fn test_only_admin_can_reinstate_member() {
     let non_admin = Address::generate(&env);
     let member = Address::generate(&env);
 
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Test DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
 
     tree_client.init_tree(&dao_id, &18, &admin);
 
@@ -337,7 +412,13 @@ fn test_revoked_member_cannot_vote_mid_proposal() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO and init tree
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Revocation DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Revocation DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
     tree_client.init_tree(&dao_id, &18, &admin);
 
     // Member setup
@@ -366,14 +447,7 @@ fn test_revoked_member_cannot_vote_mid_proposal() {
     let proof = get_real_proof(&env);
 
     // Should panic because commitment revoked after proposal creation
-    voting_client.vote(
-        &dao_id,
-        &proposal_id,
-        &true,
-        &nullifier,
-        &root,
-        &proof,
-    );
+    voting_client.vote(&dao_id, &proposal_id, &true, &nullifier, &root, &proof);
 }
 
 /// Revoke then reinstate before creating a new proposal:
@@ -393,7 +467,13 @@ fn test_revoked_then_reinstated_only_new_proposals_accept_vote() {
     let tree_client = TreeClient::new(&env, &tree_id);
     let voting_client = VotingClient::new(&env, &voting_id);
 
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Churn DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Churn DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
     tree_client.init_tree(&dao_id, &18, &admin);
 
     let member = Address::generate(&env);
@@ -433,22 +513,8 @@ fn test_revoked_then_reinstated_only_new_proposals_accept_vote() {
     let proof = get_real_proof(&env);
 
     // Vote on proposal B should succeed
-    voting_client.vote(
-        &dao_id,
-        &proposal_b,
-        &true,
-        &nullifier,
-        &root,
-        &proof,
-    );
+    voting_client.vote(&dao_id, &proposal_b, &true, &nullifier, &root, &proof);
 
     // Vote on proposal A should panic due to revocation during its lifetime
-    voting_client.vote(
-        &dao_id,
-        &proposal_a,
-        &true,
-        &nullifier,
-        &root,
-        &proof,
-    );
+    voting_client.vote(&dao_id, &proposal_a, &true, &nullifier, &root, &proof);
 }

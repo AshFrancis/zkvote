@@ -94,7 +94,7 @@ fn test_vote_with_wrong_root_fails() {
     let registry_id = env.register(dao_registry::WASM, ());
     let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
     let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(),));
+    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
 
     let admin = Address::generate(&env);
     let member = Address::generate(&env);
@@ -105,7 +105,13 @@ fn test_vote_with_wrong_root_fails() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Test DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
 
     tree_client.init_tree(&dao_id, &18, &admin);
 
@@ -236,7 +242,7 @@ fn test_vote_with_correct_root_succeeds() {
     let registry_id = env.register(dao_registry::WASM, ());
     let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
     let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(),));
+    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
 
     let admin = Address::generate(&env);
     let member = Address::generate(&env);
@@ -247,7 +253,13 @@ fn test_vote_with_correct_root_succeeds() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Test DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
 
     tree_client.init_tree(&dao_id, &18, &admin);
 

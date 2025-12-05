@@ -6,8 +6,7 @@
 // 3. Nullifier reuse across DAOs (should succeed - different domains)
 
 use soroban_sdk::{
-    contracttype, testutils::Address as _, Address, Bytes, BytesN, Env, String, Vec as SdkVec,
-    U256,
+    contracttype, testutils::Address as _, Address, Bytes, BytesN, Env, String, Vec as SdkVec, U256,
 };
 
 mod dao_registry {
@@ -151,7 +150,7 @@ fn setup_contracts(env: &Env) -> (Address, Address, Address, Address, Address) {
     let registry_id = env.register(dao_registry::WASM, ());
     let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
     let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(),));
+    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
 
     let admin = Address::generate(env);
 
@@ -174,7 +173,13 @@ fn test_corrupted_proof_fails() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO (dao_id = 1 to match proof)
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Test DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
     assert_eq!(dao_id, 1);
 
     // Initialize tree with depth 18
@@ -234,7 +239,13 @@ fn test_wrong_vk_fails() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Test DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -276,14 +287,7 @@ fn test_wrong_vk_fails() {
     let nullifier = hex_str_to_u256(&env, REAL_NULLIFIER_HEX);
     let proof = get_real_proof(&env);
 
-    voting_client.vote(
-        &dao_id,
-        &proposal_id,
-        &true,
-        &nullifier,
-        &root,
-        &proof,
-    );
+    voting_client.vote(&dao_id, &proposal_id, &true, &nullifier, &root, &proof);
 }
 
 // Test: Nullifier reuse with a real proof should fail on second attempt
@@ -302,7 +306,13 @@ fn test_real_proof_double_vote_rejected() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO and init tree
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Test DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
     tree_client.init_tree(&dao_id, &18, &admin);
 
     // Set real VK and register member
@@ -327,24 +337,10 @@ fn test_real_proof_double_vote_rejected() {
     let proof = get_real_proof(&env);
 
     // First vote succeeds
-    voting_client.vote(
-        &dao_id,
-        &proposal_id,
-        &true,
-        &nullifier,
-        &root,
-        &proof,
-    );
+    voting_client.vote(&dao_id, &proposal_id, &true, &nullifier, &root, &proof);
 
     // Second vote with same nullifier should panic
-    voting_client.vote(
-        &dao_id,
-        &proposal_id,
-        &true,
-        &nullifier,
-        &root,
-        &proof,
-    );
+    voting_client.vote(&dao_id, &proposal_id, &true, &nullifier, &root, &proof);
 }
 
 // Test: Same nullifier can be used in different DAOs
@@ -366,8 +362,20 @@ fn test_nullifier_reusable_across_daos() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create TWO DAOs
-    let dao_id_1 = registry_client.create_dao(&String::from_str(&env, "DAO 1"), &admin, &false, &true, &None);
-    let dao_id_2 = registry_client.create_dao(&String::from_str(&env, "DAO 2"), &admin, &false, &true, &None);
+    let dao_id_1 = registry_client.create_dao(
+        &String::from_str(&env, "DAO 1"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
+    let dao_id_2 = registry_client.create_dao(
+        &String::from_str(&env, "DAO 2"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
     assert_eq!(dao_id_1, 1);
     assert_eq!(dao_id_2, 2);
 
@@ -453,8 +461,20 @@ fn test_proof_for_wrong_dao_fails() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create TWO DAOs - we'll try to use a proof for DAO 1 on DAO 2
-    let _dao_id_1 = registry_client.create_dao(&String::from_str(&env, "DAO 1"), &admin, &false, &true, &None);
-    let dao_id_2 = registry_client.create_dao(&String::from_str(&env, "DAO 2"), &admin, &false, &true, &None);
+    let _dao_id_1 = registry_client.create_dao(
+        &String::from_str(&env, "DAO 1"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
+    let dao_id_2 = registry_client.create_dao(
+        &String::from_str(&env, "DAO 2"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
 
     // Initialize tree for DAO 2
     tree_client.init_tree(&dao_id_2, &18, &admin);
@@ -486,14 +506,7 @@ fn test_proof_for_wrong_dao_fails() {
     let proof = get_real_proof(&env);
 
     // This should fail - proof daoId (1) doesn't match actual daoId (2)
-    voting_client.vote(
-        &dao_id_2,
-        &proposal_id,
-        &true,
-        &nullifier,
-        &root,
-        &proof,
-    );
+    voting_client.vote(&dao_id_2, &proposal_id, &true, &nullifier, &root, &proof);
 }
 
 // Test: Proof for wrong proposal ID fails
@@ -512,7 +525,13 @@ fn test_proof_for_wrong_proposal_fails() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO (dao_id = 1 to match proof)
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Test DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -552,12 +571,5 @@ fn test_proof_for_wrong_proposal_fails() {
     let proof = get_real_proof(&env);
 
     // This should fail - proof proposalId (1) doesn't match actual proposalId (2)
-    voting_client.vote(
-        &dao_id,
-        &proposal_2,
-        &true,
-        &nullifier,
-        &root,
-        &proof,
-    );
+    voting_client.vote(&dao_id, &proposal_2, &true, &nullifier, &root, &proof);
 }

@@ -10,8 +10,8 @@ export type RelayerStatus =
   | { state: "ready"; message: string }
   | { state: "mismatch"; message: string; mismatches: string[] };
 
-// Hardcoded for local development
-const RELAYER_URL = "http://localhost:3001";
+// Use environment variable with fallback to localhost for development
+const RELAYER_URL = import.meta.env.VITE_RELAYER_URL || "http://localhost:3001";
 
 interface RelayerStatusData {
   status: RelayerStatus;

@@ -10,8 +10,10 @@ Circomlib and P25 (Protocol 25) Poseidon implementations produce **IDENTICAL** o
 ## Test Configuration
 
 - **Network**: P25 local testnet (`stellar container start -t future`)
-- **Tree Depth**: 20 (supports ~1M members)
+- **Tree Depth**: 20 (for testing Poseidon hash compatibility)
 - **Zero Value**: 0 (not Poseidon([0]))
+
+> **Note**: Production tree depth is 18 (~262K members). Depth 20 was used here to validate Poseidon hash chain compatibility across implementations.
 
 ## Verification Results
 
@@ -97,5 +99,5 @@ The cryptographic implementations are **fully compatible**:
 ## Next Steps
 
 1. ✅ Poseidon KAT passed - compatibility verified
-2. For production: Consider tree depth optimization (depth 16 = 65K members, less gas)
+2. ✅ Production tree depth set to 18 (~262K members) - balanced for capacity and gas costs
 3. For full E2E test: Need to adjust budget limits or use testnet with higher limits

@@ -1,0 +1,13 @@
+node_modules
+dist
+.env
+.env.*
+*.log
+.git
+.gitignore
+*.md
+test
+*.test.js
+*.test.ts
+data/*.db
+data/*.json

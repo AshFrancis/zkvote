@@ -67,7 +67,7 @@ async function main() {
     proposalId = 1n,
     voteChoice = 1n,
     index = 0,
-    depth = 20,
+    depth = 18,
   } = parseArgs();
 
   const poseidon = await circomlibjs.buildPoseidon();

@@ -144,7 +144,7 @@ export function Homepage() {
                     <span className="text-muted-foreground/50 group-hover:text-muted-foreground transition-colors">+</span>
                   </h3>
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    Ethereum-compatible elliptic curve enabling efficient bilinear pairings for Groth16 proof verification directly on Soroban.
+                    Pairing-friendly elliptic curve enabling efficient bilinear pairings for Groth16 proof verification directly on Soroban.
                   </p>
                 </div>
               </div>

@@ -13,6 +13,8 @@ const VERSION_KEY: Symbol = symbol_short!("ver");
 pub enum RegistryError {
     NameTooLong = 1,
     DaoNotFound = 2,
+    NotAdmin = 3,
+    MetadataCidTooLong = 4,
 }
 
 // Size limit to prevent DoS attacks
@@ -98,7 +100,7 @@ impl DaoRegistry {
         // Validate metadata CID length if provided
         if let Some(ref cid) = metadata_cid {
             if cid.len() > MAX_METADATA_CID_LEN {
-                panic!("Metadata CID too long");
+                panic_with_error!(&env, RegistryError::MetadataCidTooLong);
             }
         }
 
@@ -201,7 +203,7 @@ impl DaoRegistry {
 
         // Only admin can change proposal mode
         if admin != info.admin {
-            panic!("Not admin");
+            panic_with_error!(&env, RegistryError::NotAdmin);
         }
 
         info.members_can_propose = members_can_propose;
@@ -223,7 +225,7 @@ impl DaoRegistry {
 
         // Only admin can change membership mode
         if admin != info.admin {
-            panic!("Not admin");
+            panic_with_error!(&env, RegistryError::NotAdmin);
         }
 
         info.membership_open = membership_open;
@@ -248,7 +250,7 @@ impl DaoRegistry {
 
         // Only admin can change name
         if admin != info.admin {
-            panic!("Not admin");
+            panic_with_error!(&env, RegistryError::NotAdmin);
         }
 
         info.name = name;
@@ -264,7 +266,7 @@ impl DaoRegistry {
         // Validate CID length if provided
         if let Some(ref cid) = metadata_cid {
             if cid.len() > MAX_METADATA_CID_LEN {
-                panic!("Metadata CID too long");
+                panic_with_error!(&env, RegistryError::MetadataCidTooLong);
             }
         }
 
@@ -277,7 +279,7 @@ impl DaoRegistry {
 
         // Only admin can change metadata
         if admin != info.admin {
-            panic!("Not admin");
+            panic_with_error!(&env, RegistryError::NotAdmin);
         }
 
         info.metadata_cid = metadata_cid;
@@ -319,7 +321,7 @@ impl DaoRegistry {
         // Validate metadata CID length if provided
         if let Some(ref cid) = metadata_cid {
             if cid.len() > MAX_METADATA_CID_LEN {
-                panic!("Metadata CID too long");
+                panic_with_error!(&env, RegistryError::MetadataCidTooLong);
             }
         }
 
@@ -400,7 +402,7 @@ impl DaoRegistry {
 
         // Validate name length to prevent DoS
         if name.len() > MAX_DAO_NAME_LEN {
-            panic!("DAO name too long");
+            panic_with_error!(&env, RegistryError::NameTooLong);
         }
 
         // Step 1: Create DAO registry entry

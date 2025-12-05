@@ -6,20 +6,20 @@
 // Run with: cargo test --test standalone_proof_verification -- --nocapture
 //
 // Test proof generated with:
-//   secret: 123456789
-//   salt: 987654321
+//   secret: 999888777666
+//   salt: 111222333444
 //   daoId: 1
 //   proposalId: 1
 //   voteChoice: 1 (YES)
+//
+// Circuit has 5 public signals: root, nullifier, daoId, proposalId, voteChoice
+// (commitment is now private)
 //
 // Expected results:
 //   - Commitment registration: SUCCESS
 //   - Merkle root matches expected value
 //   - First vote submission: SUCCESS (proof verifies)
 //   - Second vote (same nullifier): FAIL (double vote detected)
-//
-// NOTE: Proofs are LE-encoded (proof_soroban_le.json). After BE migration,
-// need to regenerate using proof_soroban_be.json and verification_key_soroban_be.json
 
 use soroban_sdk::{testutils::Address as _, Address, Bytes, BytesN, Env, String, Vec, U256};
 
@@ -55,29 +55,29 @@ fn hex_str_to_u256(env: &Env, hex: &str) -> U256 {
 }
 
 fn get_real_proof(env: &Env) -> voting::Proof {
-    // Real proof from circuits/build/proof_soroban_be.json (BIG-ENDIAN!)
-    // Generated with depth 18, 6 public signals (root, nullifier, daoId, proposalId, voteChoice, commitment)
+    // Real proof from circuits/build/proof_soroban.json (BIG-ENDIAN!)
+    // Generated with depth 18, 5 public signals (root, nullifier, daoId, proposalId, voteChoice)
     // G2 format: [c1, c0, c1, c0] (imaginary first)
     voting::Proof {
         a: hex_to_bytes(
             env,
-            "2d806e0094f82e4826cbaf1c55d9411c99cbd4724a06b3636343e9b4662101d027f2ac0e90e5abf5c8eb68bc544720783089cac24d53f97b4ccb23997ee1bef1",
+            "02de5951501fe4408ea8bf4960106738d190525a270fe0b035139aac2fa762302bbb2f3f1d001d99b919a34b93a9aed831e7bd1f960d5981ae328dfd1845b8a8",
         ),
         b: hex_to_bytes(
             env,
-            "079a9e010f261129556108ece03d72f2241446001f4867236ee62d0cdd165a2d1f4155f6d442b0f8eb5dd5562119b9efad6c51f52923beb9122e1ef8479c45d508d8febd3f8a15ce920ab23fa2228a56e2af681b9b1aec9071dce66801c5fa810d51353b9164be959e736cd071d642bf3f7cbbeab73eb6dadd02471fc0000fac",
+            "2a47ed5deedaad3fe569ea39131c2800f9eead79402a3fc02a6a03e8871d0ae5186d064bc81ecb41f386eb427b70f18fb42e088eb477042681fc926ce75dc4de1cb57584e640e98d0cc2a33cdfd2403bd97cd17b6018549a6c2fd34941b19f1219e3d80a0f9f99c5f74a36d2903ef10d3ba6bbb2f61e6be2072c606510f71e4d",
         ),
         c: hex_to_bytes(
             env,
-            "1417617b66c6217dfd3d37a2949f230cd2126c8edebf73cd6fe9912c56e4b69e050323a90b08147b46079f4f0e359ee504da2082dda2ab112b8099fc064f4a6a",
+            "04dac3300843dbeef12b08362d2a98110fa9080346cff63cc8698fb97d48adcb2faeacd5f1e4b5c37664f6fcb7c67ead0cd789e2db580867dcca345799517ca2",
         ),
     }
 }
 
 fn get_verification_key(env: &Env) -> voting::VerificationKey {
-    // VK from circuits/build/verification_key_soroban_be.json (BIG-ENDIAN!)
-    // Generated for 6 public signals: [root, nullifier, daoId, proposalId, voteChoice, commitment]
-    // IC has 7 elements (n+1 for n public signals)
+    // VK from circuits/build/verification_key_soroban.json (BIG-ENDIAN!)
+    // Generated for 5 public signals: [root, nullifier, daoId, proposalId, voteChoice]
+    // IC has 6 elements (n+1 for n public signals)
     // G2 format: [c1, c0, c1, c0] (imaginary first)
     let mut ic = Vec::new(env);
 
@@ -105,10 +105,6 @@ fn get_verification_key(env: &Env) -> voting::VerificationKey {
         env,
         "143c06565aad1cacd0ddbc0cfc6dd131c70392d29c16d8c80ed7f62ada52587b13e189e68fe2fe8806b272da3c5762a18b23680cdeda63faef014b7dd6806f21",
     ));
-    ic.push_back(hex_to_bytes(
-        env,
-        "1ff2e1a8bf1cdc19c43a4040d1a87832823cdafe5fdf0bd812eabc05882e1ff12139f471e228bdec73ad109a16c1fd938d9e8c2b4d5c5c0b9cb703c8eec3a8b0",
-    ));
 
     voting::VerificationKey {
         alpha: hex_to_bytes(
@@ -125,14 +121,13 @@ fn get_verification_key(env: &Env) -> voting::VerificationKey {
         ),
         delta: hex_to_bytes(
             env,
-            "23bbe71cdbd371ce93879c1920554716ce89ee4e21f9a8aad6e7deb311f460381e3ed1aca9278a56e254d910b89f806fb308f538efd16563538b0b1ddb6d64be28ce9a5f31d7716460220c7e42e96ffa61608228d9a7a55186129cd138e47e590e2874e9d1bae76cbd0cf7081a5b178a34d8a218f7d139830922411a9fbca6c6",
+            "0d633d289456016e0c0e975e7da2d19153ca3b6a74dd83331df6407a68d9e9f81ff0cfb2f48375ed6c03370d8a55e25777a3fb3f6c748bb9e83116bf19ef6385062ce3e273c849fdc51bb2cf34308828862f248134512541fde080ed08d0eb4016cef3c53afe73c871cd493e46139da661ed0d2875fd63c8044c38a68b4caec5",
         ),
         ic,
     }
 }
 
 #[test]
-#[ignore = "TODO: Regenerate proof and VK for new 5-public-signal circuit (commitment now private)"]
 fn test_real_groth16_proof_verification() {
     println!("\n==========================================");
     println!("Real Groth16 Proof Verification Test");
@@ -165,7 +160,10 @@ fn test_real_groth16_proof_verification() {
     println!("✅ Tree deployed");
 
     // Deploy Voting
-    let voting_address = env.register(voting::WASM, (tree_address.clone(),));
+    let voting_address = env.register(
+        voting::WASM,
+        (tree_address.clone(), registry_address.clone()),
+    );
     let voting_client = voting::Client::new(&env, &voting_address);
     println!("✅ Voting deployed\n");
 
@@ -191,15 +189,15 @@ fn test_real_groth16_proof_verification() {
     println!("Step 5: Registering commitment...");
     println!("==================================\n");
 
-    // Test commitment: Poseidon(123456789, 987654321)
-    // Hex: 0x2536d01521137bf7b39e3fd26c1376f456ce46a45993a5d7c3c158a450fd7329
+    // Test commitment: Poseidon(999888777666, 111222333444)
+    // Hex: 0x28ac4fff6999c3c6612028b0dc2e34c0fa5c1c1760f44fc765cdb4b577ef2999
     let commitment = hex_str_to_u256(
         &env,
-        "2536d01521137bf7b39e3fd26c1376f456ce46a45993a5d7c3c158a450fd7329",
+        "28ac4fff6999c3c6612028b0dc2e34c0fa5c1c1760f44fc765cdb4b577ef2999",
     );
 
     println!(
-        "Commitment: 16832421271961222550979173996485995711342823810308835997146707681980704453417"
+        "Commitment: 18396963762341379990255976702361231185864766675613138359859213921414061959577"
     );
 
     tree_client.register_with_caller(&dao_id, &commitment, &admin);
@@ -207,14 +205,14 @@ fn test_real_groth16_proof_verification() {
 
     // Verify root matches expected value
     let actual_root = tree_client.current_root(&dao_id);
-    // Expected root hex: 0x25e451cc98d0ff49117b5aee305d896da857c2a74c7084332a510fd03e0299f0
+    // Expected root hex: 0x1351d0946e3542884587d25ba93bdc24ad5586b76440e1c0cd7b0a04ead3b0c5
     // With depth 18 (not 20), commitment at index 0
     let expected_root = hex_str_to_u256(
         &env,
-        "25e451cc98d0ff49117b5aee305d896da857c2a74c7084332a510fd03e0299f0",
+        "1351d0946e3542884587d25ba93bdc24ad5586b76440e1c0cd7b0a04ead3b0c5",
     );
 
-    println!("Expected root: 17138981085726982929815047770222948937180916992196016628536485002859509881328");
+    println!("Expected root: 8738498300247611617579320016420448103746920682550083539710229032819590672581");
     println!("Actual root:   {:?}\n", actual_root);
 
     // Verify roots match
@@ -256,18 +254,18 @@ fn test_real_groth16_proof_verification() {
     let proof = get_real_proof(&env);
 
     // Nullifier from test
-    // Hex: 0x0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a50
+    // Hex: 0x13a7e6da6794bd6f61ffeba529ec3f1c97c52bf862c4c63bcda069f435be8267
     let nullifier = hex_str_to_u256(
         &env,
-        "0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a50",
+        "13a7e6da6794bd6f61ffeba529ec3f1c97c52bf862c4c63bcda069f435be8267",
     );
 
     let root = actual_root; // Use the root we just computed
     let vote_choice = true; // YES vote
 
     println!("Proof public signals:");
-    println!("  Root:        17138981085726982929815047770222948937180916992196016628536485002859509881328");
-    println!("  Nullifier:   5760508796108392755529358167294721063592787938597807569861628631651201858128");
+    println!("  Root:        8738498300247611617579320016420448103746920682550083539710229032819590672581");
+    println!("  Nullifier:   8890600872736540951578032780456187360887446249529944111185710735875546972775");
     println!("  DAO ID:      {}", dao_id);
     println!("  Proposal ID: {}", proposal_id);
     println!("  Vote Choice: 1 (YES)\n");

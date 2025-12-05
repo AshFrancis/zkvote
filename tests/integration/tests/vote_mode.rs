@@ -37,7 +37,7 @@ fn setup_contracts(env: &Env) -> (Address, Address, Address, Address, Address) {
     let registry_id = env.register(dao_registry::WASM, ());
     let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
     let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(),));
+    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
 
     let admin = Address::generate(env);
 
@@ -141,7 +141,13 @@ fn test_trailing_mode_churn_across_parallel_proposals() {
     let member1 = Address::generate(&env);
     let member2 = Address::generate(&env);
 
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Churn DAO"), &admin, &true, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Churn DAO"),
+        &admin,
+        &true,
+        &true,
+        &None,
+    );
     tree_client.init_tree(&dao_id, &18, &admin);
     // Use mock VK/proof; in testutils path verification is bypassed.
     let vk = create_mock_vk(&env);
@@ -287,7 +293,13 @@ fn test_fixed_mode_late_joiner_cannot_vote() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Test DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -351,7 +363,13 @@ fn test_trailing_mode_late_joiner_can_vote() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO (first DAO will have dao_id = 1, matching the proof)
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Test DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
     assert_eq!(dao_id, 1, "First DAO must have ID 1 to match proof");
 
     // Initialize tree with depth 18 (matching the proof)
@@ -429,7 +447,13 @@ fn test_trailing_mode_late_joiner_can_vote_real_member2() {
     let tree_client = TreeClient::new(&env, &tree_id);
     let voting_client = VotingClient::new(&env, &voting_id);
 
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Test DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
     tree_client.init_tree(&dao_id, &18, &admin);
 
     // Use real VK
@@ -497,7 +521,13 @@ fn test_trailing_mode_removed_member_cannot_vote_on_new_proposal() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Test DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
 
     // Initialize tree and set VK (mock is fine since we fail before proof verification)
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -566,7 +596,13 @@ fn test_trailing_mode_removed_member_cannot_vote_on_old_proposal() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Test DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Test DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
 
     // Initialize tree and set VK (mock is fine since we fail before proof verification)
     tree_client.init_tree(&dao_id, &18, &admin);

@@ -35,7 +35,7 @@ fn setup_contracts(env: &Env) -> (Address, Address, Address, Address, Address) {
     let registry_id = env.register(dao_registry::WASM, ());
     let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
     let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(),));
+    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
 
     let admin = Address::generate(env);
 
@@ -104,7 +104,13 @@ fn test_public_dao_creation() {
     let registry_client = RegistryClient::new(&env, &registry_id);
 
     // Create public DAO with membership_open=true
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Public DAO"), &admin, &true, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Public DAO"),
+        &admin,
+        &true,
+        &true,
+        &None,
+    );
 
     // Verify DAO exists and has open membership
     assert!(registry_client.dao_exists(&dao_id));
@@ -126,7 +132,13 @@ fn test_self_join_public_dao() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create public DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Public DAO"), &admin, &true, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Public DAO"),
+        &admin,
+        &true,
+        &true,
+        &None,
+    );
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -151,7 +163,13 @@ fn test_self_join_private_dao_fails() {
     let sbt_client = SbtClient::new(&env, &sbt_id);
 
     // Create private DAO (membership_open=false)
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Private DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Private DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
 
     // Random user tries to self-join - should fail
     let user = Address::generate(&env);
@@ -170,7 +188,13 @@ fn test_self_register_public_dao() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create public DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Public DAO"), &admin, &true, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Public DAO"),
+        &admin,
+        &true,
+        &true,
+        &None,
+    );
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -201,7 +225,13 @@ fn test_self_register_private_dao_fails() {
     let tree_client = TreeClient::new(&env, &tree_id);
 
     // Create private DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Private DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Private DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -229,7 +259,13 @@ fn test_member_creates_proposal_in_public_dao() {
     let sbt_client = SbtClient::new(&env, &sbt_id);
 
     // Create public DAO with members_can_propose=true (any member can create proposals)
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Public DAO"), &admin, &true, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Public DAO"),
+        &admin,
+        &true,
+        &true,
+        &None,
+    );
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -274,7 +310,13 @@ fn test_non_member_cannot_create_proposal_in_private_dao() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create private DAO
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Private DAO"), &admin, &false, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Private DAO"),
+        &admin,
+        &false,
+        &true,
+        &None,
+    );
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -314,7 +356,13 @@ fn test_member_cannot_propose_when_admin_only_mode() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create public DAO with members_can_propose=FALSE (admin-only proposal mode)
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Admin Only DAO"), &admin, &true, &false, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Admin Only DAO"),
+        &admin,
+        &true,
+        &false,
+        &None,
+    );
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -359,7 +407,13 @@ fn test_admin_can_propose_in_admin_only_mode() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO with members_can_propose=FALSE (admin-only proposal mode)
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Admin Only DAO"), &admin, &false, &false, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Admin Only DAO"),
+        &admin,
+        &false,
+        &false,
+        &None,
+    );
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);
@@ -400,7 +454,13 @@ fn test_full_public_dao_flow() {
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create public DAO with members_can_propose=true (any member can create proposals)
-    let dao_id = registry_client.create_dao(&String::from_str(&env, "Public DAO"), &admin, &true, &true, &None);
+    let dao_id = registry_client.create_dao(
+        &String::from_str(&env, "Public DAO"),
+        &admin,
+        &true,
+        &true,
+        &None,
+    );
 
     // Initialize tree
     tree_client.init_tree(&dao_id, &18, &admin);

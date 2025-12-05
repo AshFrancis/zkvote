@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Routes, Route, useNavigate, useLocation, useParams } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import DAODashboard from "./components/DAODashboard";
@@ -74,8 +74,16 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [configErrors, setConfigErrors] = useState<string[]>([]);
   const { status: relayerStatusState } = useRelayerStatusQuery();
+
+  // Compute config errors once at render time (no effect needed)
+  const configErrors = useMemo(() => {
+    const { errors, warnings } = validateStaticConfig();
+    if (warnings.length) {
+      console.warn("[config] warnings", warnings);
+    }
+    return errors;
+  }, []);
 
   // Determine current view from URL path
   const getCurrentView = (): 'home' | 'browse' | 'votes' | 'docs' => {
@@ -119,16 +127,6 @@ function App() {
       descriptionMeta.setAttribute('content', meta.description);
     }
   }, [currentView]);
-
-
-  // Basic config guardrails (network + contract IDs)
-  useEffect(() => {
-    const { errors, warnings } = validateStaticConfig();
-    setConfigErrors(errors);
-    if (warnings.length) {
-      console.warn("[config] warnings", warnings);
-    }
-  }, []);
 
   // Relayer readiness/mismatch handled via useRelayerStatus
   const relayerStatus =

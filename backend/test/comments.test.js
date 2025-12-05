@@ -15,6 +15,7 @@
  * With IPFS: PINATA_JWT=xxx npm test -- test/comments.test.js
  */
 
+import 'dotenv/config';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
@@ -49,6 +50,13 @@ const setupApp = async () => {
   const relayer = await import('../src/index.ts');
   app = relayer.app || relayer.default || relayer;
   appLoaded = true;
+
+  // Initialize Pinata for IPFS tests if JWT is available
+  if (PINATA_JWT) {
+    const { initPinata } = await import('../src/services/ipfs.ts');
+    initPinata(PINATA_JWT);
+  }
+
   return app;
 };
 
@@ -71,7 +79,10 @@ test('POST /ipfs/metadata - upload comment content', skipIfNoIpfs, async () => {
 
   assert.equal(res.statusCode, 200);
   assert.ok(res.body.cid, 'Should return a CID');
-  assert.ok(res.body.cid.startsWith('bafy') || res.body.cid.startsWith('Qm'), 'CID should be valid format');
+  assert.ok(
+    res.body.cid.startsWith('bafy') || res.body.cid.startsWith('bafk') || res.body.cid.startsWith('Qm'),
+    `CID should be valid format (got: ${res.body.cid})`
+  );
 
   console.log(`  Uploaded comment CID: ${res.body.cid}`);
 });

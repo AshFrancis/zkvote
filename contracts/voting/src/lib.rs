@@ -35,7 +35,11 @@ use soroban_sdk::{
     U256,
 };
 
+// Re-export shared Groth16 types and utilities
+pub use zkvote_groth16::{Groth16Error, Proof, VerificationKey};
+
 const TREE_CONTRACT: Symbol = symbol_short!("tree");
+const REGISTRY: Symbol = symbol_short!("registry");
 const VERSION: u32 = 1;
 const VERSION_KEY: Symbol = symbol_short!("ver");
 
@@ -69,6 +73,10 @@ pub enum VotingError {
     InvalidG1Point = 23,
     /// Root predates member removal (invalid for Trailing mode after revocation)
     RootPredatesRemoval = 24,
+    /// Public signal value >= BN254 scalar field modulus (invalid field element)
+    SignalNotInField = 25,
+    /// Nullifier is zero (invalid)
+    InvalidNullifier = 26,
 }
 
 // Maximum allowed IC vector length (num_public_inputs + 1)
@@ -79,7 +87,12 @@ const MAX_IC_LENGTH: u32 = 21;
 // Size limits to prevent DoS attacks
 const MAX_TITLE_LEN: u32 = 100; // Max proposal title length (100 bytes)
 const MAX_CID_LEN: u32 = 64; // Max IPFS CID length (CIDv1 is ~59 chars)
-const EXPECTED_IC_LENGTH: u32 = 6; // Exact IC length for vote circuit (5 public signals + 1)
+
+// Circuit constants
+/// Vote circuit public signals: nullifier, root, dao_id, proposal_id, vote_choice
+const NUM_PUBLIC_SIGNALS: u32 = 5;
+// IC (inner commitment) vector length for Groth16 VK = num_public_inputs + 1
+const VOTE_CIRCUIT_IC_LEN: u32 = NUM_PUBLIC_SIGNALS + 1;
 
 #[contracttype]
 #[derive(Clone)]
@@ -126,26 +139,6 @@ pub struct ProposalInfo {
     pub eligible_root: U256, // Merkle root at creation - defines eligible voter set
     pub vote_mode: VoteMode, // Fixed or Trailing voting
     pub earliest_root_index: u32, // For Trailing mode: earliest valid root index
-}
-
-/// Groth16 Verification Key for BN254
-#[contracttype]
-#[derive(Clone)]
-pub struct VerificationKey {
-    pub alpha: BytesN<64>,   // G1 point
-    pub beta: BytesN<128>,   // G2 point
-    pub gamma: BytesN<128>,  // G2 point
-    pub delta: BytesN<128>,  // G2 point
-    pub ic: Vec<BytesN<64>>, // IC points (G1)
-}
-
-/// Groth16 Proof
-#[contracttype]
-#[derive(Clone)]
-pub struct Proof {
-    pub a: BytesN<64>,  // G1 point
-    pub b: BytesN<128>, // G2 point
-    pub c: BytesN<64>,  // G1 point
 }
 
 // Typed Events
@@ -212,7 +205,7 @@ pub struct Voting;
 #[contractimpl]
 impl Voting {
     /// Constructor: Initialize contract with MembershipTree address
-    pub fn __constructor(env: Env, tree_contract: Address) {
+    pub fn __constructor(env: Env, tree_contract: Address, registry: Address) {
         // Prevent accidental re-initialization
         if env.storage().instance().has(&VERSION_KEY) {
             panic_with_error!(&env, VotingError::AlreadyInitialized);
@@ -227,6 +220,16 @@ impl Voting {
         .publish(&env);
 
         env.storage().instance().set(&TREE_CONTRACT, &tree_contract);
+        // Cache registry address to reduce cross-contract call chain from 3 to 1
+        env.storage().instance().set(&REGISTRY, &registry);
+    }
+
+    /// Validate that a U256 value is within the BN254 scalar field (< r)
+    /// Panics with VotingError::SignalNotInField if value >= r
+    fn assert_in_field(env: &Env, value: &U256) {
+        if zkvote_groth16::assert_in_field(env, value).is_err() {
+            panic_with_error!(env, VotingError::SignalNotInField);
+        }
     }
 
     /// Set verification key for a DAO (admin only)
@@ -318,24 +321,9 @@ impl Voting {
     }
 
     fn assert_admin(env: &Env, dao_id: u64, admin: &Address) {
-        // Get tree contract (stored at constructor)
-        let tree_contract: Address = Self::tree_contract(env.clone());
+        // Use cached registry address (set at constructor) - only 1 cross-contract call
+        let registry: Address = env.storage().instance().get(&REGISTRY).unwrap();
 
-        // From tree, get SBT contract address
-        let sbt_contract: Address = env.invoke_contract(
-            &tree_contract,
-            &symbol_short!("sbt_contr"),
-            soroban_sdk::vec![env],
-        );
-
-        // From SBT, get DAO registry address
-        let registry: Address = env.invoke_contract(
-            &sbt_contract,
-            &symbol_short!("registry"),
-            soroban_sdk::vec![env],
-        );
-
-        // From registry, get admin for this dao_id and compare
         let dao_admin: Address = env.invoke_contract(
             &registry,
             &symbol_short!("get_admin"),
@@ -348,7 +336,7 @@ impl Voting {
     }
 
     fn validate_vk(env: &Env, vk: &VerificationKey) {
-        if vk.ic.len() != EXPECTED_IC_LENGTH {
+        if vk.ic.len() != VOTE_CIRCUIT_IC_LEN {
             panic_with_error!(env, VotingError::VkIcLengthMismatch);
         }
         if vk.ic.len() > MAX_IC_LENGTH {
@@ -396,7 +384,16 @@ impl Voting {
         creator: Address,
         vote_mode: VoteMode,
     ) -> u64 {
-        Self::create_proposal_with_version(env, dao_id, title, content_cid, end_time, creator, vote_mode, None)
+        Self::create_proposal_with_version(
+            env,
+            dao_id,
+            title,
+            content_cid,
+            end_time,
+            creator,
+            vote_mode,
+            None,
+        )
     }
 
     /// Create proposal with a specific VK version (must be <= current and exist)
@@ -411,7 +408,14 @@ impl Voting {
         vk_version: u32,
     ) -> u64 {
         Self::create_proposal_with_version(
-            env, dao_id, title, content_cid, end_time, creator, vote_mode, Some(vk_version),
+            env,
+            dao_id,
+            title,
+            content_cid,
+            end_time,
+            creator,
+            vote_mode,
+            Some(vk_version),
         )
     }
 
@@ -595,15 +599,20 @@ impl Voting {
         root: U256,
         proof: Proof,
     ) {
-        // CRITICAL: Check nullifier FIRST before any expensive operations
-        // This prevents proof verification from crashing on duplicate votes
-        // The nullifier check is cheap (just storage lookup) and should fail fast
+        // SECURITY: Validate public signals are within BN254 scalar field FIRST
+        // This prevents modular reduction attacks where values >= r verify identically
+        // to their reduced equivalents but are stored as different keys.
+        Self::assert_in_field(&env, &nullifier);
+        Self::assert_in_field(&env, &root);
+
+        // Check nullifier is non-zero (zero is not a valid nullifier)
+        if nullifier == U256::from_u32(&env, 0) {
+            panic_with_error!(&env, VotingError::InvalidNullifier);
+        }
+
+        // Check nullifier hasn't been used (prevents double voting)
         let null_key = DataKey::Nullifier(dao_id, proposal_id, nullifier.clone());
         if env.storage().persistent().has(&null_key) {
-            panic_with_error!(&env, VotingError::NullifierUsed);
-        }
-        // Additional invariant: nullifier must be non-zero
-        if nullifier == U256::from_u32(&env, 0) {
             panic_with_error!(&env, VotingError::NullifierUsed);
         }
 
@@ -743,14 +752,12 @@ impl Voting {
             .expect("proposal not found")
     }
 
-    /// Get vote mode for a proposal (0 = Fixed, 1 = Trailing)
+    /// Get vote mode for a proposal
+    /// Returns VoteMode enum directly for type safety
     /// Used by comments contract for eligibility checks
-    pub fn get_vote_mode(env: Env, dao_id: u64, proposal_id: u64) -> u32 {
+    pub fn get_vote_mode(env: Env, dao_id: u64, proposal_id: u64) -> VoteMode {
         let proposal = Self::get_proposal(env, dao_id, proposal_id);
-        match proposal.vote_mode {
-            VoteMode::Fixed => 0,
-            VoteMode::Trailing => 1,
-        }
+        proposal.vote_mode
     }
 
     /// Get eligible root for a proposal (merkle root at snapshot)
@@ -786,6 +793,14 @@ impl Voting {
         env.storage()
             .instance()
             .get(&TREE_CONTRACT)
+            .unwrap_or_else(|| panic_with_error!(&env, VotingError::VkNotSet))
+    }
+
+    /// Get registry contract address (cached at construction)
+    pub fn registry(env: Env) -> Address {
+        env.storage()
+            .instance()
+            .get(&REGISTRY)
             .unwrap_or_else(|| panic_with_error!(&env, VotingError::VkNotSet))
     }
 
@@ -888,27 +903,18 @@ impl Voting {
         new_id
     }
 
-    // Internal: Verify Groth16 proof using BN254 pairing check
+    /// Verify Groth16 proof using shared verification library.
+    /// In test mode, checks for VerifyOverride flag to allow testing error paths.
+    #[allow(unused_variables)]
     fn verify_groth16(
         env: &Env,
         vk: &VerificationKey,
         proof: &Proof,
         pub_signals: &Vec<U256>,
     ) -> bool {
-        // Groth16 verification equation:
-        // e(-A, B) * e(alpha, beta) * e(vk_x, gamma) * e(C, delta) = 1
-        //
-        // Using pairing_check which verifies: prod(e(g1[i], g2[i])) = 1
-
-        if pub_signals.len() + 1 != vk.ic.len() {
-            return false;
-        }
-
-        // In test mode (testutils feature), check for override flag or return true
-        // Real proofs require actual Circom-generated vk and proof
+        // In test mode, check for override flag first
         #[cfg(any(test, feature = "testutils"))]
         {
-            // Check if test has set VerifyOverride to false to simulate verification failure
             if let Some(override_val) = env
                 .storage()
                 .instance()
@@ -916,100 +922,10 @@ impl Voting {
             {
                 return override_val;
             }
-            let _ = (vk, proof, pub_signals);
-            return true;
         }
 
-        #[cfg(not(any(test, feature = "testutils")))]
-        {
-            // ================================================================
-            // GROTH16 VERIFICATION
-            // ================================================================
-            //
-            // The host's G1Affine::from_bytes and G2Affine::from_bytes validate
-            // points are on the curve. The pairing check provides implicit
-            // subgroup validation for G2 points.
-            //
-            // We removed custom validation code (validate_g1_point, field_mul_mod_p)
-            // as the hand-rolled modular arithmetic was unreliable and caused
-            // valid proofs to fail.
-
-            // Step 1: Compute vk_x = IC[0] + sum(pub_signals[i] * IC[i+1])
-            let vk_x = Self::compute_vk_x(env, vk, pub_signals);
-
-            // Step 2: Negate A using scalar multiplication by (r-1)
-            // For a point P, (-1) * P = -P. The scalar field order is r,
-            // so (r-1) ≡ -1 (mod r), giving us -A.
-            let a_point = G1Affine::from_bytes(proof.a.clone());
-            let neg_one = Self::get_neg_one_scalar(env);
-            let neg_a = a_point * neg_one;
-
-            // Step 3: Build pairing vectors
-            let mut g1_vec = Vec::new(env);
-            g1_vec.push_back(neg_a);
-            g1_vec.push_back(G1Affine::from_bytes(vk.alpha.clone()));
-            g1_vec.push_back(G1Affine::from_bytes(vk_x));
-            g1_vec.push_back(G1Affine::from_bytes(proof.c.clone()));
-
-            let mut g2_vec = Vec::new(env);
-            g2_vec.push_back(G2Affine::from_bytes(proof.b.clone()));
-            g2_vec.push_back(G2Affine::from_bytes(vk.beta.clone()));
-            g2_vec.push_back(G2Affine::from_bytes(vk.gamma.clone()));
-            g2_vec.push_back(G2Affine::from_bytes(vk.delta.clone()));
-
-            // Step 4: Perform pairing check
-            env.crypto().bn254().pairing_check(g1_vec, g2_vec)
-        }
-    }
-
-    /// Returns the scalar (r - 1) which is equivalent to -1 mod r.
-    /// BN254 scalar field order r = 21888242871839275222246405745257275088548364400416034343698204186575808495617
-    #[cfg(not(any(test, feature = "testutils")))]
-    fn get_neg_one_scalar(env: &Env) -> Fr {
-        // r - 1 in big-endian (256 bits)
-        // r = 0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001
-        // r - 1 = 0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000000
-        let r_minus_1: [u8; 32] = [
-            0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29,
-            0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81, 0x58, 0x5d,
-            0x28, 0x33, 0xe8, 0x48, 0x79, 0xb9, 0x70, 0x91,
-            0x43, 0xe1, 0xf5, 0x93, 0xf0, 0x00, 0x00, 0x00,
-        ];
-        let bytes = Bytes::from_array(env, &r_minus_1);
-        let u = U256::from_be_bytes(env, &bytes);
-        Fr::from(u)
-    }
-
-    // Compute vk_x = IC[0] + sum(pub_signals[i] * IC[i+1])
-    #[cfg(not(any(test, feature = "testutils")))]
-    fn compute_vk_x(env: &Env, vk: &VerificationKey, pub_signals: &Vec<U256>) -> BytesN<64> {
-        // Start with IC[0]
-        let ic0 = vk
-            .ic
-            .get(0)
-            .unwrap_or_else(|| panic_with_error!(env, VotingError::VkIcLengthMismatch));
-        let mut vk_x = G1Affine::from_bytes(ic0);
-
-        // Add each pub_signal[i] * IC[i+1]
-        for i in 0..pub_signals.len() {
-            let signal = pub_signals
-                .get(i)
-                .unwrap_or_else(|| panic_with_error!(env, VotingError::VkIcLengthMismatch));
-            let ic_point_bytes = vk
-                .ic
-                .get(i + 1)
-                .unwrap_or_else(|| panic_with_error!(env, VotingError::VkIcLengthMismatch));
-            let ic_point = G1Affine::from_bytes(ic_point_bytes);
-
-            // Scalar multiplication: signal * IC[i+1]
-            let scalar = Fr::from(signal);
-            let scaled_point = ic_point * scalar;
-
-            // Add to accumulator
-            vk_x = vk_x + scaled_point;
-        }
-
-        vk_x.to_bytes()
+        // Delegate to shared Groth16 verification
+        zkvote_groth16::verify_groth16(env, vk, proof, pub_signals)
     }
 }
 
