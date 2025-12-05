@@ -23,16 +23,10 @@ function credentialKey(daoId: number, publicKey: string) {
 // If an attacker tricks a user into signing the same message on a malicious site,
 // they can derive the user's voting credentials and vote on their behalf.
 //
-// FUTURE ENHANCEMENT: Use WebAuthn/Passkeys for deterministic credential generation
-// Passkeys are origin-bound (domain-specific) and cannot be phished across sites.
-// An attacker would need to compromise the user's physical device to steal credentials,
-// rather than just tricking them into signing a message.
-//
-// Implementation plan:
-// 1. Use navigator.credentials.get() to sign a challenge with the passkey
-// 2. Derive secret from the passkey signature (origin-bound by browser)
-// 3. Credentials work only on the legitimate domain
-// 4. Much stronger security without sacrificing deterministic recovery
+// Mitigations:
+// - Clear warning text in the signing message
+// - Domain separation in the message format
+// - Users should only sign on the official ZKVote application
 export async function generateDeterministicZKCredentials(
   kit: StellarWalletsKit,
   daoId: number

@@ -74,7 +74,7 @@ zkvote/
 │   ├── vote.circom        # Main vote proof circuit
 │   ├── merkle_tree.circom # Poseidon Merkle inclusion
 │   └── utils/             # VK/proof conversion tools
-├── frontend/              # React frontend with Passkey Kit
+├── frontend/              # React frontend (Vite + TailwindCSS)
 ├── backend/               # Relayer service for anonymous voting
 ├── tests/
 │   ├── integration/       # Cross-contract integration tests
@@ -410,7 +410,7 @@ If KAT fails, circuit and on-chain Poseidon parameters don't match - system will
 - [x] Stress tests (6 performance tests)
 - [x] Real BN254 pairing verification
 - [x] Backend relayer with SQLite storage
-- [x] Frontend with React + Passkey Kit
+- [x] Frontend with React + Stellar Wallets Kit
 - [x] Security audit preparation
 - [ ] Production deployment to Stellar mainnet
 
