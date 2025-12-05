@@ -153,7 +153,7 @@ success "Membership Tree deployed: $TREE_ID"
 sleep 5  # Wait for sequence number to sync
 
 # Deploy Voting
-VOTING_ID=$(deploy_contract "Voting" "target/wasm32v1-none/release/voting.wasm" --tree_contract "$TREE_ID")
+VOTING_ID=$(deploy_contract "Voting" "target/wasm32v1-none/release/voting.wasm" --tree_contract "$TREE_ID" --registry "$REGISTRY_ID")
 if [ -z "$VOTING_ID" ]; then
   echo "ERROR: Failed to deploy Voting contract after multiple attempts"
   exit 1
@@ -162,7 +162,7 @@ success "Voting deployed: $VOTING_ID"
 sleep 5  # Wait for sequence number to sync
 
 # Deploy Comments
-COMMENTS_ID=$(deploy_contract "Comments" "target/wasm32v1-none/release/comments.wasm" --voting_contract "$VOTING_ID" --tree_contract "$TREE_ID")
+COMMENTS_ID=$(deploy_contract "Comments" "target/wasm32v1-none/release/comments.wasm" --tree_contract "$TREE_ID" --voting_contract "$VOTING_ID" --registry "$REGISTRY_ID")
 if [ -z "$COMMENTS_ID" ]; then
   echo "ERROR: Failed to deploy Comments contract after multiple attempts"
   exit 1
