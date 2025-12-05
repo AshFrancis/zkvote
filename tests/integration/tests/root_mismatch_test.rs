@@ -8,23 +8,11 @@ use soroban_sdk::{
     testutils::Address as _, Address, Bytes, BytesN, Env, String, Vec as SdkVec, U256,
 };
 
-mod dao_registry {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/dao_registry.wasm");
-}
-mod membership_sbt {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_sbt.wasm");
-}
-mod membership_tree {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_tree.wasm");
-}
-mod voting {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/voting.wasm");
-}
-
-use dao_registry::Client as RegistryClient;
-use membership_sbt::Client as SbtClient;
-use membership_tree::Client as TreeClient;
-use voting::Client as VotingClient;
+// Import actual contract clients from crates (not WASM)
+use dao_registry::DaoRegistryClient;
+use membership_sbt::MembershipSbtClient;
+use membership_tree::MembershipTreeClient;
+use voting::{Proof, VerificationKey, VoteMode, VotingClient};
 
 fn hex_to_bytes<const N: usize>(env: &Env, hex: &str) -> BytesN<N> {
     let bytes = hex::decode(hex).expect("invalid hex");
@@ -40,10 +28,10 @@ fn hex_str_to_u256(env: &Env, hex: &str) -> U256 {
     U256::from_be_bytes(env, &Bytes::from_array(env, &padded))
 }
 
-fn get_real_proof(env: &Env) -> voting::Proof {
+fn get_real_proof(env: &Env) -> Proof {
     // Real proof from circuits/build/proof_soroban_be.json (BIG-ENDIAN)
     // Generated with: secret=123456789, salt=987654321, daoId=1, proposalId=1, voteChoice=1
-    voting::Proof {
+    Proof {
         a: hex_to_bytes(
             env,
             "06c6298fee7716bce0aca65c8e6ccde25e06bdcb6268a1b2d31db1b8d750a9b0050db001368342508a5404e7d7b5ff5f1c7d27ee0362fdae57730ab2a1b524de",
@@ -59,7 +47,7 @@ fn get_real_proof(env: &Env) -> voting::Proof {
     }
 }
 
-fn get_verification_key(env: &Env) -> voting::VerificationKey {
+fn get_verification_key(env: &Env) -> VerificationKey {
     // VK from circuits/build/verification_key_soroban_be.json (BIG-ENDIAN)
     // 6 IC elements for 5 public signals (root, nullifier, daoId, proposalId, voteChoice)
     // (commitment is now a PRIVATE signal for improved privacy)
@@ -73,7 +61,7 @@ fn get_verification_key(env: &Env) -> voting::VerificationKey {
     ic.push_back(hex_to_bytes(env, "143c06565aad1cacd0ddbc0cfc6dd131c70392d29c16d8c80ed7f62ada52587b13e189e68fe2fe8806b272da3c5762a18b23680cdeda63faef014b7dd6806f21"));
     // Removed 7th IC element (was for commitment public signal)
 
-    voting::VerificationKey {
+    VerificationKey {
         alpha: hex_to_bytes(env, "2d4d9aa7e302d9df41749d5507949d05dbea33fbb16c643b22f599a2be6df2e214bedd503c37ceb061d8ec60209fe345ce89830a19230301f076caff004d1926"),
         beta: hex_to_bytes(env, "0967032fcbf776d1afc985f88877f182d38480a653f2decaa9794cbc3bf3060c0e187847ad4c798374d0d6732bf501847dd68bc0e071241e0213bc7fc13db7ab304cfbd1e08a704a99f5e847d93f8c3caafddec46b7a0d379da69a4d112346a71739c1b1a457a8c7313123d24d2f9192f896b7c63eea05a9d57f06547ad0cec8"),
         gamma: hex_to_bytes(env, "198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c21800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa"),
@@ -90,18 +78,18 @@ fn test_vote_with_wrong_root_fails() {
     let env = Env::default();
     env.mock_all_auths();
 
-    // Deploy contracts
-    let registry_id = env.register(dao_registry::WASM, ());
-    let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
+    // Deploy contracts using direct crate registration
+    let registry_id = env.register(dao_registry::DaoRegistry, ());
+    let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
+    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let voting_id = env.register(voting::Voting, (tree_id.clone(), registry_id.clone()));
 
     let admin = Address::generate(&env);
     let member = Address::generate(&env);
 
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
@@ -142,7 +130,7 @@ fn test_vote_with_wrong_root_fails() {
         &String::from_str(&env, ""),
         &1000u64,
         &admin,
-        &voting::VoteMode::Fixed,
+        &VoteMode::Fixed,
     );
 
     let proposal_1 = voting_client.get_proposal(&dao_id, &proposal_1_id);
@@ -198,7 +186,7 @@ fn test_vote_with_wrong_root_fails() {
         &String::from_str(&env, ""),
         &2000u64,
         &admin,
-        &voting::VoteMode::Fixed,
+        &VoteMode::Fixed,
     );
 
     let proposal_2 = voting_client.get_proposal(&dao_id, &proposal_2_id);
@@ -238,18 +226,18 @@ fn test_vote_with_correct_root_succeeds() {
     let env = Env::default();
     env.mock_all_auths();
 
-    // Deploy contracts
-    let registry_id = env.register(dao_registry::WASM, ());
-    let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
+    // Deploy contracts using direct crate registration
+    let registry_id = env.register(dao_registry::DaoRegistry, ());
+    let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
+    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let voting_id = env.register(voting::Voting, (tree_id.clone(), registry_id.clone()));
 
     let admin = Address::generate(&env);
     let member = Address::generate(&env);
 
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
@@ -287,7 +275,7 @@ fn test_vote_with_correct_root_succeeds() {
         &String::from_str(&env, ""),
         &1000u64,
         &admin,
-        &voting::VoteMode::Fixed,
+        &VoteMode::Fixed,
     );
 
     // Vote with matching root

@@ -15,11 +15,10 @@
 
 #![no_std]
 
-use soroban_sdk::{
-    contracterror, contracttype,
-    crypto::bn254::{G1Affine, G2Affine},
-    Bytes, BytesN, Env, Vec, U256,
-};
+use soroban_sdk::{contracterror, contracttype, Bytes, BytesN, Env, Vec, U256};
+
+#[cfg(not(any(test, feature = "testutils")))]
+use soroban_sdk::crypto::bn254::{Fr, G1Affine, G2Affine};
 
 /// BN254 scalar field modulus (Fr) in big-endian bytes
 /// r = 21888242871839275222246405745257275088548364400416034343698204186575808495617

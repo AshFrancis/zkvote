@@ -12,19 +12,11 @@
 
 use soroban_sdk::{testutils::Address as _, Address, Bytes, BytesN, Env, String, Vec, U256};
 
-// Import contract clients
-mod dao_registry {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/dao_registry.wasm");
-}
-mod membership_sbt {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_sbt.wasm");
-}
-mod membership_tree {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_tree.wasm");
-}
-mod voting {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/voting.wasm");
-}
+// Import actual contract clients from crates (not WASM)
+use dao_registry::DaoRegistryClient;
+use membership_sbt::MembershipSbtClient;
+use membership_tree::MembershipTreeClient;
+use voting::{Proof, VerificationKey, VoteMode, VotingClient};
 
 fn hex_to_bytes<const N: usize>(env: &Env, hex: &str) -> BytesN<N> {
     let bytes = hex::decode(hex).expect("invalid hex");
@@ -40,10 +32,10 @@ fn hex_str_to_u256(env: &Env, hex: &str) -> U256 {
     U256::from_be_bytes(env, &Bytes::from_array(env, &padded))
 }
 
-fn get_real_proof(env: &Env) -> voting::Proof {
+fn get_real_proof(env: &Env) -> Proof {
     // Real proof from circuits/build/proof_soroban.json (BIG-ENDIAN)
     // Generated for 5 public signals: root, nullifier, daoId, proposalId, voteChoice
-    voting::Proof {
+    Proof {
         a: hex_to_bytes(
             env,
             "02de5951501fe4408ea8bf4960106738d190525a270fe0b035139aac2fa762302bbb2f3f1d001d99b919a34b93a9aed831e7bd1f960d5981ae328dfd1845b8a8",
@@ -59,7 +51,7 @@ fn get_real_proof(env: &Env) -> voting::Proof {
     }
 }
 
-fn get_valid_vk(env: &Env) -> voting::VerificationKey {
+fn get_valid_vk(env: &Env) -> VerificationKey {
     // Valid VK from circuits/build/verification_key_soroban.json (BIG-ENDIAN)
     // Updated for 5 public signals (commitment removed) - 6 IC elements
     let mut ic = Vec::new(env);
@@ -70,7 +62,7 @@ fn get_valid_vk(env: &Env) -> voting::VerificationKey {
     ic.push_back(hex_to_bytes(env, "09c5b9b793a6f8098f0ac918aa0a19a75b74e7f1428f726194a48af37da8ac14122edc5b3704f106fa3c095ac74f524032e460179c3e8ecd562ef050c884336a"));
     ic.push_back(hex_to_bytes(env, "143c06565aad1cacd0ddbc0cfc6dd131c70392d29c16d8c80ed7f62ada52587b13e189e68fe2fe8806b272da3c5762a18b23680cdeda63faef014b7dd6806f21"));
 
-    voting::VerificationKey {
+    VerificationKey {
         alpha: hex_to_bytes(env, "2d4d9aa7e302d9df41749d5507949d05dbea33fbb16c643b22f599a2be6df2e214bedd503c37ceb061d8ec60209fe345ce89830a19230301f076caff004d1926"),
         beta: hex_to_bytes(env, "0967032fcbf776d1afc985f88877f182d38480a653f2decaa9794cbc3bf3060c0e187847ad4c798374d0d6732bf501847dd68bc0e071241e0213bc7fc13db7ab304cfbd1e08a704a99f5e847d93f8c3caafddec46b7a0d379da69a4d112346a71739c1b1a457a8c7313123d24d2f9192f896b7c63eea05a9d57f06547ad0cec8"),
         gamma: hex_to_bytes(env, "198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c21800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa"),
@@ -79,7 +71,7 @@ fn get_valid_vk(env: &Env) -> voting::VerificationKey {
     }
 }
 
-fn get_invalid_vk(env: &Env) -> voting::VerificationKey {
+fn get_invalid_vk(env: &Env) -> VerificationKey {
     // Invalid VK with point (5, 10) which is NOT on the BN254 curve
     // y² = 10² = 100
     // x³ + 3 = 5³ + 3 = 128
@@ -94,7 +86,7 @@ fn get_invalid_vk(env: &Env) -> voting::VerificationKey {
     ic.push_back(hex_to_bytes(env, "09c5b9b793a6f8098f0ac918aa0a19a75b74e7f1428f726194a48af37da8ac14122edc5b3704f106fa3c095ac74f524032e460179c3e8ecd562ef050c884336a"));
     ic.push_back(hex_to_bytes(env, "143c06565aad1cacd0ddbc0cfc6dd131c70392d29c16d8c80ed7f62ada52587b13e189e68fe2fe8806b272da3c5762a18b23680cdeda63faef014b7dd6806f21"));
 
-    voting::VerificationKey {
+    VerificationKey {
         // Invalid alpha point: (5, 10) encoded as 64 bytes (x || y) in BE
         alpha: hex_to_bytes(env, "0000000000000000000000000000000000000000000000000000000000000005000000000000000000000000000000000000000000000000000000000000000a"),
         // Use valid BE-encoded beta/gamma/delta
@@ -120,20 +112,20 @@ fn test_pairing_security_boundary() {
     let admin = Address::generate(&env);
 
     println!("Deploying contracts...\n");
-    let registry_address = env.register(dao_registry::WASM, ());
-    let registry_client = dao_registry::Client::new(&env, &registry_address);
+    let registry_address = env.register(dao_registry::DaoRegistry, ());
+    let registry_client = DaoRegistryClient::new(&env, &registry_address);
 
-    let sbt_address = env.register(membership_sbt::WASM, (registry_address.clone(),));
-    let sbt_client = membership_sbt::Client::new(&env, &sbt_address);
+    let sbt_address = env.register(membership_sbt::MembershipSbt, (registry_address.clone(),));
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_address);
 
-    let tree_address = env.register(membership_tree::WASM, (sbt_address.clone(),));
-    let tree_client = membership_tree::Client::new(&env, &tree_address);
+    let tree_address = env.register(membership_tree::MembershipTree, (sbt_address.clone(),));
+    let tree_client = MembershipTreeClient::new(&env, &tree_address);
 
     let voting_address = env.register(
-        voting::WASM,
+        voting::Voting,
         (tree_address.clone(), registry_address.clone()),
     );
-    let voting_client = voting::Client::new(&env, &voting_address);
+    let voting_client = VotingClient::new(&env, &voting_address);
 
     println!("Creating DAO...\n");
     let dao_name = String::from_str(&env, "Security Test DAO");
@@ -179,7 +171,7 @@ fn test_pairing_security_boundary() {
         &content_cid,
         &end_time,
         &admin,
-        &voting::VoteMode::Fixed,
+        &VoteMode::Fixed,
     );
     println!("✅ Proposal created: {}\n", proposal_id1);
 
@@ -208,7 +200,7 @@ fn test_pairing_security_boundary() {
         &content_cid2,
         &end_time,
         &admin,
-        &voting::VoteMode::Fixed,
+        &VoteMode::Fixed,
     );
     println!("✅ Proposal created: {}\n", proposal_id2);
 
