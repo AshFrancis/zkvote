@@ -18,7 +18,7 @@ import type {
   u256,
   i256,
   Option,
-  Typepoint,
+  Timepoint,
   Duration,
 } from '@stellar/stellar-sdk/contract';
 export * from '@stellar/stellar-sdk'
@@ -34,7 +34,7 @@ if (typeof window !== 'undefined') {
 export const networks = {
   futurenet: {
     networkPassphrase: "Test SDF Future Network ; October 2022",
-    contractId: "CB6I7XUCMSLTABOFAIVAUXYIJYS5SPJM6WZDTQV5S62QQ43AZMIJDIB7",
+    contractId: "CDZOATGZTEKFWDKY2FJ4DH7O6MSWP4FFFQRS4FEQQ3CVWR6MZH5T3RCQ",
   }
 } as const
 
