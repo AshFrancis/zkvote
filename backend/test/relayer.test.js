@@ -16,7 +16,7 @@ const setupApp = async () => {
   process.env.HEALTH_EXPOSE_DETAILS = 'true';
   process.env.RELAYER_TEST_MODE = 'true';
 
-  const relayer = await import('../src/relayer.js');
+  const relayer = await import('../src/index.ts');
   return relayer.app || relayer.default || relayer;
 };
 
@@ -97,8 +97,8 @@ test('vote rejects malformed proof hex', async () => {
 
 test('vote rejects U256 values above BN254 modulus', async () => {
   const app = await setupApp();
-  // modulus + 1
-  const tooBig = '0x' + (BigInt('21888242871839275222246405745257275088548364400416034343698204186575808495617') + 1n).toString(16);
+  // modulus + 1 (without 0x prefix, as Zod schema expects)
+  const tooBig = (BigInt('21888242871839275222246405745257275088548364400416034343698204186575808495617') + 1n).toString(16);
   const res = await request(app)
     .post('/vote')
     .set('Authorization', `Bearer ${token}`)
@@ -107,12 +107,20 @@ test('vote rejects U256 values above BN254 modulus', async () => {
       proposalId: 1,
       choice: true,
       nullifier: tooBig,
-      root: '0x01',
-      commitment: '0x01',
-      proof: { a: '0x' + '11'.repeat(64), b: '0x' + '22'.repeat(128), c: '0x' + '33'.repeat(64) },
+      root: '01'.repeat(32), // 64 hex chars
+      proof: { a: '11'.repeat(64), b: '22'.repeat(128), c: '33'.repeat(64) },
     });
   assert.equal(res.statusCode, 400);
-  assert.ok(res.body.error.toLowerCase().includes('modulus'));
+  // Zod returns 'Validation failed' with details mentioning 'BN254 field modulus'
+  assert.ok(
+    res.body.error === 'Validation failed' ||
+    res.body.error.toLowerCase().includes('modulus'),
+    `Expected validation error, got: ${res.body.error}`
+  );
+  if (res.body.details) {
+    const nullifierError = res.body.details.find((d) => d.field === 'nullifier');
+    assert.ok(nullifierError, 'Should have nullifier validation error');
+  }
 });
 
 test('vote rejects all-zero proof components', async () => {

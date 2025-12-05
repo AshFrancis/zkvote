@@ -171,6 +171,10 @@ fn test_admin_can_reinstate_member() {
     // Root does NOT change after reinstatement (leaf is still zeroed)
     assert_eq!(root_after_removal, root_after_reinstate, "Root should NOT change after reinstatement (leaf stays zeroed)");
 
+    // Admin must re-mint SBT before member can re-register
+    // (remove_member also revokes SBT, reinstate_member does NOT restore it)
+    sbt_client.mint(&dao_id, &member, &admin, &None);
+
     // Member can now re-register with a new commitment
     let new_commitment = U256::from_u32(&env, 67890);
     tree_client.register_with_caller(&dao_id, &new_commitment, &member);
@@ -221,6 +225,9 @@ fn test_multiple_revoke_reinstate_cycles() {
     let root_after_reinstate_1 = tree_client.current_root(&dao_id);
     assert_eq!(root_after_revoke_1, root_after_reinstate_1, "Root should NOT change after reinstate");
 
+    // Re-mint SBT (remove_member revokes SBT, reinstate doesn't restore it)
+    sbt_client.mint(&dao_id, &member, &admin, &None);
+
     // Re-register with new commitment
     let commitment2 = U256::from_u32(&env, 67890);
     tree_client.register_with_caller(&dao_id, &commitment2, &member);
@@ -236,6 +243,9 @@ fn test_multiple_revoke_reinstate_cycles() {
     tree_client.reinstate_member(&dao_id, &member, &admin);
     let root_after_reinstate_2 = tree_client.current_root(&dao_id);
     assert_eq!(root_after_revoke_2, root_after_reinstate_2, "Root should NOT change after second reinstate");
+
+    // Re-mint SBT again for second cycle
+    sbt_client.mint(&dao_id, &member, &admin, &None);
 
     // Re-register again
     let commitment3 = U256::from_u32(&env, 11111);

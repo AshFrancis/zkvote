@@ -9,7 +9,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { initPinata, pinJSON, pinFile, fetchContent, isValidCid, isHealthy } from '../src/ipfs.js';
+import { initPinata, pinJSON, pinFile, fetchContent, isValidCid, isHealthy } from '../src/services/ipfs.ts';
 
 // Skip tests if no JWT configured
 const PINATA_JWT = process.env.PINATA_JWT;

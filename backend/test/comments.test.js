@@ -46,7 +46,7 @@ const setupApp = async () => {
   process.env.RELAYER_AUTH_TOKEN = token;
   process.env.RELAYER_TEST_MODE = 'true';
 
-  const relayer = await import('../src/relayer.js');
+  const relayer = await import('../src/index.ts');
   app = relayer.app || relayer.default || relayer;
   appLoaded = true;
   return app;
@@ -265,21 +265,26 @@ test('POST /comment/anonymous - requires authentication', async () => {
 test('POST /comment/anonymous - validates required fields', async () => {
   app = await setupApp();
 
-  // Missing nullifier
+  // Missing nullifier and voteChoice - Zod validation returns 'Validation failed' with details
   let res = await request(app)
     .post('/comment/anonymous')
     .set('Authorization', `Bearer ${token}`)
     .send({
       daoId: 1,
       proposalId: 1,
-      contentCid: 'bafytest123',
-      root: '0x5678',
-      commitment: '0xabcd',
-      nonce: 0,
-      proof: { a: '0x1', b: '0x2', c: '0x3' },
+      contentCid: 'bafybeihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku', // Valid CIDv1
+      root: '11'.repeat(32), // 64 hex chars
+      commitment: '22'.repeat(32), // 64 hex chars
+      proof: { a: '44'.repeat(64), b: '55'.repeat(128), c: '66'.repeat(64) },
     });
   assert.equal(res.statusCode, 400);
-  assert.ok(res.body.error.includes('Missing'));
+  // Zod validation returns 'Validation failed' with details array
+  assert.ok(res.body.error === 'Validation failed' || res.body.error.includes('Missing'));
+  // Check that nullifier or voteChoice is mentioned in details
+  if (res.body.details) {
+    const fields = res.body.details.map((d) => d.field);
+    assert.ok(fields.includes('nullifier') || fields.includes('voteChoice'));
+  }
 
   // Missing proof
   res = await request(app)
@@ -288,14 +293,14 @@ test('POST /comment/anonymous - validates required fields', async () => {
     .send({
       daoId: 1,
       proposalId: 1,
-      contentCid: 'bafytest123',
-      nullifier: '0x1234',
-      root: '0x5678',
-      commitment: '0xabcd',
-      nonce: 0,
+      contentCid: 'bafybeihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+      nullifier: '11'.repeat(32),
+      root: '22'.repeat(32),
+      commitment: '33'.repeat(32),
+      voteChoice: true,
     });
   assert.equal(res.statusCode, 400);
-  assert.ok(res.body.error.includes('Missing'));
+  assert.ok(res.body.error === 'Validation failed' || res.body.error.includes('Missing'));
 });
 
 test('POST /comment/anonymous - validates voteChoice is boolean', async () => {
@@ -307,23 +312,28 @@ test('POST /comment/anonymous - validates voteChoice is boolean', async () => {
     .send({
       daoId: 1,
       proposalId: 1,
-      contentCid: 'bafytest123',
-      nullifier: '0x' + '11'.repeat(32),
-      root: '0x' + '22'.repeat(32),
-      commitment: '0x' + '33'.repeat(32),
+      contentCid: 'bafybeihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku', // Valid CIDv1
+      nullifier: '11'.repeat(32), // 64 hex chars without 0x
+      root: '22'.repeat(32),
+      commitment: '33'.repeat(32),
       voteChoice: 'invalid', // Should be boolean
-      proof: { a: '0x' + '44'.repeat(64), b: '0x' + '55'.repeat(128), c: '0x' + '66'.repeat(64) },
+      proof: { a: '44'.repeat(64), b: '55'.repeat(128), c: '66'.repeat(64) },
     });
 
   assert.equal(res.statusCode, 400);
-  assert.ok(res.body.error.includes('voteChoice'));
+  // Zod validation returns 'Validation failed' with details mentioning voteChoice
+  assert.ok(res.body.error === 'Validation failed' || res.body.error.includes('voteChoice'));
+  if (res.body.details) {
+    const voteChoiceError = res.body.details.find((d) => d.field === 'voteChoice');
+    assert.ok(voteChoiceError, 'Should have voteChoice validation error');
+  }
 });
 
 test('POST /comment/anonymous - validates nullifier is within BN254 field', async () => {
   app = await setupApp();
 
-  // Value above BN254 modulus
-  const tooBig = '0x' + (BigInt('21888242871839275222246405745257275088548364400416034343698204186575808495617') + 1n).toString(16);
+  // Value above BN254 modulus (without 0x prefix, as Zod schema expects)
+  const tooBig = (BigInt('21888242871839275222246405745257275088548364400416034343698204186575808495617') + 1n).toString(16);
 
   const res = await request(app)
     .post('/comment/anonymous')
@@ -331,16 +341,21 @@ test('POST /comment/anonymous - validates nullifier is within BN254 field', asyn
     .send({
       daoId: 1,
       proposalId: 1,
-      contentCid: 'bafytest123',
+      contentCid: 'bafybeihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku', // Valid CIDv1
       nullifier: tooBig,
-      root: '0x' + '22'.repeat(32),
-      commitment: '0x' + '33'.repeat(32),
+      root: '22'.repeat(32),
+      commitment: '33'.repeat(32),
       voteChoice: true,
-      proof: { a: '0x' + '44'.repeat(64), b: '0x' + '55'.repeat(128), c: '0x' + '66'.repeat(64) },
+      proof: { a: '44'.repeat(64), b: '55'.repeat(128), c: '66'.repeat(64) },
     });
 
   assert.equal(res.statusCode, 400);
-  assert.ok(res.body.error.toLowerCase().includes('modulus'));
+  // Zod returns 'Validation failed' with details mentioning 'BN254 field modulus'
+  assert.ok(res.body.error === 'Validation failed' || res.body.error.toLowerCase().includes('modulus'));
+  if (res.body.details) {
+    const nullifierError = res.body.details.find((d) => d.field === 'nullifier');
+    assert.ok(nullifierError, 'Should have nullifier validation error');
+  }
 });
 
 // ============================================

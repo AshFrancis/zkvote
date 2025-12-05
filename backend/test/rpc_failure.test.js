@@ -14,7 +14,7 @@ const setupApp = async () => {
   process.env.HEALTH_EXPOSE_DETAILS = 'false';
   process.env.RELAYER_TEST_MODE = 'true';
 
-  const relayer = await import('../src/relayer.js');
+  const relayer = await import('../src/index.ts');
   return relayer.app || relayer.default || relayer;
 };
 

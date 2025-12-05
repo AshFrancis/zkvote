@@ -251,8 +251,8 @@ test('ZK Proof Voting E2E', { concurrency: false }, async (t) => {
       });
     }, 'get_merkle_path');
 
-    const siblings = JSON.parse(proofResult);
-    const { pathElements, pathIndices } = buildMerkleProof(leafIndex, siblings);
+    // Pass raw result to buildMerkleProof which handles parsing
+    const { pathElements, pathIndices } = await buildMerkleProof(leafIndex, proofResult);
 
     // Compute nullifier
     const nullifier = await computeNullifier(credentials.secret, daoId, proposalId);
