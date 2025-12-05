@@ -153,12 +153,12 @@ stellar contract deploy \
 stellar contract deploy \
   --wasm target/wasm32v1-none/release/voting.wasm \
   --source mykey --network local \
-  -- --tree_contract $TREE_ID
+  -- --tree_contract $TREE_ID --registry $REGISTRY_ID
 
 stellar contract deploy \
   --wasm target/wasm32v1-none/release/comments.wasm \
   --source mykey --network local \
-  -- --tree_contract $TREE_ID
+  -- --tree_contract $TREE_ID --voting_contract $VOTING_ID --registry $REGISTRY_ID
 ```
 
 ### 4. Run Frontend & Backend
