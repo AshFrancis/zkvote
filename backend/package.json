@@ -4,9 +4,11 @@
   "description": "Backend services for ZKVote: Relayer (required) and optional Proof Query Service",
   "type": "module",
   "scripts": {
-    "relayer": "node src/relayer.js",
-    "dev:relayer": "node --watch src/relayer.js",
-    "test": "RELAYER_TEST_MODE=true node --test"
+    "relayer": "tsx src/index.ts",
+    "dev:relayer": "tsx watch src/index.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "RELAYER_TEST_MODE=true tsx --test test/*.test.js"
   },
   "keywords": [
     "stellar",
@@ -27,10 +29,18 @@
     "express-rate-limit": "^7.1.5",
     "helmet": "^7.1.0",
     "multer": "^1.4.5-lts.1",
-    "pinata": "^2.5.1"
+    "pinata": "^2.5.1",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^20.0.0",
     "snarkjs": "^0.7.5",
-    "supertest": "^7.1.4"
+    "supertest": "^7.1.4",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
   }
 }

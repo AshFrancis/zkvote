@@ -9,12 +9,17 @@ import * as StellarSdk from '@stellar/stellar-sdk';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import * as db from './db.js';
+import type { Event, EventInput, EventQueryOptions, DbStatus } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Event types we index
-const EVENT_TYPES = {
+// ============================================
+// TYPES
+// ============================================
+
+/** Event types we index from contracts */
+const EVENT_TYPES: Record<string, string> = {
   // DAO Registry
   DaoCreateEvent: 'dao_create',
   AdminXferEvent: 'admin_transfer',
@@ -35,30 +40,86 @@ const EVENT_TYPES = {
   VoteEvent: 'vote_cast',
 };
 
-let isPolling = false;
-let rpcServer = null;
-let contractIds = [];
+/** Parsed event from the chain */
+interface ParsedEvent {
+  type: string;
+  daoId: number | null;
+  data: Record<string, unknown>;
+  ledger: number;
+  txHash: string | null;
+  timestamp: string;
+}
 
-// Logger
-const log = (level, event, meta = {}) => {
+/** Indexer status response */
+export interface IndexerStatus extends DbStatus {
+  isRunning: boolean;
+}
+
+/** DAO data for synthetic events */
+export interface DaoData {
+  id?: number;
+  name?: string;
+  creator?: string;
+  membership_open?: boolean;
+  members_can_propose?: boolean;
+  metadata_cid?: string | null;
+  member_count?: number;
+}
+
+/** Events result with pagination */
+export interface EventsResult {
+  events: Event[];
+  total: number;
+}
+
+// Re-export types that may be needed by consumers
+export type { Event, EventQueryOptions };
+
+// ============================================
+// STATE
+// ============================================
+
+let isPolling = false;
+let rpcServer: StellarSdk.rpc.Server | null = null;
+
+// ============================================
+// LOGGER
+// ============================================
+
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+interface LogMeta {
+  [key: string]: unknown;
+}
+
+const log = (level: LogLevel, event: string, meta: LogMeta = {}): void => {
   console.log(JSON.stringify({ level, event, ts: new Date().toISOString(), ...meta }));
 };
 
+// ============================================
+// EVENT PARSING
+// ============================================
+
 /**
- * Parse contract event data
+ * Parse contract event data from Soroban RPC
  */
-function parseEventData(event) {
+function parseEventData(event: {
+  topic?: StellarSdk.xdr.ScVal[];
+  value?: StellarSdk.xdr.ScVal;
+  ledger?: number;
+  txHash?: string;
+}): ParsedEvent | null {
   try {
-    const topics = event.topic || [];
+    const topics = event.topic ?? [];
     const data = event.value;
 
     let eventType = 'unknown';
-    let daoId = null;
-    let parsed = {};
+    let daoId: number | null = null;
+    let parsed: Record<string, unknown> = {};
 
     if (topics.length > 0) {
-      const eventName = StellarSdk.scValToNative(topics[0]);
-      eventType = EVENT_TYPES[eventName] || eventName;
+      const eventName = StellarSdk.scValToNative(topics[0]) as string;
+      eventType = EVENT_TYPES[eventName] ?? eventName;
 
       if (topics.length > 1) {
         try {
@@ -71,7 +132,7 @@ function parseEventData(event) {
 
     if (data) {
       try {
-        parsed = StellarSdk.scValToNative(data);
+        parsed = StellarSdk.scValToNative(data) as Record<string, unknown>;
       } catch {
         // Keep raw
       }
@@ -81,20 +142,28 @@ function parseEventData(event) {
       type: eventType,
       daoId,
       data: parsed,
-      ledger: event.ledger,
-      txHash: event.txHash,
+      ledger: event.ledger ?? 0,
+      txHash: event.txHash ?? null,
       timestamp: new Date().toISOString(),
     };
   } catch (err) {
-    log('warn', 'event_parse_failed', { error: err.message });
+    log('warn', 'event_parse_failed', { error: (err as Error).message });
     return null;
   }
 }
 
+// ============================================
+// POLLING
+// ============================================
+
 /**
  * Poll for new events from Soroban RPC
  */
-async function pollEvents(server, contracts, startLedger) {
+async function pollEvents(
+  server: StellarSdk.rpc.Server,
+  contracts: string[],
+  startLedger: number
+): Promise<number> {
   try {
     const latestLedger = await server.getLatestLedger();
     const currentLedger = latestLedger.sequence;
@@ -105,8 +174,10 @@ async function pollEvents(server, contracts, startLedger) {
 
     for (const contractId of contracts) {
       try {
+        // The SDK now requires endLedger
         const events = await server.getEvents({
           startLedger: startLedger + 1,
+          endLedger: currentLedger,
           filters: [{
             type: 'contract',
             contractIds: [contractId],
@@ -119,10 +190,16 @@ async function pollEvents(server, contracts, startLedger) {
           for (const event of events.events) {
             const parsed = parseEventData(event);
             if (parsed && parsed.daoId !== null) {
-              const added = db.addEvent({
-                ...parsed,
+              const eventInput: EventInput = {
+                daoId: parsed.daoId,
+                type: parsed.type,
+                data: parsed.data,
+                ledger: parsed.ledger,
+                txHash: parsed.txHash,
+                timestamp: parsed.timestamp,
                 verified: true, // Events from RPC are verified
-              });
+              };
+              const added = db.addEvent(eventInput);
               if (added) addedCount++;
             }
           }
@@ -135,10 +212,11 @@ async function pollEvents(server, contracts, startLedger) {
           }
         }
       } catch (err) {
-        if (!err.message.includes('not found')) {
+        const error = err as Error;
+        if (!error.message.includes('not found')) {
           log('warn', 'poll_contract_failed', {
             contract: contractId.slice(0, 8) + '...',
-            error: err.message
+            error: error.message
           });
         }
       }
@@ -146,28 +224,32 @@ async function pollEvents(server, contracts, startLedger) {
 
     return currentLedger;
   } catch (err) {
-    log('error', 'poll_events_failed', { error: err.message });
+    log('error', 'poll_events_failed', { error: (err as Error).message });
     return startLedger;
   }
 }
+
+// ============================================
+// VERIFICATION
+// ============================================
 
 /**
  * Verify a pending event against the chain
  * Returns true if verified, false if should be deleted
  */
-async function verifyEventOnChain(event) {
+async function verifyEventOnChain(event: Event): Promise<boolean> {
   if (!rpcServer || !event.tx_hash) return false;
 
   try {
     // Try to get the transaction
     const txResult = await rpcServer.getTransaction(event.tx_hash);
 
-    if (txResult.status === 'SUCCESS') {
+    if (txResult.status === StellarSdk.rpc.Api.GetTransactionStatus.SUCCESS) {
       // Transaction confirmed - mark as verified
       db.verifyEvent(event.tx_hash, txResult.ledger);
       log('info', 'event_verified', { txHash: event.tx_hash, ledger: txResult.ledger });
       return true;
-    } else if (txResult.status === 'FAILED') {
+    } else if (txResult.status === StellarSdk.rpc.Api.GetTransactionStatus.FAILED) {
       // Transaction failed - delete the event
       db.deleteUnverifiedEvent(event.tx_hash);
       log('warn', 'event_verification_failed', { txHash: event.tx_hash, status: txResult.status });
@@ -176,7 +258,7 @@ async function verifyEventOnChain(event) {
     // NOT_FOUND - keep pending for now
     return false;
   } catch (err) {
-    log('warn', 'event_verify_error', { txHash: event.tx_hash, error: err.message });
+    log('warn', 'event_verify_error', { txHash: event.tx_hash, error: (err as Error).message });
     return false;
   }
 }
@@ -184,32 +266,39 @@ async function verifyEventOnChain(event) {
 /**
  * Background job to verify pending events
  */
-async function verifyPendingEvents() {
+async function verifyPendingEvents(): Promise<void> {
   const unverified = db.getUnverifiedEvents(10);
   for (const event of unverified) {
     await verifyEventOnChain(event);
   }
 }
 
+// ============================================
+// PUBLIC API
+// ============================================
+
 /**
  * Start the event indexer
  */
-export async function startIndexer(server, contracts, pollIntervalMs = 5000) {
+export async function startIndexer(
+  server: StellarSdk.rpc.Server | { getLatestLedger: () => Promise<{ sequence: number }> },
+  contracts: string[],
+  pollIntervalMs = 5000
+): Promise<void> {
   if (isPolling) {
     log('warn', 'indexer_already_running');
     return;
   }
 
   isPolling = true;
-  rpcServer = server;
-  contractIds = contracts;
+  rpcServer = server as StellarSdk.rpc.Server;
 
   // Initialize database and migrate from JSON if exists
   db.initDb();
-  const jsonPath = path.join(__dirname, '..', 'data', 'events.json');
+  const jsonPath = path.join(__dirname, '..', '..', 'data', 'events.json');
   db.migrateFromJson(jsonPath);
 
-  let lastLedger = db.getMetadata('lastLedger') || 0;
+  let lastLedger = db.getMetadata<number>('lastLedger') ?? 0;
 
   log('info', 'indexer_started', {
     contracts: contracts.length,
@@ -218,15 +307,15 @@ export async function startIndexer(server, contracts, pollIntervalMs = 5000) {
   });
 
   // Initial poll
-  lastLedger = await pollEvents(server, contracts, lastLedger);
+  lastLedger = await pollEvents(rpcServer, contracts, lastLedger);
   db.setMetadata('lastLedger', lastLedger);
 
   // Periodic polling
-  const poll = async () => {
+  const poll = async (): Promise<void> => {
     if (!isPolling) return;
 
     try {
-      const newLedger = await pollEvents(server, contracts, lastLedger);
+      const newLedger = await pollEvents(rpcServer!, contracts, lastLedger);
       if (newLedger > lastLedger) {
         lastLedger = newLedger;
         db.setMetadata('lastLedger', lastLedger);
@@ -235,7 +324,7 @@ export async function startIndexer(server, contracts, pollIntervalMs = 5000) {
       // Also verify any pending events
       await verifyPendingEvents();
     } catch (err) {
-      log('error', 'poll_failed', { error: err.message });
+      log('error', 'poll_failed', { error: (err as Error).message });
     }
 
     setTimeout(poll, pollIntervalMs);
@@ -247,7 +336,7 @@ export async function startIndexer(server, contracts, pollIntervalMs = 5000) {
 /**
  * Stop the indexer
  */
-export function stopIndexer() {
+export function stopIndexer(): void {
   isPolling = false;
   db.closeDb();
   log('info', 'indexer_stopped');
@@ -256,23 +345,28 @@ export function stopIndexer() {
 /**
  * Get events for a specific DAO
  */
-export function getEventsForDao(daoId, options = {}) {
+export function getEventsForDao(daoId: number, options: EventQueryOptions = {}): EventsResult {
   db.initDb(); // Ensure DB is initialized
-  return db.getEventsForDao(daoId, options);
+  const result = db.getEventsForDao(daoId, options);
+  return {
+    events: result.events,
+    total: result.total,
+  };
 }
 
 /**
  * Get all indexed DAOs
  */
-export function getIndexedDaos() {
+export function getIndexedDaos(): number[] {
   db.initDb();
-  return db.getIndexedDaos();
+  const daos = db.getIndexedDaos();
+  return daos.map(d => d.daoId);
 }
 
 /**
  * Get indexer status
  */
-export function getIndexerStatus() {
+export function getIndexerStatus(): IndexerStatus {
   db.initDb();
   const status = db.getDbStatus();
   return {
@@ -284,7 +378,12 @@ export function getIndexerStatus() {
 /**
  * Manually add an event (useful for testing)
  */
-export function addManualEvent(daoId, type, data, ledger = 0) {
+export function addManualEvent(
+  daoId: number,
+  type: string,
+  data: Record<string, unknown>,
+  ledger = 0
+): void {
   db.initDb();
   db.addEvent({
     daoId: Number(daoId),
@@ -301,7 +400,12 @@ export function addManualEvent(daoId, type, data, ledger = 0) {
  * Notify the indexer of an event from the frontend
  * The event is stored as pending and verified against the chain
  */
-export function notifyEvent(daoId, type, data, txHash) {
+export function notifyEvent(
+  daoId: number,
+  type: string,
+  data: Record<string, unknown>,
+  txHash: string
+): void {
   db.initDb();
   db.addPendingEvent(daoId, type, data, txHash);
   log('info', 'event_notified', { daoId, type, txHash });
@@ -310,7 +414,7 @@ export function notifyEvent(daoId, type, data, txHash) {
 /**
  * Get the RPC server instance (for on-chain verification)
  */
-export function getRpcServer() {
+export function getRpcServer(): StellarSdk.rpc.Server | null {
   return rpcServer;
 }
 
@@ -319,7 +423,7 @@ export function getRpcServer() {
  * Creates a synthetic event if one doesn't already exist
  * This handles DAOs created before the indexer started watching
  */
-export function ensureDaoCreateEvent(daoId, daoData) {
+export function ensureDaoCreateEvent(daoId: number, daoData: DaoData): boolean {
   db.initDb();
 
   // Check if dao_create event already exists for this DAO
