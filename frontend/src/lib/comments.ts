@@ -1,6 +1,6 @@
 // Comment types and utilities for the commenting system
 
-import { relayerFetch, RELAYER_URL } from "./api";
+import { relayerFetch } from "./api";
 
 export interface CommentMetadata {
   version: 1;

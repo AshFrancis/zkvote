@@ -52,7 +52,8 @@ export async function generateVoteProof(
   try {
     // Format input for circuit - matches vote.circom signal names
     // Public signals: [root, nullifier, daoId, proposalId, voteChoice]
-    // Note: commitment is a PRIVATE input (computed in circuit) for improved vote unlinkability
+    // Note: commitment is COMPUTED INTERNALLY in the circuit from secret+salt
+    // This provides improved vote unlinkability - commitment is never exposed
     const circuitInput = {
       // Public signals (verified on-chain)
       root: input.root,
@@ -61,7 +62,7 @@ export async function generateVoteProof(
       proposalId: input.proposalId,
       voteChoice: input.voteChoice,
       // Private signals (hidden in ZK proof)
-      commitment: input.commitment, // Now private for improved privacy
+      // commitment is computed internally: Poseidon(secret, salt)
       secret: input.secret,
       salt: input.salt,
       pathElements: input.pathElements,

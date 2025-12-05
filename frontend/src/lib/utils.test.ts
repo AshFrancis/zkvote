@@ -7,6 +7,7 @@ import {
   toSlug,
   toIdSlug,
   parseIdFromSlug,
+  extractTxHash,
   cn,
 } from "./utils";
 
@@ -16,7 +17,8 @@ describe("cn", () => {
   });
 
   it("handles conditional classes", () => {
-    expect(cn("foo", false && "bar", "baz")).toBe("foo baz");
+    const condition = false;
+    expect(cn("foo", condition && "bar", "baz")).toBe("foo baz");
   });
 
   it("merges Tailwind classes correctly", () => {
@@ -158,5 +160,64 @@ describe("parseIdFromSlug", () => {
 
   it("handles larger IDs", () => {
     expect(parseIdFromSlug("12345-my-org")).toBe(12345);
+  });
+});
+
+describe("extractTxHash", () => {
+  it("returns null for null/undefined", () => {
+    expect(extractTxHash(null)).toBe(null);
+    expect(extractTxHash(undefined)).toBe(null);
+  });
+
+  it("returns null for non-object types", () => {
+    expect(extractTxHash("string")).toBe(null);
+    expect(extractTxHash(123)).toBe(null);
+    expect(extractTxHash(true)).toBe(null);
+  });
+
+  it("extracts hash from direct hash property", () => {
+    expect(extractTxHash({ hash: "abc123" })).toBe("abc123");
+  });
+
+  it("returns null for non-string hash property", () => {
+    expect(extractTxHash({ hash: 123 })).toBe(null);
+    expect(extractTxHash({ hash: null })).toBe(null);
+  });
+
+  it("extracts hash from sendTransactionResponse", () => {
+    const result = {
+      sendTransactionResponse: {
+        hash: "tx-hash-from-send",
+      },
+    };
+    expect(extractTxHash(result)).toBe("tx-hash-from-send");
+  });
+
+  it("extracts txHash from getTransactionResponse", () => {
+    const result = {
+      getTransactionResponse: {
+        txHash: "tx-hash-from-get",
+      },
+    };
+    expect(extractTxHash(result)).toBe("tx-hash-from-get");
+  });
+
+  it("prefers direct hash over nested responses", () => {
+    const result = {
+      hash: "direct-hash",
+      sendTransactionResponse: {
+        hash: "nested-hash",
+      },
+    };
+    expect(extractTxHash(result)).toBe("direct-hash");
+  });
+
+  it("returns null for empty object", () => {
+    expect(extractTxHash({})).toBe(null);
+  });
+
+  it("returns null when nested response is not an object", () => {
+    expect(extractTxHash({ sendTransactionResponse: "not-an-object" })).toBe(null);
+    expect(extractTxHash({ getTransactionResponse: 123 })).toBe(null);
   });
 });

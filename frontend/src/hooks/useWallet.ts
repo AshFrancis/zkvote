@@ -19,6 +19,38 @@ export interface WalletState {
 
 let globalKit: StellarWalletsKit | null = null;
 
+// Safe localStorage helpers (handle private mode/SSR)
+const safeLocalStorageGet = (key: string): string | null => {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      return localStorage.getItem(key);
+    }
+  } catch {
+    console.warn("[useWallet] localStorage.getItem failed for", key);
+  }
+  return null;
+};
+
+const safeLocalStorageSet = (key: string, value: string): void => {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      localStorage.setItem(key, value);
+    }
+  } catch {
+    console.warn("[useWallet] localStorage.setItem failed for", key);
+  }
+};
+
+const safeLocalStorageRemove = (key: string): void => {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    console.warn("[useWallet] localStorage.removeItem failed for", key);
+  }
+};
+
 const inferWalletNetwork = (passphrase: string): WalletNetwork | null => {
   if (passphrase === "Public Global Stellar Network ; September 2015") return WalletNetwork.PUBLIC;
   if (passphrase === "Test SDF Network ; September 2015") return WalletNetwork.TESTNET;
@@ -61,7 +93,8 @@ export function useWallet() {
 
     // Only attempt auto-reconnect if user previously connected
     const checkConnection = async () => {
-      const storedWalletId = localStorage.getItem("selectedWalletId");
+      const storedWalletId = safeLocalStorageGet("selectedWalletId");
+
       if (!storedWalletId) {
         // No previous connection, skip auto-reconnect
         console.log('[useWallet] No stored wallet, skipping auto-reconnect. isInitializing -> false');
@@ -82,10 +115,10 @@ export function useWallet() {
             kit: globalKit,
           });
         }
-      } catch (error) {
+      } catch {
         // Auto-reconnect failed, clear stored wallet
         console.log("[useWallet] Auto-reconnect failed, user needs to reconnect manually. isInitializing -> false");
-        localStorage.removeItem("selectedWalletId");
+        safeLocalStorageRemove("selectedWalletId");
         setWallet(prev => ({ ...prev, isInitializing: false }));
       }
     };
@@ -105,7 +138,7 @@ export function useWallet() {
           const { address } = await globalKit!.getAddress();
 
           // Store wallet selection in localStorage for persistence
-          localStorage.setItem("selectedWalletId", option.id);
+          safeLocalStorageSet("selectedWalletId", option.id);
 
           setWallet({
             publicKey: address,
@@ -123,20 +156,26 @@ export function useWallet() {
 
   const disconnect = useCallback(() => {
     // Clear stored wallet selection
-    localStorage.removeItem("selectedWalletId");
+    safeLocalStorageRemove("selectedWalletId");
 
     // Clear all Stellar Wallets Kit localStorage entries
     // The library stores data with keys prefixed with "SWK" or containing "stellar"
-    Object.keys(localStorage).forEach(key => {
-      if (key.startsWith('SWK') ||
-          key.toLowerCase().includes('stellar') ||
-          key.toLowerCase().includes('wallet') ||
-          key.toLowerCase().includes('freighter') ||
-          key.toLowerCase().includes('albedo') ||
-          key.toLowerCase().includes('xbull')) {
-        localStorage.removeItem(key);
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('SWK') ||
+              key.toLowerCase().includes('stellar') ||
+              key.toLowerCase().includes('wallet') ||
+              key.toLowerCase().includes('freighter') ||
+              key.toLowerCase().includes('albedo') ||
+              key.toLowerCase().includes('xbull')) {
+            localStorage.removeItem(key);
+          }
+        });
       }
-    });
+    } catch {
+      console.warn("[useWallet] Failed to clear wallet localStorage entries");
+    }
 
     setWallet({ publicKey: null, isConnected: false, isInitializing: false, kit: globalKit });
   }, []);
@@ -147,4 +186,3 @@ export function useWallet() {
     disconnect,
   };
 }
-/* eslint-disable react-hooks/set-state-in-effect, @typescript-eslint/no-unused-vars */

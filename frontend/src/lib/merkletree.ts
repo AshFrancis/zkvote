@@ -7,6 +7,21 @@ const TREE_DEPTH = 18;
 // Cache for zero hashes at each level
 let zeroCache: string[] | null = null;
 
+// Cache for the Poseidon hash function instance (expensive to initialize)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let poseidonCache: any = null;
+
+/**
+ * Get cached Poseidon instance (avoids re-initializing WASM on each call)
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getPoseidon(): Promise<any> {
+  if (!poseidonCache) {
+    poseidonCache = await buildPoseidon();
+  }
+  return poseidonCache;
+}
+
 /**
  * Compute zero hash at each level of the tree
  * Zero hashes are: [0, H(0,0), H(H(0,0), H(0,0)), ...]
@@ -14,7 +29,7 @@ let zeroCache: string[] | null = null;
 async function getZeroHashes(): Promise<string[]> {
   if (zeroCache) return zeroCache;
 
-  const poseidon = await buildPoseidon();
+  const poseidon = await getPoseidon();
   const zeros: string[] = ["0"];
 
   for (let i = 0; i < TREE_DEPTH; i++) {
@@ -38,10 +53,10 @@ async function getZeroHashes(): Promise<string[]> {
  */
 export async function computeMerklePath(
   leafIndex: number,
-  totalLeaves: number,
+  _totalLeaves: number,
   leaves: string[]
 ): Promise<{ pathElements: string[]; pathIndices: number[] }> {
-  const poseidon = await buildPoseidon();
+  const poseidon = await getPoseidon();
   const zeros = await getZeroHashes();
 
   const pathElements: string[] = [];

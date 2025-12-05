@@ -6,34 +6,26 @@
 import nacl from 'tweetnacl';
 import { encodeBase64, decodeBase64 } from 'tweetnacl-util';
 
+// Note: deriveKeyFromSignature was removed - use deriveKeyFromSignatureAsync instead
+
 /**
- * Derives a symmetric encryption key from a wallet signature using HKDF-like derivation
- * @param signature - The signature from the wallet (hex string)
- * @param daoId - DAO ID for context binding
- * @returns 32-byte symmetric key
+ * Signature input type - can be various formats from different wallets
  */
-function deriveKeyFromSignature(signature: string, daoId: number): Uint8Array {
-  // Convert signature to bytes
-  const sigBytes = new Uint8Array(
-    signature.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) || []
-  );
-
-  // Use SHA-256 hash as poor man's HKDF (browser-compatible)
-  // Mix signature with DAO ID for context
-  const context = new TextEncoder().encode(`zkvote-aliases-${daoId}`);
-  const combined = new Uint8Array(sigBytes.length + context.length);
-  combined.set(sigBytes);
-  combined.set(context, sigBytes.length);
-
-  // Hash to get deterministic 32-byte key
-  return crypto.subtle.digest('SHA-256', combined).then((hash) => new Uint8Array(hash)) as any;
-}
+type SignatureInput =
+  | Uint8Array
+  | number[]
+  | string
+  | { signedMessage: SignatureInput }
+  | { signature: SignatureInput }
+  | { data: SignatureInput }
+  | Buffer
+  | Record<string, number>;
 
 /**
  * Derives a symmetric encryption key from a wallet signature (async version)
  */
 async function deriveKeyFromSignatureAsync(
-  signature: any,
+  signature: SignatureInput,
   daoId: number
 ): Promise<Uint8Array> {
   // Convert signature to Uint8Array if it's not already
@@ -63,8 +55,8 @@ async function deriveKeyFromSignatureAsync(
         for (let i = 0; i < binaryString.length; i++) {
           sigBytes[i] = binaryString.charCodeAt(i);
         }
-      } catch (e) {
-        throw new Error(`Failed to decode base64 signature: ${e}`);
+      } catch (err) {
+        throw new Error(`Failed to decode base64 signature: ${err}`);
       }
     }
   } else if (typeof signature === 'object' && signature !== null) {
@@ -82,7 +74,7 @@ async function deriveKeyFromSignatureAsync(
       // Try to convert object to array
       try {
         sigBytes = new Uint8Array(Object.values(signature));
-      } catch (e) {
+      } catch {
         throw new Error(`Invalid signature object format: ${JSON.stringify(signature).substring(0, 100)}`);
       }
     }
@@ -241,4 +233,3 @@ export function encryptAlias(alias: string, encryptionKey: Uint8Array): string {
 export function decryptAlias(encryptedAlias: string, encryptionKey: Uint8Array): string | null {
   return decryptWithKey(encryptedAlias, encryptionKey);
 }
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */

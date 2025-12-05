@@ -165,7 +165,8 @@ export async function getOrRegenerateZKCredentials(
   // Regenerate from wallet signature
   console.log(`[ZK] Regenerating credentials from wallet signature for DAO ${daoId}...`);
   try {
-    const credentials = await generateDeterministicZKCredentials(kit, daoId);
+    // Credentials generated but not used - leaf index lookup not yet implemented
+    await generateDeterministicZKCredentials(kit, daoId);
 
     // Get leaf index from contract (this requires on-chain lookup)
     // For now, return null and require explicit registration
@@ -189,4 +190,3 @@ export async function computeCommitment(secret: string, salt: string): Promise<s
   const commitment = poseidon.F.toString(poseidon([BigInt(secret), BigInt(salt)]));
   return commitment;
 }
-/* eslint-disable @typescript-eslint/no-unused-vars */

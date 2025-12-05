@@ -6,6 +6,8 @@ import {
   BASE_FEE,
   Contract,
   Address,
+  xdr,
+  Transaction,
 } from "@stellar/stellar-sdk";
 import { NETWORK_CONFIG } from "../config/contracts";
 
@@ -62,14 +64,14 @@ export async function buildContractInvocation(
   source: string,
   contractId: string,
   method: string,
-  ...args: any[]
+  ...args: xdr.ScVal[]
 ) {
   let sourceAccount;
 
   try {
     // Try to get the actual account
     sourceAccount = await server.getAccount(source);
-  } catch (e) {
+  } catch {
     // If account doesn't exist or can't be fetched, use a mock account for simulation
     // This works for read-only operations
     sourceAccount = new (await import("@stellar/stellar-sdk")).Account(source, "0");
@@ -102,14 +104,21 @@ export async function buildContractInvocation(
 }
 
 /**
+ * Wallet Kit interface for transaction signing
+ */
+interface WalletKit {
+  signTransaction(xdr: string, options: { networkPassphrase: string }): Promise<{ signedTxXdr: string }>;
+}
+
+/**
  * Sign and submit a transaction using the wallet kit
  * @param tx Transaction to sign and submit
  * @param kit Stellar Wallets Kit instance
  * @returns Transaction result
  */
 export async function signAndSubmitTransaction(
-  tx: any,
-  kit: any
+  tx: Transaction,
+  kit: WalletKit
 ) {
   // Sign transaction using wallet kit
   const { signedTxXdr } = await kit.signTransaction(tx.toXDR(), {
@@ -149,7 +158,7 @@ export async function signAndSubmitTransaction(
 export async function simulateContractCall(
   contractId: string,
   method: string,
-  ...args: any[]
+  ...args: xdr.ScVal[]
 ) {
   const contract = new Contract(contractId);
 
@@ -190,4 +199,3 @@ export function addressToScVal(address: string) {
 export function isFreighterInstalled(): boolean {
   return typeof window !== "undefined" && "freighter" in window;
 }
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */

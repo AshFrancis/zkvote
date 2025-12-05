@@ -40,11 +40,11 @@ export function isUserRejection(err: unknown): boolean {
 
   return (
     error.code === -4 ||
-    error.message?.includes("User rejected") ||
-    error.message?.includes("user rejected") ||
-    error.message?.includes("declined") ||
-    error.message?.includes("cancelled") ||
-    error.message?.includes("canceled")
+    error.message?.includes("User rejected") === true ||
+    error.message?.includes("user rejected") === true ||
+    error.message?.includes("declined") === true ||
+    error.message?.includes("cancelled") === true ||
+    error.message?.includes("canceled") === true
   );
 }
 

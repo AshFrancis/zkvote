@@ -1,34 +1,21 @@
 import { useState, useEffect } from "react";
 import { Routes, Route, useNavigate, useLocation, useParams } from "react-router-dom";
-import { Buffer } from "buffer";
 import Navbar from "./components/Navbar";
 import DAODashboard from "./components/DAODashboard";
 import DAOList from "./components/DAOList";
 import Homepage from "./components/Homepage";
 import Docs from "./components/Docs";
-import ManageMembers from "./components/ManageMembers";
 import PublicVotes from "./components/PublicVotes";
 import ProposalPage from "./components/ProposalPage";
 import { ErrorBoundary, RouteErrorBoundary } from "./components/ErrorBoundary";
+import { CreateDAOForm } from "./components/CreateDAOForm";
 import { useWallet } from "./hooks/useWallet";
 import { useTheme } from "./hooks/useTheme";
-import { useDaoName } from "./hooks/useDaoName";
-import { useDaoInfo } from "./hooks/useDaoInfo";
-import { initializeContractClients } from "./lib/contracts";
+import { useDaoInfoQuery, useRelayerStatusQuery } from "./queries";
 import { truncateText, toIdSlug, parseIdFromSlug } from "./lib/utils";
-import verificationKey from "./lib/verification_key_soroban.json";
-import { CONTRACTS } from "./config/contracts";
 import { validateStaticConfig } from "./config/guardrails";
-import { useRelayerStatus } from "./hooks/useRelayerStatus";
 import { RelayerStatusBanner } from "./components/RelayerStatusBanner";
-import { Alert, LoadingSpinner } from "./components/ui";
 import { Button } from "./components/ui/Button";
-import { Input } from "./components/ui/Input";
-import { Textarea } from "./components/ui/Textarea";
-import { Label } from "./components/ui/Label";
-import { uploadDAOMetadata, uploadImage, MAX_DESCRIPTION_LENGTH } from "./lib/daoMetadata";
-import { ChevronDown, ChevronUp, Image as ImageIcon, Link2, Globe, Twitter, Linkedin, Github, X } from "lucide-react";
-// ZK credentials will be generated deterministically after DAO creation
 
 // Tab types for DAO pages
 type DAOTab = 'info' | 'proposals' | 'members' | 'create-proposal' | 'settings';
@@ -39,12 +26,13 @@ function DAODetailPage({ publicKey, isInitializing, tab = 'proposals' }: { publi
   const navigate = useNavigate();
   const selectedDaoId = daoSlug ? parseIdFromSlug(daoSlug) : null;
 
-  // Use the useDaoName hook to handle DAO name loading and caching
-  const { daoName, loading } = useDaoName({
-    publicKey,
+  // Use React Query hook for DAO info
+  const { data: daoInfo, isLoading: loading } = useDaoInfoQuery({
     daoId: selectedDaoId,
-    isInitializing,
+    publicKey,
+    enabled: !isInitializing && selectedDaoId !== null,
   });
+  const daoName = daoInfo?.name ?? "";
 
   // Update URL with proper slug when name loads
   useEffect(() => {
@@ -80,97 +68,14 @@ function DAODetailPage({ publicKey, isInitializing, tab = 'proposals' }: { publi
   );
 }
 
-// Component for Manage/View Members page
-function ManageMembersPage({ publicKey, isInitializing }: { publicKey: string | null; isInitializing: boolean }) {
-  const { daoSlug } = useParams<{ daoSlug: string }>();
-  const navigate = useNavigate();
-  const selectedDaoId = daoSlug ? parseIdFromSlug(daoSlug) : null;
-
-  // Use the useDaoInfo hook to handle DAO info loading and caching
-  const { daoInfo, loading } = useDaoInfo({
-    publicKey,
-    daoId: selectedDaoId,
-    isInitializing,
-  });
-
-  // Update URL with proper slug when name loads
-  useEffect(() => {
-    if (selectedDaoId && daoInfo?.name && !loading) {
-      const expectedSlug = toIdSlug(selectedDaoId, daoInfo.name);
-      if (daoSlug !== expectedSlug) {
-        navigate(`/daos/${expectedSlug}/members`, { replace: true });
-      }
-    }
-  }, [selectedDaoId, daoInfo?.name, loading, daoSlug, navigate]);
-
-  // Generate slug for navigation
-  const daoSlugForNav = selectedDaoId && daoInfo?.name ? toIdSlug(selectedDaoId, daoInfo.name) : daoSlug;
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* Breadcrumbs */}
-      <nav className="flex items-center gap-2 text-sm">
-        <button
-          onClick={() => navigate('/daos/')}
-          className="text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
-        >
-          DAOs
-        </button>
-        <span className="text-gray-400 dark:text-gray-600">/</span>
-        <button
-          onClick={() => navigate(`/daos/${daoSlugForNav}`)}
-          className="text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
-        >
-          {truncateText(daoInfo?.name || '', 30)}
-        </button>
-        <span className="text-gray-400 dark:text-gray-600">/</span>
-        <span className="text-gray-900 dark:text-gray-100 font-medium">Members</span>
-      </nav>
-
-      {/* Manage/View Members */}
-      {selectedDaoId !== null && (
-        <ManageMembers publicKey={publicKey} daoId={selectedDaoId} isAdmin={daoInfo?.isAdmin || false} isInitializing={isInitializing} />
-      )}
-    </div>
-  );
-}
-
 function App() {
   const { publicKey, isConnected, isInitializing, connect, disconnect, kit } = useWallet();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
-  const [userDaoIds, setUserDaoIds] = useState<number[]>([]);
-  const [userDaosLoaded, setUserDaosLoaded] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [newDaoName, setNewDaoName] = useState("");
-  const [membershipOpen, setMembershipOpen] = useState(false);
-  const [membersCanPropose, setMembersCanPropose] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [configErrors, setConfigErrors] = useState<string[]>([]);
-  const { status: relayerStatusState, relayerConfig } = useRelayerStatus();
-
-  // Profile fields for Create DAO form
-  const [showProfileOptions, setShowProfileOptions] = useState(false);
-  const [description, setDescription] = useState("");
-  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
-  const [coverImagePreview, setCoverImagePreview] = useState<string | null>(null);
-  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
-  const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
-  const [website, setWebsite] = useState("");
-  const [twitter, setTwitter] = useState("");
-  const [linkedin, setLinkedin] = useState("");
-  const [github, setGithub] = useState("");
+  const { status: relayerStatusState } = useRelayerStatusQuery();
 
   // Determine current view from URL path
   const getCurrentView = (): 'home' | 'browse' | 'votes' | 'docs' => {
@@ -184,6 +89,9 @@ function App() {
 
   // Update document title and meta description based on current view
   useEffect(() => {
+    // SSR guard: only run in browser environment
+    if (typeof document === 'undefined') return;
+
     const pageMeta: Record<string, { title: string; description: string }> = {
       home: {
         title: 'ZKVote - Anonymous Governance',
@@ -212,19 +120,6 @@ function App() {
     }
   }, [currentView]);
 
-  // Clear success and error messages when navigating to a different route
-  useEffect(() => {
-    setSuccess(null);
-    setError(null);
-  }, [location.pathname]);
-
-  // Reset userDaosLoaded when disconnecting
-  useEffect(() => {
-    if (!isConnected) {
-      setUserDaosLoaded(false);
-      setUserDaoIds([]);
-    }
-  }, [isConnected]);
 
   // Basic config guardrails (network + contract IDs)
   useEffect(() => {
@@ -253,204 +148,9 @@ function App() {
     navigate(`/daos/${slug}`);
   };
 
-  // Image upload handlers for Create DAO form
-  const handleCoverImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setCoverImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setCoverImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setProfileImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProfileImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const resetProfileFields = () => {
-    setShowProfileOptions(false);
-    setDescription("");
-    setCoverImageFile(null);
-    setCoverImagePreview(null);
-    setProfileImageFile(null);
-    setProfileImagePreview(null);
-    setWebsite("");
-    setTwitter("");
-    setLinkedin("");
-    setGithub("");
-  };
-
-  const handleCreateDao = async () => {
-    if (!newDaoName.trim()) {
-      setError("DAO name is required");
-      return;
-    }
-
-    if (!publicKey) {
-      setError("Wallet not connected");
-      return;
-    }
-
-    try {
-      setCreating(true);
-      setError(null);
-      setSuccess(null);
-
-      if (!kit) {
-        throw new Error("Wallet kit not available. Please reconnect your wallet.");
-      }
-
-      const clients = initializeContractClients(publicKey);
-
-      // Helper function to retry transactions on TRY_AGAIN_LATER errors
-      const sendWithRetry = async (tx: any, maxRetries = 3) => {
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-          try {
-            return await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
-          } catch (err: any) {
-            const isTryAgainLater = err?.message?.includes("TRY_AGAIN_LATER") ||
-              err?.toString()?.includes("TRY_AGAIN_LATER");
-
-            if (isTryAgainLater && attempt < maxRetries) {
-              console.log(`Transaction failed with TRY_AGAIN_LATER, retrying (attempt ${attempt}/${maxRetries})...`);
-              await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
-              continue;
-            }
-            throw err; // Re-throw if not TRY_AGAIN_LATER or out of retries
-          }
-        }
-      };
-
-      // Convert hex strings to Buffers for VK
-      const vk = {
-        alpha: Buffer.from(verificationKey.alpha, 'hex'),
-        beta: Buffer.from(verificationKey.beta, 'hex'),
-        gamma: Buffer.from(verificationKey.gamma, 'hex'),
-        delta: Buffer.from(verificationKey.delta, 'hex'),
-        ic: verificationKey.ic.map((ic: string) => Buffer.from(ic, 'hex')),
-      };
-
-      // Upload profile metadata BEFORE creating DAO (so we can include it in single transaction)
-      const hasProfileData = description || coverImageFile || profileImageFile || website || twitter || linkedin || github;
-      let metadataCid: string | undefined;
-
-      if (hasProfileData) {
-        try {
-          setSuccess("Uploading DAO profile to IPFS...");
-
-          // Upload images if provided
-          let coverImageCid: string | undefined;
-          let profileImageCid: string | undefined;
-
-          if (coverImageFile) {
-            const coverResult = await uploadImage(coverImageFile);
-            coverImageCid = coverResult.cid;
-          }
-
-          if (profileImageFile) {
-            const profileResult = await uploadImage(profileImageFile);
-            profileImageCid = profileResult.cid;
-          }
-
-          // Build metadata object
-          const metadataToUpload: {
-            description: string;
-            coverImageCid?: string;
-            profileImageCid?: string;
-            links?: {
-              website?: string;
-              twitter?: string;
-              linkedin?: string;
-              github?: string;
-            };
-          } = {
-            description: description || "",
-            coverImageCid,
-            profileImageCid,
-          };
-
-          // Add links if any are provided
-          if (website || twitter || linkedin || github) {
-            metadataToUpload.links = {};
-            if (website) metadataToUpload.links.website = website;
-            if (twitter) metadataToUpload.links.twitter = twitter;
-            if (linkedin) metadataToUpload.links.linkedin = linkedin;
-            if (github) metadataToUpload.links.github = github;
-          }
-
-          // Upload metadata to IPFS
-          const uploadResult = await uploadDAOMetadata(metadataToUpload);
-          metadataCid = uploadResult.cid;
-          console.log("Metadata uploaded to IPFS:", metadataCid);
-        } catch (metadataErr) {
-          // Log the error but continue with DAO creation without metadata
-          console.error("Failed to upload profile metadata:", metadataErr);
-          setError("Failed to upload profile. Continuing without profile metadata...");
-          // Clear the error after a moment so user sees the creation progress
-          setTimeout(() => setError(null), 3000);
-        }
-      }
-
-      // Single transaction: Create and initialize DAO with metadata (without creator registration)
-      // Creator will register with deterministic credentials after creation
-      console.log("Creating and initializing DAO...");
-      setSuccess("Creating DAO (initializing tree and setting verification key)...");
-
-      const createAndInitTx = await clients.daoRegistry.create_and_init_dao_no_reg(
-        {
-          name: newDaoName,
-          creator: publicKey,
-          membership_open: membershipOpen,
-          members_can_propose: membersCanPropose,
-          metadata_cid: metadataCid || undefined, // Pass metadata CID if available
-          sbt_contract: CONTRACTS.SBT_ID,
-          tree_contract: CONTRACTS.TREE_ID,
-          voting_contract: CONTRACTS.VOTING_ID,
-          tree_depth: 18,
-          vk,
-        },
-        {
-          // Increase budget for this complex transaction (5 steps including Merkle tree ops)
-          fee: "10000000", // 10 XLM max fee
-        }
-      );
-
-      const result = await sendWithRetry(createAndInitTx);
-
-      const newDaoId = Number(result.result);
-      console.log(`DAO created and fully initialized with ID: ${newDaoId}${metadataCid ? ` with metadata CID: ${metadataCid}` : ''}`);
-
-      setSuccess(
-        `DAO "${newDaoName}" created successfully! Redirecting...`
-      );
-
-      console.log(`DAO "${newDaoName}" (ID: ${newDaoId}) fully initialized!`);
-      const createdDaoName = newDaoName; // Capture before clearing
-      setNewDaoName("");
-      setShowCreateForm(false);
-      resetProfileFields();
-
-      // Navigate to DAO page with slug
-      navigate(`/daos/${toIdSlug(newDaoId, createdDaoName)}`);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to create DAO";
-      setError(errorMessage);
-      console.error("Failed to create DAO:", err);
-      console.error("Error details:", errorMessage);
-    } finally {
-      setCreating(false);
-    }
+  const handleDaoCreated = (daoId: number, daoName: string) => {
+    setShowCreateForm(false);
+    navigate(`/daos/${toIdSlug(daoId, daoName)}`);
   };
 
   return (
@@ -504,230 +204,15 @@ function App() {
                 )}
               </div>
 
-              {/* Success/Error Messages */}
-              {success && <Alert variant="success">{success}</Alert>}
-              {error && <Alert variant="error">{error}</Alert>}
-
               {/* Create DAO Form */}
-              {isConnected && showCreateForm && (
-                <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6 animate-slide-in-from-top">
-                  <div className="space-y-6">
-                    <div>
-                      <h3 className="text-lg font-semibold leading-none tracking-tight mb-4">
-                        Create New DAO
-                      </h3>
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <label htmlFor="dao-name-input" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                            DAO Name
-                            <span className="ml-2 text-xs text-muted-foreground font-normal">
-                              ({newDaoName.length}/24 characters)
-                            </span>
-                          </label>
-                          <input
-                            id="dao-name-input"
-                            type="text"
-                            value={newDaoName}
-                            onChange={(e) => setNewDaoName(e.target.value)}
-                            placeholder="Enter DAO name..."
-                            maxLength={24}
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                          />
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            id="membership-open"
-                            checked={membershipOpen}
-                            onChange={(e) => setMembershipOpen(e.target.checked)}
-                            className="h-4 w-4 rounded border-gray-400 text-primary focus:ring-1 focus:ring-primary/50 focus:ring-offset-0"
-                          />
-                          <label htmlFor="membership-open" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                            Open Membership
-                            <span className="ml-2 text-xs text-muted-foreground font-normal">(Allow users to join without admin approval)</span>
-                          </label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            id="members-can-propose"
-                            checked={membersCanPropose}
-                            onChange={(e) => setMembersCanPropose(e.target.checked)}
-                            className="h-4 w-4 rounded border-gray-400 text-primary focus:ring-1 focus:ring-primary/50 focus:ring-offset-0"
-                          />
-                          <label htmlFor="members-can-propose" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                            Member Proposals
-                            <span className="ml-2 text-xs text-muted-foreground font-normal">(Allow members to create proposals, or admin-only)</span>
-                          </label>
-                        </div>
-
-                        {/* Profile Options Toggle */}
-                        <button
-                          type="button"
-                          onClick={() => setShowProfileOptions(!showProfileOptions)}
-                          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mt-2"
-                        >
-                          {showProfileOptions ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                          <ImageIcon className="w-4 h-4" />
-                          Add Profile (optional)
-                        </button>
-
-                        {/* Profile Options */}
-                        {showProfileOptions && (
-                          <div className="space-y-4 pt-4 border-t mt-4">
-                            {/* Description */}
-                            <div className="space-y-2">
-                              <Label htmlFor="dao-description">
-                                Description
-                                <span className="ml-2 text-xs text-muted-foreground font-normal">
-                                  ({description.length}/{MAX_DESCRIPTION_LENGTH} characters, Markdown supported)
-                                </span>
-                              </Label>
-                              <Textarea
-                                id="dao-description"
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value.slice(0, MAX_DESCRIPTION_LENGTH))}
-                                placeholder="Describe your DAO..."
-                                rows={3}
-                              />
-                            </div>
-
-                            {/* Images */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {/* Cover Image */}
-                              <div className="space-y-2">
-                                <Label htmlFor="cover-image">Cover Image</Label>
-                                <div className="flex items-center gap-2">
-                                  <Input
-                                    id="cover-image"
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleCoverImageChange}
-                                    className="flex-1"
-                                  />
-                                  {coverImagePreview && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setCoverImageFile(null);
-                                        setCoverImagePreview(null);
-                                      }}
-                                      className="p-1 hover:bg-muted rounded"
-                                    >
-                                      <X className="w-4 h-4" />
-                                    </button>
-                                  )}
-                                </div>
-                                {coverImagePreview && (
-                                  <div className="relative h-24 rounded-lg overflow-hidden bg-muted">
-                                    <img src={coverImagePreview} alt="Cover preview" className="w-full h-full object-cover" />
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Profile Image */}
-                              <div className="space-y-2">
-                                <Label htmlFor="profile-image">Profile Image</Label>
-                                <div className="flex items-center gap-2">
-                                  <Input
-                                    id="profile-image"
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleProfileImageChange}
-                                    className="flex-1"
-                                  />
-                                  {profileImagePreview && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setProfileImageFile(null);
-                                        setProfileImagePreview(null);
-                                      }}
-                                      className="p-1 hover:bg-muted rounded"
-                                    >
-                                      <X className="w-4 h-4" />
-                                    </button>
-                                  )}
-                                </div>
-                                {profileImagePreview && (
-                                  <div className="w-16 h-16 rounded-full overflow-hidden bg-muted">
-                                    <img src={profileImagePreview} alt="Profile preview" className="w-full h-full object-cover" />
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Social Links */}
-                            <div className="space-y-3">
-                              <Label className="flex items-center gap-1">
-                                <Link2 className="w-4 h-4" />
-                                Social Links
-                              </Label>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div className="flex items-center gap-2">
-                                  <Globe className="w-4 h-4 text-muted-foreground shrink-0" />
-                                  <Input
-                                    value={website}
-                                    onChange={(e) => setWebsite(e.target.value)}
-                                    placeholder="https://example.com"
-                                  />
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Twitter className="w-4 h-4 text-muted-foreground shrink-0" />
-                                  <Input
-                                    value={twitter}
-                                    onChange={(e) => setTwitter(e.target.value)}
-                                    placeholder="@handle or x.com/handle"
-                                  />
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Linkedin className="w-4 h-4 text-muted-foreground shrink-0" />
-                                  <Input
-                                    value={linkedin}
-                                    onChange={(e) => setLinkedin(e.target.value)}
-                                    placeholder="linkedin.com/company/..."
-                                  />
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Github className="w-4 h-4 text-muted-foreground shrink-0" />
-                                  <Input
-                                    value={github}
-                                    onChange={(e) => setGithub(e.target.value)}
-                                    placeholder="github.com/org"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex gap-3">
-                      <Button
-                        onClick={handleCreateDao}
-                        disabled={creating || isInitializing || !kit}
-                        className="flex-1"
-                      >
-                        {creating && <LoadingSpinner size="sm" color="white" className="mr-2" />}
-                        {creating ? "Creating..." : "Create DAO"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setShowCreateForm(false);
-                          setNewDaoName("");
-                          setMembershipOpen(false);
-                          setMembersCanPropose(true);
-                          resetProfileFields();
-                          setError(null);
-                        }}
-                        className="flex-1"
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+              {isConnected && showCreateForm && kit && (
+                <CreateDAOForm
+                  publicKey={publicKey!}
+                  kit={kit}
+                  isInitializing={isInitializing}
+                  onCancel={() => setShowCreateForm(false)}
+                  onSuccess={handleDaoCreated}
+                />
               )}
 
               {/* DAO List - single component handles both user's DAOs and other DAOs */}
@@ -735,10 +220,6 @@ function App() {
                 onSelectDao={handleSelectDao}
                 isConnected={isConnected}
                 userAddress={publicKey}
-                onUserDaosLoaded={(ids) => {
-                  setUserDaoIds(ids);
-                  setUserDaosLoaded(true);
-                }}
                 isInitializing={isInitializing}
               />
 
@@ -840,7 +321,7 @@ function App() {
                 <h4 className="text-sm font-semibold">Resources</h4>
                 <ul className="space-y-3 text-sm text-muted-foreground">
                   <li>
-                    <a href="https://github.com/ashtron/zkvote" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
+                    <a href="https://github.com/ashfrancis/zkvote" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
                       GitHub
                     </a>
                   </li>
@@ -865,7 +346,7 @@ function App() {
               Built with Stellar Soroban Protocol 25 • Groth16 on BN254 • Poseidon Merkle Trees
             </p>
             <div className="flex items-center gap-6">
-              <a href="https://github.com/ashtron/zkvote" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors">
+              <a href="https://github.com/ashfrancis/zkvote" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
                 </svg>
@@ -885,4 +366,3 @@ function App() {
 }
 
 export default App;
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps */
