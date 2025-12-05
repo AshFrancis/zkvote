@@ -176,7 +176,7 @@ describe("ManageMembers", () => {
       expect(screen.queryByText("Mint Membership SBT")).not.toBeInTheDocument();
     });
 
-    it("shows remove button for non-admin members when admin", async () => {
+    it("shows action menu for non-admin members when admin", async () => {
       const { getReadOnlyMembershipSbt } = await import("../lib/readOnlyContracts");
       (getReadOnlyMembershipSbt as ReturnType<typeof vi.fn>).mockReturnValue({
         get_member_count: vi.fn().mockResolvedValue({ result: BigInt(1) }),
@@ -190,9 +190,9 @@ describe("ManageMembers", () => {
       render(<ManageMembers {...adminProps} />);
 
       await waitFor(() => {
-        // Look for the revoke button (X icon with title "Revoke membership")
-        const revokeButtons = document.querySelectorAll('[title="Revoke membership"]');
-        expect(revokeButtons.length).toBeGreaterThan(0);
+        // Look for the member actions menu button (three dots icon)
+        const actionButtons = document.querySelectorAll('[title="Member actions"]');
+        expect(actionButtons.length).toBeGreaterThan(0);
       });
     });
   });
@@ -330,6 +330,126 @@ describe("ManageMembers", () => {
   });
 });
 
+describe("ManageMembers Reinstate Member", () => {
+  const adminProps = {
+    publicKey: "GPUBLIC...",
+    daoId: 1,
+    isAdmin: true,
+    isInitializing: false,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it("renders member list for admin to manage", async () => {
+    const { getReadOnlyMembershipSbt } = await import("../lib/readOnlyContracts");
+    (getReadOnlyMembershipSbt as ReturnType<typeof vi.fn>).mockReturnValue({
+      get_member_count: vi.fn().mockResolvedValue({ result: BigInt(1) }),
+      get_members: vi.fn().mockResolvedValue({
+        result: ["GREVOKED..."],
+      }),
+      has: vi.fn().mockResolvedValue({ result: false }), // Member was revoked
+      get_alias: vi.fn().mockResolvedValue({ result: null }),
+    });
+
+    render(<ManageMembers {...adminProps} />);
+
+    // Verify member list section renders
+    await waitFor(() => {
+      expect(screen.getByText(/Current Members/)).toBeInTheDocument();
+    });
+  });
+});
+
+describe("ManageMembers Alias Handling", () => {
+  const defaultProps = {
+    publicKey: "GPUBLIC...",
+    daoId: 1,
+    isAdmin: false,
+    isInitializing: false,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it("renders member list with aliases", async () => {
+    const { getReadOnlyMembershipSbt } = await import("../lib/readOnlyContracts");
+
+    (getReadOnlyMembershipSbt as ReturnType<typeof vi.fn>).mockReturnValue({
+      get_member_count: vi.fn().mockResolvedValue({ result: BigInt(1) }),
+      get_members: vi.fn().mockResolvedValue({
+        result: ["GMEMBER..."],
+      }),
+      has: vi.fn().mockResolvedValue({ result: true }),
+      get_alias: vi.fn().mockResolvedValue({ result: "encrypted-alias-data" }),
+    });
+
+    render(<ManageMembers {...defaultProps} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Current Members/)).toBeInTheDocument();
+    });
+  });
+
+  it("handles null aliases gracefully", async () => {
+    const { getReadOnlyMembershipSbt } = await import("../lib/readOnlyContracts");
+
+    (getReadOnlyMembershipSbt as ReturnType<typeof vi.fn>).mockReturnValue({
+      get_member_count: vi.fn().mockResolvedValue({ result: BigInt(2) }),
+      get_members: vi.fn().mockResolvedValue({
+        result: ["GMEMBER1...", "GMEMBER2..."],
+      }),
+      has: vi.fn().mockResolvedValue({ result: true }),
+      get_alias: vi.fn().mockResolvedValue({ result: null }), // No alias set
+    });
+
+    render(<ManageMembers {...defaultProps} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Current Members/)).toBeInTheDocument();
+    });
+  });
+});
+
+describe("ManageMembers Data Refresh", () => {
+  const adminProps = {
+    publicKey: "GPUBLIC...",
+    daoId: 1,
+    isAdmin: true,
+    isInitializing: false,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it("calls get_members on initial load", async () => {
+    const getMembersMock = vi.fn().mockResolvedValue({ result: ["GEXISTING..."] });
+
+    const { getReadOnlyMembershipSbt } = await import("../lib/readOnlyContracts");
+    (getReadOnlyMembershipSbt as ReturnType<typeof vi.fn>).mockReturnValue({
+      get_member_count: vi.fn().mockResolvedValue({ result: BigInt(1) }),
+      get_members: getMembersMock,
+      has: vi.fn().mockResolvedValue({ result: true }),
+      get_alias: vi.fn().mockResolvedValue({ result: null }),
+    });
+
+    render(<ManageMembers {...adminProps} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Current Members/)).toBeInTheDocument();
+    });
+
+    // Verify get_members was called at least once during initial load
+    expect(getMembersMock).toHaveBeenCalled();
+  });
+});
+
 describe("ManageMembers Confirmation Modals", () => {
   const adminProps = {
     publicKey: "GPUBLIC...",
@@ -357,15 +477,22 @@ describe("ManageMembers Confirmation Modals", () => {
     render(<ManageMembers {...adminProps} />);
 
     await waitFor(() => {
-      const revokeButtons = document.querySelectorAll('[title="Revoke membership"]');
-      expect(revokeButtons.length).toBeGreaterThan(0);
+      const actionButtons = document.querySelectorAll('[title="Member actions"]');
+      expect(actionButtons.length).toBeGreaterThan(0);
     });
 
-    // Click the revoke button
-    const revokeButton = document.querySelector('[title="Revoke membership"]');
-    if (revokeButton) {
-      fireEvent.click(revokeButton);
+    // Click the actions menu button (three dots)
+    const actionButton = document.querySelector('[title="Member actions"]');
+    if (actionButton) {
+      fireEvent.click(actionButton);
     }
+
+    // Wait for dropdown menu to appear and click Remove Member
+    await waitFor(() => {
+      expect(screen.getByText("Remove Member")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("Remove Member"));
 
     // Should show confirmation modal
     await waitFor(() => {
@@ -387,15 +514,22 @@ describe("ManageMembers Confirmation Modals", () => {
     render(<ManageMembers {...adminProps} />);
 
     await waitFor(() => {
-      const revokeButtons = document.querySelectorAll('[title="Revoke membership"]');
-      expect(revokeButtons.length).toBeGreaterThan(0);
+      const actionButtons = document.querySelectorAll('[title="Member actions"]');
+      expect(actionButtons.length).toBeGreaterThan(0);
     });
 
-    // Click the revoke button
-    const revokeButton = document.querySelector('[title="Revoke membership"]');
-    if (revokeButton) {
-      fireEvent.click(revokeButton);
+    // Click the actions menu button (three dots)
+    const actionButton = document.querySelector('[title="Member actions"]');
+    if (actionButton) {
+      fireEvent.click(actionButton);
     }
+
+    // Wait for dropdown menu to appear and click Remove Member
+    await waitFor(() => {
+      expect(screen.getByText("Remove Member")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("Remove Member"));
 
     // Wait for modal to appear
     await waitFor(() => {

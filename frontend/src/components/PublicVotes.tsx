@@ -84,15 +84,15 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
           result = await clients.daoRegistry.get_dao({
             dao_id: BigInt(publicDaoId),
           });
-          vkResult = await (clients.voting as any).vk_version({ dao_id: BigInt(publicDaoId) });
-        } catch (err: any) {
+          vkResult = await clients.voting.vk_version({ dao_id: BigInt(publicDaoId) });
+        } catch (err) {
           const errorMessage = err instanceof Error ? err.message : String(err);
           if (errorMessage.includes('Account not found') || errorMessage.includes('does not exist')) {
             const registry = getReadOnlyDaoRegistry();
             result = await registry.get_dao({
               dao_id: BigInt(publicDaoId),
             });
-            const voting = getReadOnlyVoting() as any;
+            const voting = getReadOnlyVoting();
             vkResult = await voting.vk_version({ dao_id: BigInt(publicDaoId) });
           } else {
             throw err;
@@ -103,7 +103,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
         result = await registry.get_dao({
           dao_id: BigInt(publicDaoId),
         });
-        const voting = getReadOnlyVoting() as any;
+        const voting = getReadOnlyVoting();
         vkResult = await voting.vk_version({ dao_id: BigInt(publicDaoId) });
       }
 
@@ -125,7 +125,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
                 of: publicKey,
               });
               hasMembership = membershipResult.result;
-            } catch (err: any) {
+            } catch (err) {
               const errorMessage = err instanceof Error ? err.message : String(err);
               if (errorMessage.includes('Account not found') || errorMessage.includes('does not exist')) {
                 const sbt = getReadOnlyMembershipSbt();
@@ -158,7 +158,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
                 });
                 const onChainLeafIndex = Number(leafIndexResult.result);
                 isRegistered = onChainLeafIndex === cached.leafIndex;
-              } catch (err: any) {
+              } catch (err) {
                 const errorMessage = err instanceof Error ? err.message : String(err);
                 if (errorMessage.includes('Account not found') || errorMessage.includes('does not exist')) {
                   const tree = getReadOnlyMembershipTree();
@@ -172,13 +172,13 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
                   throw err;
                 }
               }
-            } catch (err) {
+            } catch {
               console.log("Cached registration invalid, clearing...");
               isRegistered = false;
             }
           }
-        } catch (err) {
-          console.error("Failed to check membership:", err);
+        } catch (e) {
+          console.error("Failed to check membership:", e);
         }
       }
 
@@ -191,7 +191,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
               dao_id: BigInt(publicDaoId),
             });
             memberCount = Number(countResult.result);
-          } catch (err: any) {
+          } catch (err) {
             const errorMessage = err instanceof Error ? err.message : String(err);
             if (errorMessage.includes('Account not found') || errorMessage.includes('does not exist')) {
               const sbt = getReadOnlyMembershipSbt();
@@ -296,7 +296,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
       localStorage.removeItem(PUBLIC_DAO_CACHE_KEY);
       await loadPublicDAO();
       console.log("[JoinDAO] Join completed successfully");
-    } catch (err: any) {
+    } catch (err) {
       if (isUserRejection(err)) {
         console.log("[JoinDAO] User cancelled joining DAO");
       } else {
@@ -391,7 +391,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
           // Other errors or final retry failed
           console.error("[Registration] Step 2 (signAndSend) failed:", err);
           const enhancedError = new Error(`Transaction signing failed: ${(err as { message?: string })?.message || 'Unknown error'}`);
-          (enhancedError as { originalError: unknown }).originalError = err;
+          (enhancedError as unknown as { originalError: unknown }).originalError = err;
           throw enhancedError;
         }
       }
@@ -446,7 +446,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
 
       console.log(alreadyRegistered ? "[Registration] Credentials recovered! Leaf index:" : "[Registration] Registration successful! Leaf index:", leafIndex);
       await loadPublicDAO();
-    } catch (err: any) {
+    } catch (err) {
       if (isUserRejection(err)) {
         console.log("User cancelled registration");
       } else {
@@ -502,7 +502,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
 
       navigate('/public-votes/');
       setProposalKey(prev => prev + 1);
-    } catch (err: any) {
+    } catch (err) {
       if (isUserRejection(err)) {
         console.log("User cancelled proposal creation");
       } else {

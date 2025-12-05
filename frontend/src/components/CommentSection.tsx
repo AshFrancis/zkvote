@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useMemo } from "react";
 import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 import { MessageSquare, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "./ui/Button";
@@ -6,13 +6,8 @@ import { Card, CardContent, CardHeader } from "./ui/Card";
 import Comment from "./Comment";
 import CommentForm from "./CommentForm";
 import RevisionHistory from "./RevisionHistory";
-import {
-  type CommentWithContent,
-  type CommentInfo,
-  fetchComments,
-  fetchCommentContent,
-  buildCommentTree,
-} from "../lib/comments";
+import { type CommentWithContent } from "../lib/comments";
+import { useCommentsQuery, useInvalidateComments } from "../queries";
 
 // Build a map of nullifiers to anonymous member numbers
 function buildNullifierMap(comments: CommentWithContent[]): Map<string, number> {
@@ -56,53 +51,29 @@ export default function CommentSection({
   eligibleRoot,
   isAdmin,
 }: CommentSectionProps) {
-  const [comments, setComments] = useState<CommentWithContent[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [showRevisions, setShowRevisions] = useState<CommentWithContent | null>(null);
 
-  const loadComments = useCallback(async (showRefreshing = false) => {
-    if (showRefreshing) {
-      setIsRefreshing(true);
-    }
+  // Use React Query for comments
+  const {
+    data: comments = [],
+    isLoading,
+    isFetching: isRefreshing,
+    error: queryError,
+    refetch,
+  } = useCommentsQuery({ daoId, proposalId });
 
-    try {
-      // Fetch comments from relayer
-      const rawComments: CommentInfo[] = await fetchComments(daoId, proposalId);
-
-      // Fetch content for each comment
-      const contentMap = new Map();
-      await Promise.all(
-        rawComments.map(async (c) => {
-          const content = await fetchCommentContent(c.contentCid);
-          contentMap.set(c.contentCid, content);
-        })
-      );
-
-      // Build comment tree
-      const tree = buildCommentTree(rawComments, contentMap);
-      setComments(tree);
-      setError(null);
-    } catch (err) {
-      console.error("Failed to load comments:", err);
-      // Don't show error if endpoint doesn't exist yet
-      if (err instanceof Error && !err.message.includes("404")) {
-        setError("Failed to load comments");
-      }
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [daoId, proposalId]);
-
-  useEffect(() => {
-    loadComments();
-  }, [loadComments]);
+  const invalidateComments = useInvalidateComments();
 
   const handleRefresh = () => {
-    loadComments(true);
+    invalidateComments(daoId, proposalId);
+    refetch();
   };
+
+  // Convert query error to string for display
+  const error =
+    queryError && queryError instanceof Error && !queryError.message.includes("404")
+      ? "Failed to load comments"
+      : null;
 
   const totalComments =
     comments.length +

@@ -1,4 +1,3 @@
-import * as React from "react";
 import { AlertTriangle, Info, X } from "lucide-react";
 import { Button } from "./Button";
 

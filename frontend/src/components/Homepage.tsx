@@ -44,7 +44,7 @@ export function Homepage() {
       {/* Tech Stack Badges */}
       <div className="py-16 border-t border-border/40">
         <div className="text-center mb-8">
-          <p className="text-sm text-muted-foreground">Built with cutting-edge cryptographic primitives</p>
+          <p className="text-sm text-muted-foreground">Built on Stellar with cutting-edge cryptographic primitives</p>
         </div>
         <div className="flex flex-wrap items-center justify-center gap-8 md:gap-16 opacity-60">
           <div className="flex items-center gap-2 text-sm font-medium">
@@ -58,10 +58,6 @@ export function Homepage() {
           <div className="flex items-center gap-2 text-sm font-medium">
             <div className="w-2 h-2 rounded-full bg-green-500"></div>
             Poseidon Hash
-          </div>
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <div className="w-2 h-2 rounded-full bg-orange-500"></div>
-            Stellar Soroban
           </div>
         </div>
       </div>
@@ -383,7 +379,7 @@ export function Homepage() {
             <Button
               variant="outline"
               size="lg"
-              onClick={() => window.open('https://github.com/ashtron/zkvote', '_blank')}
+              onClick={() => window.open('https://github.com/ashfrancis/zkvote', '_blank')}
               className="h-12 px-8"
             >
               View on GitHub

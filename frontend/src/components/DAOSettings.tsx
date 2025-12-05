@@ -5,7 +5,7 @@ import { extractTxHash } from "../lib/utils";
 import { notifyEvent } from "../lib/api";
 import { Button } from "./ui/Button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/Card";
-import { LoadingSpinner } from "./ui";
+// LoadingSpinner is imported but currently unused (may be used for future loading states)
 import { ConfirmModal } from "./ui/ConfirmModal";
 import DAOProfileEditor from "./DAOProfileEditor";
 import { Settings, Users, FileText, Loader2 } from "lucide-react";

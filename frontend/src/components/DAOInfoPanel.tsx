@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 import { initializeContractClients } from "../lib/contracts";
 import { getReadOnlyDaoRegistry, getReadOnlyMembershipSbt, getReadOnlyMembershipTree, getReadOnlyVoting } from "../lib/readOnlyContracts";
-import { LoadingSpinner, Badge, Button } from "./ui";
-import { CheckCircle, Copy, Check, Users, UserPlus, UserMinus, Vote, FileText, Shield, Key, Loader2, Edit } from "lucide-react";
+import { LoadingSpinner, Badge } from "./ui";
+import { CheckCircle, Copy, Check, Users, UserPlus, UserMinus, Vote, FileText, Shield, Key, Edit } from "lucide-react";
 import defaultVK from "../lib/verification_key_soroban.json";
 import ProfileChangesModal from "./ProfileChangesModal";
 
@@ -38,7 +38,7 @@ interface DAODetails {
 interface DAOEvent {
   type: string;
   daoId: number;
-  data: Record<string, any>;
+  data: Record<string, unknown>;
   ledger: number;
   txHash: string;
   timestamp: string | null;
@@ -91,7 +91,7 @@ function formatHex(hex: string, startChars = 8, endChars = 8): string {
 }
 
 // Format event data for display
-function formatEventData(data: Record<string, any>): string {
+function formatEventData(data: Record<string, unknown>): string {
   const parts: string[] = [];
   for (const [key, value] of Object.entries(data)) {
     if (typeof value === 'string' && value.length > 20) {
@@ -99,7 +99,7 @@ function formatEventData(data: Record<string, any>): string {
     } else if (typeof value === 'object') {
       parts.push(`${key}: {...}`);
     } else {
-      parts.push(`${key}: ${value}`);
+      parts.push(`${key}: ${String(value)}`);
     }
   }
   return parts.join(' • ');
@@ -126,7 +126,7 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-export default function DAOInfoPanel({ daoId, publicKey, kit }: DAOInfoPanelProps) {
+export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPanelProps) {
   const [details, setDetails] = useState<DAODetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -187,12 +187,12 @@ export default function DAOInfoPanel({ daoId, publicKey, kit }: DAOInfoPanelProp
           const clients = initializeContractClients(publicKey);
           // Test if account exists by making a simple call
           await clients.daoRegistry.get_dao({ dao_id: BigInt(daoId) });
-          // If successful, use authenticated clients
-          daoRegistry = clients.daoRegistry as any;
-          membershipSbt = clients.membershipSbt as any;
-          membershipTree = clients.membershipTree as any;
-          voting = clients.voting as any;
-        } catch (err) {
+          // If successful, use authenticated clients (same interface as read-only)
+          daoRegistry = clients.daoRegistry;
+          membershipSbt = clients.membershipSbt;
+          membershipTree = clients.membershipTree;
+          voting = clients.voting;
+        } catch {
           // Fall back to read-only
         }
       }
@@ -222,7 +222,7 @@ export default function DAOInfoPanel({ daoId, publicKey, kit }: DAOInfoPanelProp
             merkleRoot: treeInfoResult.result[2]?.toString() || "0",
           };
         }
-      } catch (err) {
+      } catch {
         // Tree not initialized yet - use defaults
         console.log("Tree not initialized for DAO:", daoId);
       }
@@ -241,10 +241,10 @@ export default function DAOInfoPanel({ daoId, publicKey, kit }: DAOInfoPanelProp
           });
 
           // Convert Buffer to hex string
-          const bufferToHex = (buf: any): string => {
+          const bufferToHex = (buf: Uint8Array | number[] | string | Buffer): string => {
             if (typeof buf === 'string') return buf;
             if (buf instanceof Uint8Array || Array.isArray(buf)) {
-              return Array.from(buf).map(b => b.toString(16).padStart(2, '0')).join('');
+              return Array.from(buf).map((b: number) => b.toString(16).padStart(2, '0')).join('');
             }
             return String(buf);
           };

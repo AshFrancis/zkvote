@@ -86,7 +86,7 @@ export default function DAOProfileEditor({
   const [success, setSuccess] = useState(false);
 
   // Track original values for change detection
-  const [originalName, setOriginalName] = useState(daoName);
+  const [_originalName, _setOriginalName] = useState(daoName);
   const [originalProfile, setOriginalProfile] = useState<{
     description: string;
     coverImageCid: string | null;
@@ -208,7 +208,8 @@ export default function DAOProfileEditor({
       }
 
       let newMetadataCid: string | null = metadataCid;
-      let result: any;
+      // Transaction result - the SDK returns the result with transaction hash we need to extract
+      let result: { getTransactionResponse?: { hash?: string }; hash?: string } | undefined;
 
       // Only upload metadata if content actually changed
       if (metadataContentChanged) {
@@ -281,7 +282,7 @@ export default function DAOProfileEditor({
         };
 
         const oldProfile = {
-          name: originalName,
+          name: daoName,
           description: originalProfile?.description || "",
           coverImageCid: originalProfile?.coverImageCid || null,
           profileImageCid: originalProfile?.profileImageCid || null,

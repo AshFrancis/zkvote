@@ -376,7 +376,8 @@ function CreatingDAO() {
         <h4 className="font-semibold mb-2">Admin Responsibility</h4>
         <p className="text-sm text-muted-foreground leading-relaxed">
           Admin privileges are tied to your wallet address. If you lose access to your wallet,
-          you lose admin access to your DAO. There's currently no way to transfer admin rights.
+          you lose admin access to your DAO. You can transfer admin rights to another member
+          using the "Make Admin" option in the member actions menu (3-dot icon next to each member).
         </p>
       </div>
     </div>
@@ -396,14 +397,18 @@ function CreatingProposal() {
 
       <div>
         <h3 className="text-lg font-semibold mb-4">Who Can Create Proposals</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Only DAO members with an SBT (Soulbound Token) can create proposals. The DAO's settings control
+          whether all members can propose or only the admin.
+        </p>
         <div className="space-y-3">
           <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border">
             <svg className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
             </svg>
             <div>
-              <span className="font-medium">Closed DAOs</span>
-              <p className="text-sm text-muted-foreground mt-0.5">Only members with an SBT can create proposals</p>
+              <span className="font-medium">Members can propose (default)</span>
+              <p className="text-sm text-muted-foreground mt-0.5">Any member with an SBT can create proposals</p>
             </div>
           </div>
           <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border">
@@ -411,8 +416,8 @@ function CreatingProposal() {
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
             </svg>
             <div>
-              <span className="font-medium">Open DAOs</span>
-              <p className="text-sm text-muted-foreground mt-0.5">Anyone can create proposals, even non-members</p>
+              <span className="font-medium">Admin-only proposals</span>
+              <p className="text-sm text-muted-foreground mt-0.5">Only the DAO admin can create proposals</p>
             </div>
           </div>
         </div>
@@ -884,10 +889,10 @@ function TechnicalDeepDive() {
           The vote circuit (written in Circom) proves the following statement:
         </p>
         <div className="p-6 rounded-lg border bg-card font-mono text-sm">
-          <p className="text-muted-foreground mb-2">// Public inputs</p>
-          <p>root, nullifier, daoId, proposalId, voteChoice, commitment</p>
+          <p className="text-muted-foreground mb-2">// Public inputs (5 signals)</p>
+          <p>root, nullifier, daoId, proposalId, voteChoice</p>
           <p className="text-muted-foreground mt-4 mb-2">// Private inputs</p>
-          <p>secret, salt, pathElements[], pathIndices[]</p>
+          <p>secret, salt, commitment, pathElements[], pathIndices[]</p>
           <p className="text-muted-foreground mt-4 mb-2">// Constraints</p>
           <p>1. commitment == Poseidon(secret, salt)</p>
           <p>2. MerkleProof(commitment, pathElements) == root</p>

@@ -88,7 +88,7 @@ export default function ProposalCard({
           const data = await res.json();
           setMetadata(data);
           setLoadingMetadata(false);
-        } catch (err) {
+        } catch {
           const newRetryCount = retryCount + 1;
           setRetryCount(newRetryCount);
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "./ui/Button";
 import Alert from "./ui/Alert";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "./ui/Card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/Card";
 import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 import { initializeContractClients } from "../lib/contracts";
 import { relayerFetch } from "../lib/api";
@@ -17,7 +17,6 @@ import {
   getZKCredentials,
   storeZKCredentials,
 } from "../lib/zk";
-import { LoadingSpinner } from "./ui";
 import { CheckCircle, XCircle, AlertTriangle, Loader2, X } from "lucide-react";
 
 interface VoteModalProps {
@@ -38,7 +37,7 @@ export default function VoteModal({
   proposalId,
   eligibleRoot,
   voteMode,
-  vkVersion,
+  vkVersion: _vkVersion,
   daoId,
   publicKey,
   kit,

@@ -73,7 +73,7 @@ function getCachedDaoInfo(daoId: number): DAOInfo | null {
   return null;
 }
 
-export default function ProposalPage({ publicKey, kit, isInitializing }: ProposalPageProps) {
+export default function ProposalPage({ publicKey, kit, isInitializing: _isInitializing }: ProposalPageProps) {
   const { daoSlug, proposalSlug } = useParams<{ daoSlug: string; proposalSlug: string }>();
   const navigate = useNavigate();
 
@@ -90,10 +90,8 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
   const [loadingMetadata, setLoadingMetadata] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showVoteModal, setShowVoteModal] = useState(false);
-  const [hasMembership, setHasMembership] = useState(() => {
-    const cached = numericDaoId ? getCachedDaoInfo(numericDaoId) : null;
-    return cached?.hasMembership || false;
-  });
+  // Start with false - membership is set by fresh on-chain check (not cached)
+  const [hasMembership, setHasMembership] = useState(false);
   const [joining, setJoining] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [registrationStatus, setRegistrationStatus] = useState<string | null>(null);
@@ -111,6 +109,7 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
       setIsRegistered(false);
     }
   }, [publicKey, numericDaoId]);
+
 
   // Generate slug for navigation - use DAO name if available, otherwise fallback to original slug
   const daoSlugForNav = numericDaoId && dao?.name ? toIdSlug(numericDaoId, dao.name) : daoSlug || '';
@@ -154,14 +153,16 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
     const now = Date.now();
     const isCacheValid = cached && cacheTime && (now - parseInt(cacheTime, 10)) < CACHE_TTL_MS;
 
-    // Show cached data immediately for fast UX
+    // Show cached data immediately for fast UX (but always refresh membership)
     if (cached) {
       const cachedDao = JSON.parse(cached);
       setDao(cachedDao);
-      setHasMembership(cachedDao.hasMembership || false);
+      // Don't trust cached membership - always refresh it from chain
+      // setHasMembership(cachedDao.hasMembership || false);
 
-      // If cache is still valid, don't refresh
-      if (isCacheValid) {
+      // For non-membership data, return early if cache is valid
+      // But we still need to check membership freshly (done below)
+      if (isCacheValid && !publicKey) {
         return;
       }
     }
@@ -209,12 +210,14 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
           membershipOpen: daoData.membership_open,
         };
 
-        // Only update state if data changed
+        // Always update membership from fresh on-chain check
+        setHasMembership(userHasMembership);
+
+        // Only update DAO state if data changed (avoid unnecessary re-renders)
         const cachedStr = localStorage.getItem(cacheKey);
         const newStr = JSON.stringify(daoInfo);
         if (cachedStr !== newStr) {
           setDao(daoInfo);
-          setHasMembership(userHasMembership);
         }
 
         // Update cache with timestamp
@@ -291,15 +294,13 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
         eligibleRoot: proposalData.eligible_root,
         voteMode: proposalData.vote_mode.tag as "Fixed" | "Trailing",
         endTime: Number(proposalData.end_time),
-        vkVersion: (proposalData as any).vk_version !== undefined
-          ? Number((proposalData as any).vk_version)
+        vkVersion: 'vk_version' in proposalData && proposalData.vk_version !== undefined
+          ? Number(proposalData.vk_version)
           : null,
       });
 
-      // Check membership status
-      if (publicKey) {
-        setHasMembership(!!getZKCredentials(numericDaoId, publicKey));
-      }
+      // Note: hasMembership is set by the fresh on-chain check in useEffect,
+      // not from local ZK credentials (which persist after SBT revocation)
     } catch (err) {
       console.error("Failed to load proposal:", err);
       setError(err instanceof Error ? err.message : "Failed to load proposal");
@@ -413,15 +414,15 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
       });
 
       // Helper to check if error is CommitmentExists (error #5 from tree contract)
-      const isCommitmentExistsError = (err: any): boolean => {
-        const errStr = err?.message || err?.toString() || '';
+      const isCommitmentExistsError = (err: unknown): boolean => {
+        const errStr = (err as { message?: string })?.message || String(err);
         return errStr.includes('#5') || errStr.includes('Error(Contract, #5)');
       };
 
       let alreadyRegistered = false;
       try {
         await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
-      } catch (err: any) {
+      } catch (err) {
         // Check if this is a CommitmentExists error - means we're already registered
         if (isCommitmentExistsError(err)) {
           console.log("[Registration] Commitment already exists on-chain - recovering credentials");
@@ -842,7 +843,7 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
         )}
       </div>
 
-      {showVoteModal && numericDaoId !== null && (
+      {showVoteModal && numericDaoId !== null && proposal && (
         <VoteModal
           proposalId={proposal.id}
           eligibleRoot={proposal.eligibleRoot}

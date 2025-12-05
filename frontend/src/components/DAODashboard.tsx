@@ -25,7 +25,7 @@ import ProposalList from "./ProposalList";
 import ManageMembers from "./ManageMembers";
 import DAOInfoPanel from "./DAOInfoPanel";
 import DAOSettings from "./DAOSettings";
-import { Shield, Users, Lock, Unlock, FileText, CheckCircle, PlusCircle, Home, Settings, Globe, ExternalLink, ChevronDown, ChevronUp, Menu } from "lucide-react";
+import { Shield, Users, Lock, Unlock, FileText, CheckCircle, PlusCircle, Home, Settings, Globe, ChevronDown, ChevronUp } from "lucide-react";
 
 // Custom social icons
 const TwitterIcon = ({ className }: { className?: string }) => (
@@ -191,7 +191,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
         setIsRegistered(false);
         setHasUnregisteredCredentials(false);
       }
-    } catch (err) {
+    } catch {
       setIsRegistered(false);
       setHasUnregisteredCredentials(true);
     }
@@ -385,17 +385,17 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
 
       setRegistrationStatus("Step 2/2: Registering Commitment");
       console.log("[Registration] Step 2: Registering commitment in Merkle tree...");
-      const clients = initializeContractClients(publicKey);
+      const clients = initializeContractClients(publicKey || "");
 
       const tx = await clients.membershipTree.register_with_caller({
         dao_id: BigInt(daoId),
         commitment: BigInt(commitment),
-        caller: publicKey,
+        caller: publicKey || "",
       });
 
       // Helper to check if error is CommitmentExists (error #5 from tree contract)
-      const isCommitmentExistsError = (err: any): boolean => {
-        const errStr = err?.message || err?.toString() || '';
+      const isCommitmentExistsError = (err: unknown): boolean => {
+        const errStr = (err as { message?: string })?.message || String(err);
         return errStr.includes('#5') || errStr.includes('Error(Contract, #5)');
       };
 
@@ -406,15 +406,16 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
         const result = await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
         console.log("[Registration] Step 2 complete - Transaction signed and sent:", result);
         txHash = extractTxHash(result);
-      } catch (err: any) {
+      } catch (err) {
         // Check if this is a CommitmentExists error - means we're already registered
         if (isCommitmentExistsError(err)) {
           console.log("[Registration] Commitment already exists on-chain - recovering credentials");
           alreadyRegistered = true;
         } else {
           console.error("[Registration] Step 2 (signAndSend) failed:", err);
-          const enhancedError = new Error(`Transaction signing failed: ${err?.message || 'Unknown error'}`);
-          (enhancedError as any).originalError = err;
+          const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+          const enhancedError = new Error(`Transaction signing failed: ${errorMessage}`);
+          (enhancedError as Error & { originalError: unknown }).originalError = err;
           throw enhancedError;
         }
       }
@@ -440,7 +441,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
       setHasUnregisteredCredentials(false);
       setRegistrationStatus(alreadyRegistered ? "Credentials recovered!" : "Registration complete!");
       console.log(alreadyRegistered ? "Credentials recovered! Leaf index:" : "Registration successful! Leaf index:", leafIndex);
-    } catch (err: any) {
+    } catch (err) {
       if (isUserRejection(err)) {
         console.log("User cancelled registration");
         setRegistrationStatus(null);
@@ -459,7 +460,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
       setJoining(true);
       setError(null);
 
-      const clients = initializeContractClients(publicKey);
+      const clients = initializeContractClients(publicKey || "");
 
       if (!kit) {
         throw new Error("Wallet kit not available");
@@ -467,7 +468,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
 
       const tx = await clients.membershipSbt.self_join({
         dao_id: BigInt(daoId),
-        member: publicKey,
+        member: publicKey || "",
         encrypted_alias: undefined,
       });
 
@@ -513,7 +514,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
       setCreatingProposal(true);
       setError(null);
 
-      const clients = initializeContractClients(publicKey);
+      const clients = initializeContractClients(publicKey || "");
 
       let endTime: bigint;
       if (data.deadlineSeconds === 0) {
@@ -527,7 +528,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
         title: data.title,
         content_cid: data.contentCid,
         end_time: endTime,
-        creator: publicKey,
+        creator: publicKey || "",
         vote_mode: { tag: data.voteMode === "fixed" ? "Fixed" : "Trailing", values: void 0 },
       });
 
