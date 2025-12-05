@@ -109,110 +109,116 @@ export function assertValidNullifier(nullifier: bigint | string): void {
 /**
  * DAO Registry contract error codes
  */
-export enum RegistryError {
-  NameTooLong = 1,
-  DaoNotFound = 2,
-  NotAdmin = 3,
-  MetadataCidTooLong = 4,
-}
+export const RegistryError = {
+  NameTooLong: 1,
+  DaoNotFound: 2,
+  NotAdmin: 3,
+  MetadataCidTooLong: 4,
+} as const;
+export type RegistryError = (typeof RegistryError)[keyof typeof RegistryError];
 
 /**
  * Membership SBT contract error codes
  */
-export enum SbtError {
-  NotDaoAdmin = 1,
-  AlreadyMinted = 2,
-  NotMember = 3,
-  NotOpenMembership = 4,
-  AlreadyInitialized = 5,
-}
+export const SbtError = {
+  NotDaoAdmin: 1,
+  AlreadyMinted: 2,
+  NotMember: 3,
+  NotOpenMembership: 4,
+  AlreadyInitialized: 5,
+} as const;
+export type SbtError = (typeof SbtError)[keyof typeof SbtError];
 
 /**
  * Membership Tree contract error codes
  */
-export enum TreeError {
-  NotAdmin = 1,
-  InvalidDepth = 2,
-  TreeInitialized = 3,
-  TreeNotInitialized = 4,
-  CommitmentExists = 5,
-  MemberExists = 6,
-  TreeFull = 7,
-  NoSbt = 8,
-  NotOpenMembership = 9,
-  LeafOutOfBounds = 10,
-  MemberRemoved = 11,
-  MemberNotInTree = 12,
-  RootNotFound = 13,
-  AlreadyInitialized = 14,
-  MemberNotRevoked = 15,
-}
+export const TreeError = {
+  NotAdmin: 1,
+  InvalidDepth: 2,
+  TreeInitialized: 3,
+  TreeNotInitialized: 4,
+  CommitmentExists: 5,
+  MemberExists: 6,
+  TreeFull: 7,
+  NoSbt: 8,
+  NotOpenMembership: 9,
+  LeafOutOfBounds: 10,
+  MemberRemoved: 11,
+  MemberNotInTree: 12,
+  RootNotFound: 13,
+  AlreadyInitialized: 14,
+  MemberNotRevoked: 15,
+} as const;
+export type TreeError = (typeof TreeError)[keyof typeof TreeError];
 
 /**
  * Voting contract error codes
  */
-export enum VotingError {
-  NotAdmin = 1,
-  VkIcLengthMismatch = 2,
-  VkIcTooLarge = 3,
-  TitleTooLong = 4,
-  NotDaoMember = 5,
-  EndTimeInvalid = 6,
-  NullifierUsed = 7,
-  VotingClosed = 8,
-  CommitmentRevokedAtCreation = 9,
-  CommitmentRevokedDuringVoting = 10,
-  RootMismatch = 11,
-  RootNotInHistory = 12,
-  RootPredatesProposal = 13,
-  VkChanged = 14,
-  InvalidProof = 15,
-  VkNotSet = 16,
-  VkVersionMismatch = 17,
-  AlreadyInitialized = 18,
-  Unauthorized = 19,
-  InvalidState = 20,
-  InvalidContentCid = 21,
-  OnlyAdminCanPropose = 22,
-  InvalidG1Point = 23,
-  RootPredatesRemoval = 24,
-  SignalNotInField = 25,
-  InvalidNullifier = 26,
-}
+export const VotingError = {
+  NotAdmin: 1,
+  VkIcLengthMismatch: 2,
+  VkIcTooLarge: 3,
+  TitleTooLong: 4,
+  NotDaoMember: 5,
+  EndTimeInvalid: 6,
+  NullifierUsed: 7,
+  VotingClosed: 8,
+  CommitmentRevokedAtCreation: 9,
+  CommitmentRevokedDuringVoting: 10,
+  RootMismatch: 11,
+  RootNotInHistory: 12,
+  RootPredatesProposal: 13,
+  VkChanged: 14,
+  InvalidProof: 15,
+  VkNotSet: 16,
+  VkVersionMismatch: 17,
+  AlreadyInitialized: 18,
+  Unauthorized: 19,
+  InvalidState: 20,
+  InvalidContentCid: 21,
+  OnlyAdminCanPropose: 22,
+  InvalidG1Point: 23,
+  RootPredatesRemoval: 24,
+  SignalNotInField: 25,
+  InvalidNullifier: 26,
+} as const;
+export type VotingError = (typeof VotingError)[keyof typeof VotingError];
 
 /**
  * Comments contract error codes
  */
-export enum CommentsError {
-  NotAdmin = 1,
-  NotDaoMember = 5,
-  CommitmentRevoked = 9,
-  RootNotInHistory = 12,
-  InvalidProof = 15,
-  ContractNotSet = 16,
-  AlreadyInitialized = 18,
-  Unauthorized = 19,
-  CommentNotFound = 22,
-  CommentDeleted = 23,
-  NotCommentOwner = 24,
-  InvalidParentComment = 25,
-  CommentContentTooLong = 27,
-  ProposalNotFound = 28,
-  RootMismatch = 29,
-  RootPredatesProposal = 30,
-  SignalNotInField = 31,
-  InvalidNullifier = 32,
-  RootPredatesRemoval = 33,
-}
+export const CommentsError = {
+  NotAdmin: 1,
+  NotDaoMember: 5,
+  CommitmentRevoked: 9,
+  RootNotInHistory: 12,
+  InvalidProof: 15,
+  ContractNotSet: 16,
+  AlreadyInitialized: 18,
+  Unauthorized: 19,
+  CommentNotFound: 22,
+  CommentDeleted: 23,
+  NotCommentOwner: 24,
+  InvalidParentComment: 25,
+  CommentContentTooLong: 27,
+  ProposalNotFound: 28,
+  RootMismatch: 29,
+  RootPredatesProposal: 30,
+  SignalNotInField: 31,
+  InvalidNullifier: 32,
+  RootPredatesRemoval: 33,
+} as const;
+export type CommentsError = (typeof CommentsError)[keyof typeof CommentsError];
 
 /**
  * Groth16 verification error codes (shared between contracts)
  */
-export enum Groth16Error {
-  IcLengthMismatch = 30,
-  SignalNotInField = 31,
-  InvalidNullifier = 32,
-}
+export const Groth16Error = {
+  IcLengthMismatch: 30,
+  SignalNotInField: 31,
+  InvalidNullifier: 32,
+} as const;
+export type Groth16Error = (typeof Groth16Error)[keyof typeof Groth16Error];
 
 /**
  * Human-readable error messages for contract errors

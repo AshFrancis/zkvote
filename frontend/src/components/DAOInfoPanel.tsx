@@ -35,10 +35,15 @@ interface DAODetails {
   } | null;
 }
 
+interface ProfileChange {
+  old: string | null;
+  new: string | null;
+}
+
 interface DAOEvent {
   type: string;
   daoId: number;
-  data: Record<string, unknown>;
+  data: Record<string, unknown> & { changes?: Record<string, ProfileChange> };
   ledger: number;
   txHash: string;
   timestamp: string | null;
@@ -497,7 +502,7 @@ export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPan
                         {formatEventData(event.data)}
                       </p>
                     )}
-                    {hasChanges && (
+                    {hasChanges && event.data.changes && (
                       <button
                         onClick={() => setSelectedProfileEvent(event)}
                         className="text-xs text-primary hover:underline"

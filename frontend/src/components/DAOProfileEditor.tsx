@@ -208,8 +208,9 @@ export default function DAOProfileEditor({
       }
 
       let newMetadataCid: string | null = metadataCid;
-      // Transaction result - the SDK returns the result with transaction hash we need to extract
-      let result: { getTransactionResponse?: { hash?: string }; hash?: string } | undefined;
+      // Transaction result - use unknown since SDK types may vary, we extract hash via helper
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let result: any;
 
       // Only upload metadata if content actually changed
       if (metadataContentChanged) {

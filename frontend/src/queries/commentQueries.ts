@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type CommentWithContent,
   type CommentInfo,
+  type CommentMetadata,
   fetchComments,
   fetchCommentContent,
   buildCommentTree,
@@ -25,7 +26,7 @@ async function fetchCommentsWithContent(
   const rawComments: CommentInfo[] = await fetchComments(daoId, proposalId);
 
   // Fetch content for each comment in parallel
-  const contentMap = new Map<string, string>();
+  const contentMap = new Map<string, CommentMetadata | null>();
   await Promise.all(
     rawComments.map(async (c) => {
       const content = await fetchCommentContent(c.contentCid);

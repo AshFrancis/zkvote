@@ -56,12 +56,12 @@ async function deriveKeyFromSignatureAsync(
     }
   } else if (typeof signature === 'object' && signature !== null) {
     // Handle object that might have signature property or be array-like
-    if ('signedMessage' in signature) {
+    if ('signedMessage' in signature && typeof signature.signedMessage !== 'number') {
       // Stellar wallet format (Freighter, etc.)
       return deriveKeyFromSignatureAsync(signature.signedMessage, daoId);
-    } else if ('signature' in signature) {
+    } else if ('signature' in signature && typeof signature.signature !== 'number') {
       return deriveKeyFromSignatureAsync(signature.signature, daoId);
-    } else if ('data' in signature) {
+    } else if ('data' in signature && typeof signature.data !== 'number') {
       return deriveKeyFromSignatureAsync(signature.data, daoId);
     } else if (typeof Buffer !== 'undefined' && Buffer.isBuffer(signature)) {
       sigBytes = new Uint8Array(signature);

@@ -1,11 +1,17 @@
 declare module 'circomlibjs' {
   /**
    * Field element type used by Poseidon
+   * Can be the internal type or primitive inputs
    */
-  interface FieldElement {
+  type FieldElement = {
     toString(): string;
     toBigInt(): bigint;
-  }
+  };
+
+  /**
+   * Input type that Poseidon accepts (bigint, number, or string)
+   */
+  type PoseidonInput = bigint | number | string | FieldElement;
 
   /**
    * Field operations interface
@@ -13,13 +19,15 @@ declare module 'circomlibjs' {
   interface PoseidonField {
     e(value: bigint | number | string): FieldElement;
     toObject(element: FieldElement): bigint;
+    toString(element: FieldElement | PoseidonInput): string;
   }
 
   /**
    * Poseidon hash function instance
+   * Accepts arrays of bigint, number, string, or FieldElement
    */
   interface PoseidonHasher {
-    (inputs: FieldElement[]): FieldElement;
+    (inputs: PoseidonInput[]): FieldElement;
     F: PoseidonField;
   }
 
