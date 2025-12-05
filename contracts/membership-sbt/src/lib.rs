@@ -327,7 +327,7 @@ impl MembershipSbt {
         admin.require_auth();
 
         // Verify this admin owns the DAO (cross-contract call to registry)
-        let registry: Address = env.storage().instance().get(&REGISTRY).unwrap();
+        let registry: Address = Self::registry_addr(&env);
         let dao_admin: Address = env.invoke_contract(
             &registry,
             &symbol_short!("get_admin"),

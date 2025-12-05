@@ -298,7 +298,7 @@ impl MembershipTree {
             .storage()
             .persistent()
             .get(&DataKey::NextLeafIndex(dao_id))
-            .unwrap();
+            .unwrap_or_else(|| panic_with_error!(&env, TreeError::TreeNotInitialized));
 
         if next_index >= (1u32 << depth) {
             panic_with_error!(&env, TreeError::TreeFull);
@@ -368,12 +368,16 @@ impl MembershipTree {
         }
 
         // Get tree parameters
-        let depth: u32 = env.storage().persistent().get(&depth_key).unwrap();
+        let depth: u32 = env
+            .storage()
+            .persistent()
+            .get(&depth_key)
+            .unwrap_or_else(|| panic_with_error!(&env, TreeError::TreeNotInitialized));
         let next_index: u32 = env
             .storage()
             .persistent()
             .get(&DataKey::NextLeafIndex(dao_id))
-            .unwrap();
+            .unwrap_or_else(|| panic_with_error!(&env, TreeError::TreeNotInitialized));
 
         if next_index >= (1u32 << depth) {
             panic_with_error!(&env, TreeError::TreeFull);
@@ -462,12 +466,16 @@ impl MembershipTree {
         }
 
         // Get tree parameters
-        let depth: u32 = env.storage().persistent().get(&depth_key).unwrap();
+        let depth: u32 = env
+            .storage()
+            .persistent()
+            .get(&depth_key)
+            .unwrap_or_else(|| panic_with_error!(&env, TreeError::TreeNotInitialized));
         let next_index: u32 = env
             .storage()
             .persistent()
             .get(&DataKey::NextLeafIndex(dao_id))
-            .unwrap();
+            .unwrap_or_else(|| panic_with_error!(&env, TreeError::TreeNotInitialized));
 
         if next_index >= (1u32 << depth) {
             panic_with_error!(&env, TreeError::TreeFull);
@@ -578,7 +586,7 @@ impl MembershipTree {
             .storage()
             .persistent()
             .get(&DataKey::NextLeafIndex(dao_id))
-            .unwrap();
+            .unwrap_or_else(|| panic_with_error!(&env, TreeError::TreeNotInitialized));
         let root = Self::current_root(env, dao_id);
         (depth, next_index, root)
     }
@@ -595,13 +603,13 @@ impl MembershipTree {
             .storage()
             .persistent()
             .get(&DataKey::TreeDepth(dao_id))
-            .expect("tree not initialized");
+            .unwrap_or_else(|| panic_with_error!(&env, TreeError::TreeNotInitialized));
 
         let next_index: u32 = env
             .storage()
             .persistent()
             .get(&DataKey::NextLeafIndex(dao_id))
-            .unwrap();
+            .unwrap_or_else(|| panic_with_error!(&env, TreeError::TreeNotInitialized));
 
         if leaf_index >= next_index {
             panic_with_error!(&env, TreeError::LeafOutOfBounds);
@@ -717,6 +725,19 @@ impl MembershipTree {
             .persistent()
             .set(&DataKey::MinValidRootIdx(dao_id), &root_index);
 
+        // Also revoke the member's SBT in the same transaction
+        // The admin has already called require_auth(), so the SBT contract will accept this
+        env.invoke_contract::<()>(
+            &sbt_contract,
+            &symbol_short!("revoke"),
+            soroban_sdk::vec![
+                &env,
+                dao_id.into_val(&env),
+                member.clone().into_val(&env),
+                admin.into_val(&env),
+            ],
+        );
+
         RemovalEvent {
             dao_id,
             member,
@@ -817,7 +838,7 @@ impl MembershipTree {
             .storage()
             .persistent()
             .get(&DataKey::FilledSubtrees(dao_id))
-            .unwrap();
+            .unwrap_or_else(|| panic_with_error!(env, TreeError::TreeNotInitialized));
 
         // Fast path for first leaf (index 0): pre-compute root directly
         // Since all siblings are zeros, we can compute the root in a tight loop
@@ -847,12 +868,14 @@ impl MembershipTree {
                 .storage()
                 .persistent()
                 .get(&DataKey::Roots(dao_id))
-                .unwrap();
+                .unwrap_or_else(|| panic_with_error!(env, TreeError::TreeNotInitialized));
             roots.push_back(current_hash.clone());
             if roots.len() > MAX_ROOTS {
                 let mut new_roots = Vec::new(env);
                 for i in 1..roots.len() {
-                    new_roots.push_back(roots.get(i).unwrap());
+                    if let Some(r) = roots.get(i) {
+                        new_roots.push_back(r);
+                    }
                 }
                 roots = new_roots;
             }
@@ -865,7 +888,7 @@ impl MembershipTree {
                 .storage()
                 .persistent()
                 .get(&DataKey::NextRootIndex(dao_id))
-                .unwrap();
+                .unwrap_or(0);
             env.storage()
                 .persistent()
                 .set(&DataKey::NextRootIndex(dao_id), &(root_index + 1));
@@ -892,7 +915,9 @@ impl MembershipTree {
                 current_hash = Self::hash_pair(env, &current_hash, &zero_at_level);
             } else {
                 // Right child - use filled subtree from left
-                let left = filled.get(level).unwrap();
+                let left = filled
+                    .get(level)
+                    .unwrap_or_else(|| Self::zero_at_level(env, level));
                 current_hash = Self::hash_pair(env, &left, &current_hash);
             }
             // Store intermediate node hash at level+1 (since level 0 is leaves)
@@ -914,7 +939,7 @@ impl MembershipTree {
             .storage()
             .persistent()
             .get(&DataKey::Roots(dao_id))
-            .unwrap();
+            .unwrap_or_else(|| panic_with_error!(env, TreeError::TreeNotInitialized));
 
         roots.push_back(current_hash.clone());
 
@@ -922,7 +947,9 @@ impl MembershipTree {
         if roots.len() > MAX_ROOTS {
             let mut new_roots = Vec::new(env);
             for i in 1..roots.len() {
-                new_roots.push_back(roots.get(i).unwrap());
+                if let Some(r) = roots.get(i) {
+                    new_roots.push_back(r);
+                }
             }
             roots = new_roots;
         }
@@ -936,7 +963,7 @@ impl MembershipTree {
             .storage()
             .persistent()
             .get(&DataKey::NextRootIndex(dao_id))
-            .unwrap();
+            .unwrap_or(0);
         env.storage()
             .persistent()
             .set(&DataKey::NextRootIndex(dao_id), &(root_index + 1));
@@ -958,7 +985,7 @@ impl MembershipTree {
             .storage()
             .persistent()
             .get(&DataKey::TreeDepth(dao_id))
-            .unwrap();
+            .unwrap_or_else(|| panic_with_error!(env, TreeError::TreeNotInitialized));
 
         // Update the leaf value
         env.storage()
@@ -1015,7 +1042,7 @@ impl MembershipTree {
             .storage()
             .persistent()
             .get(&DataKey::Roots(dao_id))
-            .unwrap();
+            .unwrap_or_else(|| panic_with_error!(env, TreeError::TreeNotInitialized));
 
         roots.push_back(current_hash.clone());
 
@@ -1023,7 +1050,9 @@ impl MembershipTree {
         if roots.len() > MAX_ROOTS {
             let mut new_roots = Vec::new(env);
             for i in 1..roots.len() {
-                new_roots.push_back(roots.get(i).unwrap());
+                if let Some(r) = roots.get(i) {
+                    new_roots.push_back(r);
+                }
             }
             roots = new_roots;
         }
@@ -1037,7 +1066,7 @@ impl MembershipTree {
             .storage()
             .persistent()
             .get(&DataKey::NextRootIndex(dao_id))
-            .unwrap();
+            .unwrap_or(0);
         env.storage()
             .persistent()
             .set(&DataKey::NextRootIndex(dao_id), &(root_index + 1));
@@ -1069,9 +1098,17 @@ impl MembershipTree {
     fn hash_pair(env: &Env, left: &U256, right: &U256) -> U256 {
         Self::ensure_poseidon_params_cached(env);
 
-        // Load cached params from persistent storage
-        let mds: Vec<Vec<U256>> = env.storage().persistent().get(&POSEIDON_MDS).unwrap();
-        let rc: Vec<Vec<U256>> = env.storage().persistent().get(&POSEIDON_RC).unwrap();
+        // Load cached params from persistent storage (safe: ensure_poseidon_params_cached guarantees these exist)
+        let mds: Vec<Vec<U256>> = env
+            .storage()
+            .persistent()
+            .get(&POSEIDON_MDS)
+            .unwrap_or_else(|| panic_with_error!(env, TreeError::TreeNotInitialized));
+        let rc: Vec<Vec<U256>> = env
+            .storage()
+            .persistent()
+            .get(&POSEIDON_RC)
+            .unwrap_or_else(|| panic_with_error!(env, TreeError::TreeNotInitialized));
 
         // Sponge construction: state = [0, left, right]
         let zero = U256::from_u32(env, 0);
@@ -1090,8 +1127,10 @@ impl MembershipTree {
             &rc,
         );
 
-        // Output is first element of state
-        result.get(0).unwrap()
+        // Output is first element of state (always exists after Poseidon permutation)
+        result
+            .get(0)
+            .unwrap_or_else(|| panic_with_error!(env, TreeError::TreeNotInitialized))
     }
 
     // Internal: Zero value (empty leaf)
@@ -1124,8 +1163,14 @@ impl MembershipTree {
     // Internal: O(1) lookup for precomputed zero at each level
     fn zero_at_level(env: &Env, level: u32) -> U256 {
         Self::ensure_zeros_cache(env);
-        let zeros: Vec<U256> = env.storage().instance().get(&ZEROS_CACHE).unwrap();
-        zeros.get(level).unwrap()
+        let zeros: Vec<U256> = env
+            .storage()
+            .instance()
+            .get(&ZEROS_CACHE)
+            .unwrap_or_else(|| panic_with_error!(env, TreeError::TreeNotInitialized));
+        zeros
+            .get(level)
+            .unwrap_or_else(|| panic_with_error!(env, TreeError::InvalidDepth))
     }
 
     /// Contract version for upgrade tracking.

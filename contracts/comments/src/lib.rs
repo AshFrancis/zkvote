@@ -9,7 +9,8 @@
 //! - Comment contract: just verifies proof for membership (allows multiple comments)
 //!
 //! ## Public Signals (Vote Circuit - shared with voting contract)
-//! [root, nullifier, daoId, proposalId, voteChoice, commitment]
+//! [root, nullifier, daoId, proposalId, voteChoice] - 5 signals
+//! Note: commitment is computed internally in the circuit (private input)
 //!
 //! The voteChoice signal is ignored for comments - we just verify membership.
 
@@ -383,8 +384,9 @@ impl Comments {
         // Get VK from voting contract (single source of truth)
         let vk = Self::get_vk_from_voting(&env, dao_id);
 
-        // Public signals: [root, nullifier, daoId, proposalId, voteChoice, commitment]
+        // Public signals: [root, nullifier, daoId, proposalId, voteChoice]
         // Same as vote circuit - we just ignore voteChoice value for comments
+        // NOTE: commitment is computed internally in the circuit (private input)
         let dao_signal = U256::from_u128(&env, dao_id as u128);
         let proposal_signal = U256::from_u128(&env, proposal_id as u128);
         let choice_signal = if vote_choice {
@@ -399,9 +401,12 @@ impl Comments {
             nullifier.clone(),
             dao_signal,
             proposal_signal,
-            choice_signal,
-            commitment.clone()
+            choice_signal
         ];
+
+        // Ignore commitment parameter - it's not used for verification since the vote
+        // circuit computes commitment internally from secret+salt (private inputs)
+        let _ = commitment;
 
         if !Self::verify_groth16(&env, &vk, &proof, &pub_signals) {
             panic_with_error!(&env, CommentsError::InvalidProof);
@@ -534,6 +539,8 @@ impl Comments {
         // Verify ZK proof using VK from voting contract
         let vk = Self::get_vk_from_voting(&env, dao_id);
 
+        // Public signals: [root, nullifier, daoId, proposalId, voteChoice]
+        // commitment is computed internally in the circuit (private input)
         let dao_signal = U256::from_u128(&env, dao_id as u128);
         let proposal_signal = U256::from_u128(&env, proposal_id as u128);
         let choice_signal = if vote_choice {
@@ -548,9 +555,11 @@ impl Comments {
             nullifier.clone(),
             dao_signal,
             proposal_signal,
-            choice_signal,
-            commitment.clone()
+            choice_signal
         ];
+
+        // Ignore commitment parameter - it's not used for verification
+        let _ = commitment;
 
         if !Self::verify_groth16(&env, &vk, &proof, &pub_signals) {
             panic_with_error!(&env, CommentsError::InvalidProof);
@@ -646,6 +655,8 @@ impl Comments {
         // Verify ZK proof using VK from voting contract
         let vk = Self::get_vk_from_voting(&env, dao_id);
 
+        // Public signals: [root, nullifier, daoId, proposalId, voteChoice]
+        // commitment is computed internally in the circuit (private input)
         let dao_signal = U256::from_u128(&env, dao_id as u128);
         let proposal_signal = U256::from_u128(&env, proposal_id as u128);
         let choice_signal = if vote_choice {
@@ -660,9 +671,11 @@ impl Comments {
             nullifier.clone(),
             dao_signal,
             proposal_signal,
-            choice_signal,
-            commitment.clone()
+            choice_signal
         ];
+
+        // Ignore commitment parameter - it's not used for verification
+        let _ = commitment;
 
         if !Self::verify_groth16(&env, &vk, &proof, &pub_signals) {
             panic_with_error!(&env, CommentsError::InvalidProof);
@@ -882,12 +895,25 @@ impl Comments {
     }
 
     #[cfg(not(any(test, feature = "testutils")))]
-    fn compute_vk_x(_env: &Env, vk: &VerificationKey, pub_signals: &Vec<U256>) -> BytesN<64> {
-        let mut vk_x = G1Affine::from_bytes(vk.ic.get(0).unwrap());
+    fn compute_vk_x(env: &Env, vk: &VerificationKey, pub_signals: &Vec<U256>) -> BytesN<64> {
+        // Start with IC[0]
+        let ic0 = vk
+            .ic
+            .get(0)
+            .unwrap_or_else(|| panic_with_error!(env, CommentsError::InvalidProof));
+        let mut vk_x = G1Affine::from_bytes(ic0);
 
+        // Add each pub_signal[i] * IC[i+1]
         for i in 0..pub_signals.len() {
-            let signal = pub_signals.get(i).unwrap();
-            let ic_point = G1Affine::from_bytes(vk.ic.get(i + 1).unwrap());
+            let signal = pub_signals
+                .get(i)
+                .unwrap_or_else(|| panic_with_error!(env, CommentsError::InvalidProof));
+            let ic_point_bytes = vk
+                .ic
+                .get(i + 1)
+                .unwrap_or_else(|| panic_with_error!(env, CommentsError::InvalidProof));
+            let ic_point = G1Affine::from_bytes(ic_point_bytes);
+
             let scalar = Fr::from(signal);
             let scaled_point = ic_point * scalar;
             vk_x = vk_x + scaled_point;

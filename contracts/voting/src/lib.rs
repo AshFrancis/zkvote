@@ -575,8 +575,9 @@ impl Voting {
         data.append(&Bytes::from_array(env, &vk.delta.to_array()));
         // Add IC points
         for i in 0..vk.ic.len() {
-            let ic_point = vk.ic.get(i).unwrap();
-            data.append(&Bytes::from_array(env, &ic_point.to_array()));
+            if let Some(ic_point) = vk.ic.get(i) {
+                data.append(&Bytes::from_array(env, &ic_point.to_array()));
+            }
         }
 
         env.crypto().sha256(&data).into()
@@ -981,14 +982,24 @@ impl Voting {
 
     // Compute vk_x = IC[0] + sum(pub_signals[i] * IC[i+1])
     #[cfg(not(any(test, feature = "testutils")))]
-    fn compute_vk_x(_env: &Env, vk: &VerificationKey, pub_signals: &Vec<U256>) -> BytesN<64> {
+    fn compute_vk_x(env: &Env, vk: &VerificationKey, pub_signals: &Vec<U256>) -> BytesN<64> {
         // Start with IC[0]
-        let mut vk_x = G1Affine::from_bytes(vk.ic.get(0).unwrap());
+        let ic0 = vk
+            .ic
+            .get(0)
+            .unwrap_or_else(|| panic_with_error!(env, VotingError::VkIcLengthMismatch));
+        let mut vk_x = G1Affine::from_bytes(ic0);
 
         // Add each pub_signal[i] * IC[i+1]
         for i in 0..pub_signals.len() {
-            let signal = pub_signals.get(i).unwrap();
-            let ic_point = G1Affine::from_bytes(vk.ic.get(i + 1).unwrap());
+            let signal = pub_signals
+                .get(i)
+                .unwrap_or_else(|| panic_with_error!(env, VotingError::VkIcLengthMismatch));
+            let ic_point_bytes = vk
+                .ic
+                .get(i + 1)
+                .unwrap_or_else(|| panic_with_error!(env, VotingError::VkIcLengthMismatch));
+            let ic_point = G1Affine::from_bytes(ic_point_bytes);
 
             // Scalar multiplication: signal * IC[i+1]
             let scalar = Fr::from(signal);
