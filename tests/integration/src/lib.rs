@@ -43,19 +43,19 @@ mod tests {
             }
         }
 
-        fn registry_client(&self) -> DaoRegistryClient {
+        fn registry_client(&self) -> DaoRegistryClient<'_> {
             DaoRegistryClient::new(&self.env, &self.registry)
         }
 
-        fn sbt_client(&self) -> MembershipSbtClient {
+        fn sbt_client(&self) -> MembershipSbtClient<'_> {
             MembershipSbtClient::new(&self.env, &self.sbt)
         }
 
-        fn tree_client(&self) -> MembershipTreeClient {
+        fn tree_client(&self) -> MembershipTreeClient<'_> {
             MembershipTreeClient::new(&self.env, &self.tree)
         }
 
-        fn voting_client(&self) -> VotingClient {
+        fn voting_client(&self) -> VotingClient<'_> {
             VotingClient::new(&self.env, &self.voting)
         }
 

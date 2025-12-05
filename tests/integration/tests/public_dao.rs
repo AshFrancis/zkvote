@@ -28,7 +28,7 @@ mod voting {
 use dao_registry::Client as RegistryClient;
 use membership_sbt::Client as SbtClient;
 use membership_tree::Client as TreeClient;
-use voting::Client as VotingClient;
+use voting::{Client as VotingClient, VoteMode};
 
 fn setup_contracts(env: &Env) -> (Address, Address, Address, Address, Address) {
     // Deploy contracts
@@ -291,7 +291,7 @@ fn test_member_creates_proposal_in_public_dao() {
         &String::from_str(&env, ""),
         &end_time,
         &user,
-        &voting::VoteMode::Trailing,
+        &VoteMode::Trailing,
     );
 
     assert_eq!(proposal_id, 1);
@@ -337,7 +337,7 @@ fn test_non_member_cannot_create_proposal_in_private_dao() {
         &String::from_str(&env, ""),
         &end_time,
         &user,
-        &voting::VoteMode::Fixed,
+        &VoteMode::Fixed,
     );
 }
 
@@ -389,7 +389,7 @@ fn test_member_cannot_propose_when_admin_only_mode() {
         &String::from_str(&env, ""),
         &end_time,
         &user,
-        &voting::VoteMode::Trailing,
+        &VoteMode::Trailing,
     );
 }
 
@@ -435,7 +435,7 @@ fn test_admin_can_propose_in_admin_only_mode() {
         &String::from_str(&env, ""),
         &end_time,
         &admin,
-        &voting::VoteMode::Fixed,
+        &VoteMode::Fixed,
     );
 
     assert_eq!(proposal_id, 1);
@@ -494,7 +494,7 @@ fn test_full_public_dao_flow() {
         &String::from_str(&env, ""),
         &end_time,
         &user3,
-        &voting::VoteMode::Trailing,
+        &VoteMode::Trailing,
     );
 
     // Verify proposal created

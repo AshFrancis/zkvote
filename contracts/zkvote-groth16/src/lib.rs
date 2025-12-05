@@ -17,7 +17,7 @@
 
 use soroban_sdk::{
     contracterror, contracttype,
-    crypto::bn254::{Fr, G1Affine, G2Affine},
+    crypto::bn254::{G1Affine, G2Affine},
     Bytes, BytesN, Env, Vec, U256,
 };
 
@@ -31,6 +31,7 @@ pub const BN254_FR_MODULUS: [u8; 32] = [
 
 /// BN254 scalar field order minus one (r - 1) in big-endian bytes
 /// Used for G1 point negation: (r-1) * P = -P since (r-1) ≡ -1 (mod r)
+#[allow(dead_code)]
 const BN254_R_MINUS_ONE: [u8; 32] = [
     0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81, 0x58, 0x5d,
     0x28, 0x33, 0xe8, 0x48, 0x79, 0xb9, 0x70, 0x91, 0x43, 0xe1, 0xf5, 0x93, 0xf0, 0x00, 0x00, 0x00,
