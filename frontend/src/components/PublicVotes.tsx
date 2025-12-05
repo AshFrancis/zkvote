@@ -350,16 +350,27 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
         return errStr.includes('txBadSeq') || errStr.includes('bad_seq');
       };
 
+      // Helper to check if error is NoSbt (error #8 from tree contract)
+      // This happens when user just joined but SBT transaction hasn't confirmed yet
+      const isNoSbtError = (err: unknown): boolean => {
+        const errStr = (err as { message?: string })?.message || String(err);
+        return errStr.includes('#8') || errStr.includes('Error(Contract, #8)');
+      };
+
       let alreadyRegistered = false;
       let registerTxHash: string | null = null;
 
-      // Retry loop for txBadSeq errors (stale sequence number)
-      const maxRetries = 3;
+      // Retry loop for txBadSeq and NoSbt errors
+      // NoSbt needs more retries with longer delays (waiting for SBT confirmation)
+      const maxRetries = 5;
+      let noSbtRetryCount = 0;
       for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
           if (attempt > 0) {
             console.log(`[Registration] Retrying transaction (attempt ${attempt + 1}/${maxRetries})...`);
-            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait before retry
+            // Longer delay for NoSbt errors (SBT confirmation can take time)
+            const delay = noSbtRetryCount > 0 ? 3000 : 2000;
+            await new Promise(resolve => setTimeout(resolve, delay));
           }
 
           // Create fresh transaction for each attempt (gets latest sequence number)
@@ -382,6 +393,13 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
             break; // Not an error, exit retry loop
           }
 
+          // Check if this is a NoSbt error - SBT not confirmed yet, can be retried
+          if (isNoSbtError(err) && attempt < maxRetries - 1) {
+            noSbtRetryCount++;
+            console.log(`[Registration] SBT membership not confirmed yet (NoSbt error), waiting for blockchain confirmation... (attempt ${noSbtRetryCount})`);
+            continue; // Retry after delay
+          }
+
           // Check if this is a txBadSeq error - can be retried
           if (isBadSeqError(err) && attempt < maxRetries - 1) {
             console.log("[Registration] Got txBadSeq error (stale sequence number), will retry...");
@@ -390,7 +408,14 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
 
           // Other errors or final retry failed
           console.error("[Registration] Step 2 (signAndSend) failed:", err);
-          const enhancedError = new Error(`Transaction signing failed: ${(err as { message?: string })?.message || 'Unknown error'}`);
+
+          // Provide a more helpful error message for NoSbt
+          let errorMessage = (err as { message?: string })?.message || 'Unknown error';
+          if (isNoSbtError(err)) {
+            errorMessage = 'Membership not yet confirmed on blockchain. Please wait a few seconds and try again.';
+          }
+
+          const enhancedError = new Error(`Transaction signing failed: ${errorMessage}`);
           (enhancedError as unknown as { originalError: unknown }).originalError = err;
           throw enhancedError;
         }
@@ -445,6 +470,11 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
       }
 
       console.log(alreadyRegistered ? "[Registration] Credentials recovered! Leaf index:" : "[Registration] Registration successful! Leaf index:", leafIndex);
+
+      // Immediately update local state to reflect registration (optimistic update)
+      setDao(prev => prev ? { ...prev, isRegistered: true } : prev);
+
+      // Also reload in background to ensure consistency
       await loadPublicDAO();
     } catch (err) {
       if (isUserRejection(err)) {
