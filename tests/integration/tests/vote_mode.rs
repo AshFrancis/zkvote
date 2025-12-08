@@ -108,8 +108,8 @@ const REAL2_PROOF_C: &str =
     "26b5b0e8fdf645d99e117e4b1799773334f4b0f9508b484fa88d546784dd2424122b0ff02af71ad64efc4f75248775804046e51a3ac49d9924c9c67b5326bf64";
 
 // Churn test: two trailing proposals, late joiner votes on both (testutils path, mock proof).
+// This test verifies trailing mode allows late joiners to vote on multiple parallel proposals.
 #[test]
-#[should_panic(expected = "HostError")]
 fn test_trailing_mode_churn_across_parallel_proposals() {
     let env = Env::default();
     env.mock_all_auths();
