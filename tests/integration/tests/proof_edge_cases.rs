@@ -9,26 +9,11 @@ use soroban_sdk::{
     contracttype, testutils::Address as _, Address, Bytes, BytesN, Env, String, Vec as SdkVec, U256,
 };
 
-mod dao_registry {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/dao_registry.wasm");
-}
-
-mod membership_sbt {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_sbt.wasm");
-}
-
-mod membership_tree {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_tree.wasm");
-}
-
-mod voting {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/voting.wasm");
-}
-
-use dao_registry::Client as RegistryClient;
-use membership_sbt::Client as SbtClient;
-use membership_tree::Client as TreeClient;
-use voting::Client as VotingClient;
+// Import actual contract clients from crates (not WASM)
+use dao_registry::DaoRegistryClient;
+use membership_sbt::MembershipSbtClient;
+use membership_tree::MembershipTreeClient;
+use voting::{Proof, VerificationKey, VoteMode, VotingClient};
 
 // Local mirror of the voting contract's DataKey for storage surgery in tests
 #[contracttype]
@@ -61,7 +46,7 @@ fn hex_str_to_u256(env: &Env, hex: &str) -> U256 {
 // Real VK from circuits/build/verification_key_soroban_be.json
 // 6 IC elements for 5 public signals: root, nullifier, daoId, proposalId, voteChoice
 // (commitment is now a PRIVATE signal for improved privacy)
-fn get_real_vk(env: &Env) -> voting::VerificationKey {
+fn get_real_vk(env: &Env) -> VerificationKey {
     let mut ic = SdkVec::new(env);
     ic.push_back(hex_to_bytes(env, "0386c87c5f77037451fea91c60759229ca390a30e60d564e5ff0f0f95ffbd18207683040dab753f41635f947d3d13e057c73cb92a38d83400af26019ce24d54f"));
     ic.push_back(hex_to_bytes(env, "0b8de6c132c626e6aa4676f7ca94d9ebeb93375ea3584b6337f9f823ac4157dd0b3de52288f2f4473c0c5041cf9a754decd57e2c0f6b2979d3467a30570c01ea"));
@@ -71,7 +56,7 @@ fn get_real_vk(env: &Env) -> voting::VerificationKey {
     ic.push_back(hex_to_bytes(env, "143c06565aad1cacd0ddbc0cfc6dd131c70392d29c16d8c80ed7f62ada52587b13e189e68fe2fe8806b272da3c5762a18b23680cdeda63faef014b7dd6806f21"));
     // Removed 7th IC element (was for commitment public signal)
 
-    voting::VerificationKey {
+    VerificationKey {
         alpha: hex_to_bytes(env, "2d4d9aa7e302d9df41749d5507949d05dbea33fbb16c643b22f599a2be6df2e214bedd503c37ceb061d8ec60209fe345ce89830a19230301f076caff004d1926"),
         beta: hex_to_bytes(env, "0967032fcbf776d1afc985f88877f182d38480a653f2decaa9794cbc3bf3060c0e187847ad4c798374d0d6732bf501847dd68bc0e071241e0213bc7fc13db7ab304cfbd1e08a704a99f5e847d93f8c3caafddec46b7a0d379da69a4d112346a71739c1b1a457a8c7313123d24d2f9192f896b7c63eea05a9d57f06547ad0cec8"),
         gamma: hex_to_bytes(env, "198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c21800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa"),
@@ -83,8 +68,8 @@ fn get_real_vk(env: &Env) -> voting::VerificationKey {
 // Real proof generated for updated circuit (5 public signals)
 // secret=123456789, salt=987654321, daoId=1, proposalId=1, voteChoice=1
 // commitment at index 0 in depth-18 Merkle tree
-fn get_real_proof(env: &Env) -> voting::Proof {
-    voting::Proof {
+fn get_real_proof(env: &Env) -> Proof {
+    Proof {
         a: hex_to_bytes(
             env,
             "06c6298fee7716bce0aca65c8e6ccde25e06bdcb6268a1b2d31db1b8d750a9b0050db001368342508a5404e7d7b5ff5f1c7d27ee0362fdae57730ab2a1b524de",
@@ -101,8 +86,8 @@ fn get_real_proof(env: &Env) -> voting::Proof {
 }
 
 // Corrupted proof (flipped bits in proof.a)
-fn get_corrupted_proof(env: &Env) -> voting::Proof {
-    voting::Proof {
+fn get_corrupted_proof(env: &Env) -> Proof {
+    Proof {
         a: hex_to_bytes(
             env,
             // Changed first byte from 06 to 16 (single bit flip)
@@ -121,7 +106,7 @@ fn get_corrupted_proof(env: &Env) -> voting::Proof {
 
 // Different VK (valid curve points but different from real VK)
 // 6 IC elements for 5 public signals (commitment removed)
-fn get_different_vk(env: &Env) -> voting::VerificationKey {
+fn get_different_vk(env: &Env) -> VerificationKey {
     // Use the real VK but modify alpha point slightly
     let mut ic = SdkVec::new(env);
     ic.push_back(hex_to_bytes(env, "0386c87c5f77037451fea91c60759229ca390a30e60d564e5ff0f0f95ffbd18207683040dab753f41635f947d3d13e057c73cb92a38d83400af26019ce24d54f"));
@@ -132,7 +117,7 @@ fn get_different_vk(env: &Env) -> voting::VerificationKey {
     ic.push_back(hex_to_bytes(env, "143c06565aad1cacd0ddbc0cfc6dd131c70392d29c16d8c80ed7f62ada52587b13e189e68fe2fe8806b272da3c5762a18b23680cdeda63faef014b7dd6806f21"));
     // Removed 7th IC element (was for commitment public signal)
 
-    voting::VerificationKey {
+    VerificationKey {
         // Modified alpha (different x coordinate)
         alpha: hex_to_bytes(env, "1d4d9aa7e302d9df41749d5507949d05dbea33fbb16c643b22f599a2be6df2e214bedd503c37ceb061d8ec60209fe345ce89830a19230301f076caff004d1926"),
         beta: hex_to_bytes(env, "0967032fcbf776d1afc985f88877f182d38480a653f2decaa9794cbc3bf3060c0e187847ad4c798374d0d6732bf501847dd68bc0e071241e0213bc7fc13db7ab304cfbd1e08a704a99f5e847d93f8c3caafddec46b7a0d379da69a4d112346a71739c1b1a457a8c7313123d24d2f9192f896b7c63eea05a9d57f06547ad0cec8"),
@@ -147,10 +132,10 @@ const REAL_COMMITMENT_HEX: &str =
 const REAL_NULLIFIER_HEX: &str = "0cbc551a937e12107e513efd646a4f32eec3f0d2c130532e3516bdd9d4683a50";
 
 fn setup_contracts(env: &Env) -> (Address, Address, Address, Address, Address) {
-    let registry_id = env.register(dao_registry::WASM, ());
-    let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
+    let registry_id = env.register(dao_registry::DaoRegistry, ());
+    let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
+    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let voting_id = env.register(voting::Voting, (tree_id.clone(), registry_id.clone()));
 
     let admin = Address::generate(env);
 
@@ -167,9 +152,9 @@ fn test_corrupted_proof_fails() {
 
     let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
 
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO (dao_id = 1 to match proof)
@@ -203,7 +188,7 @@ fn test_corrupted_proof_fails() {
         &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &member,
-        &voting::VoteMode::Fixed,
+        &VoteMode::Fixed,
     );
     assert_eq!(proposal_id, 1);
 
@@ -233,9 +218,9 @@ fn test_wrong_vk_fails() {
 
     let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
 
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
@@ -268,7 +253,7 @@ fn test_wrong_vk_fails() {
         &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &member,
-        &voting::VoteMode::Fixed,
+        &VoteMode::Fixed,
     );
 
     // Admin changes VK AFTER proposal creation
@@ -300,9 +285,9 @@ fn test_real_proof_double_vote_rejected() {
 
     let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
 
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO and init tree
@@ -330,7 +315,7 @@ fn test_real_proof_double_vote_rejected() {
         &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &member,
-        &voting::VoteMode::Fixed,
+        &VoteMode::Fixed,
     );
 
     let nullifier = hex_str_to_u256(&env, REAL_NULLIFIER_HEX);
@@ -356,9 +341,9 @@ fn test_nullifier_reusable_across_daos() {
 
     let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
 
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create TWO DAOs
@@ -411,7 +396,7 @@ fn test_nullifier_reusable_across_daos() {
         &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &member,
-        &voting::VoteMode::Fixed,
+        &VoteMode::Fixed,
     );
     let prop_id_2 = voting_client.create_proposal(
         &dao_id_2,
@@ -419,7 +404,7 @@ fn test_nullifier_reusable_across_daos() {
         &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &member,
-        &voting::VoteMode::Fixed,
+        &VoteMode::Fixed,
     );
 
     // Check that nullifier storage is DAO-scoped
@@ -455,9 +440,9 @@ fn test_proof_for_wrong_dao_fails() {
 
     let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
 
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create TWO DAOs - we'll try to use a proof for DAO 1 on DAO 2
@@ -497,7 +482,7 @@ fn test_proof_for_wrong_dao_fails() {
         &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &member,
-        &voting::VoteMode::Fixed,
+        &VoteMode::Fixed,
     );
 
     // Try to vote on DAO 2 with proof generated for DAO 1
@@ -519,9 +504,9 @@ fn test_proof_for_wrong_proposal_fails() {
 
     let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
 
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO (dao_id = 1 to match proof)
@@ -554,7 +539,7 @@ fn test_proof_for_wrong_proposal_fails() {
         &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &member,
-        &voting::VoteMode::Fixed,
+        &VoteMode::Fixed,
     );
     let proposal_2 = voting_client.create_proposal(
         &dao_id,
@@ -562,7 +547,7 @@ fn test_proof_for_wrong_proposal_fails() {
         &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &member,
-        &voting::VoteMode::Fixed,
+        &VoteMode::Fixed,
     );
 
     // Try to vote on proposal 2 with proof generated for proposal 1

@@ -2,29 +2,13 @@
 
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
 
-// Import contracts
-mod dao_registry {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/dao_registry.wasm");
-}
-
-mod membership_sbt {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_sbt.wasm");
-}
-
-mod membership_tree {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_tree.wasm");
-}
-
-mod voting {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/voting.wasm");
-}
-
-use dao_registry::Client as RegistryClient;
-use membership_sbt::Client as SbtClient;
-use membership_tree::Client as TreeClient;
-use voting::Client as VotingClient;
+// Import actual contract clients from crates (not WASM)
+use dao_registry::DaoRegistryClient;
+use membership_sbt::MembershipSbtClient;
+use membership_tree::MembershipTreeClient;
+use voting::{VerificationKey, VoteMode, VotingClient};
 // Real verification key (big-endian) from circuits/build/verification_key_soroban_be.json
-fn get_real_vk(env: &Env) -> voting::VerificationKey {
+fn get_real_vk(env: &Env) -> VerificationKey {
     // Helper to parse BE hex into BytesN of length 64 or 128
     fn hex_to_bytes<const N: usize>(env: &Env, hex: &str) -> BytesN<N> {
         let bytes = hex::decode(hex).expect("invalid hex");
@@ -44,7 +28,7 @@ fn get_real_vk(env: &Env) -> voting::VerificationKey {
     ic.push_back(hex_to_bytes(env, "09c5b9b793a6f8098f0ac918aa0a19a75b74e7f1428f726194a48af37da8ac14122edc5b3704f106fa3c095ac74f524032e460179c3e8ecd562ef050c884336a"));
     ic.push_back(hex_to_bytes(env, "143c06565aad1cacd0ddbc0cfc6dd131c70392d29c16d8c80ed7f62ada52587b13e189e68fe2fe8806b272da3c5762a18b23680cdeda63faef014b7dd6806f21"));
 
-    voting::VerificationKey {
+    VerificationKey {
         alpha: hex_to_bytes(env, "2d4d9aa7e302d9df41749d5507949d05dbea33fbb16c643b22f599a2be6df2e214bedd503c37ceb061d8ec60209fe345ce89830a19230301f076caff004d1926"),
         beta: hex_to_bytes(env, "0967032fcbf776d1afc985f88877f182d38480a653f2decaa9794cbc3bf3060c0e187847ad4c798374d0d6732bf501847dd68bc0e071241e0213bc7fc13db7ab304cfbd1e08a704a99f5e847d93f8c3caafddec46b7a0d379da69a4d112346a71739c1b1a457a8c7313123d24d2f9192f896b7c63eea05a9d57f06547ad0cec8"),
         gamma: hex_to_bytes(env, "198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c21800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa"),
@@ -56,23 +40,23 @@ fn get_real_vk(env: &Env) -> voting::VerificationKey {
 fn setup(
     env: &Env,
 ) -> (
-    RegistryClient,
-    SbtClient,
-    TreeClient,
+    DaoRegistryClient,
+    MembershipSbtClient,
+    MembershipTreeClient,
     VotingClient,
     Address,
     u64,
 ) {
     env.mock_all_auths();
 
-    let registry_id = env.register(dao_registry::WASM, ());
-    let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
+    let registry_id = env.register(dao_registry::DaoRegistry, ());
+    let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
+    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let voting_id = env.register(voting::Voting, (tree_id.clone(), registry_id.clone()));
 
-    let registry = RegistryClient::new(env, &registry_id);
-    let sbt = SbtClient::new(env, &sbt_id);
-    let tree = TreeClient::new(env, &tree_id);
+    let registry = DaoRegistryClient::new(env, &registry_id);
+    let sbt = MembershipSbtClient::new(env, &sbt_id);
+    let tree = MembershipTreeClient::new(env, &tree_id);
     let voting = VotingClient::new(env, &voting_id);
 
     let admin = Address::generate(env);
@@ -112,7 +96,7 @@ fn budget_vote_path_within_limit() {
         &String::from_str(&env, ""),
         &0u64,
         &admin,
-        &voting::VoteMode::Fixed,
+        &VoteMode::Fixed,
     );
 
     let budget_after = env.cost_estimate().budget().cpu_instruction_cost();
@@ -135,13 +119,13 @@ fn budget_set_vk_within_limit() {
     env.cost_estimate().budget().reset_unlimited();
     env.mock_all_auths();
 
-    let registry_id = env.register(dao_registry::WASM, ());
-    let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
+    let registry_id = env.register(dao_registry::DaoRegistry, ());
+    let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
+    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let voting_id = env.register(voting::Voting, (tree_id.clone(), registry_id.clone()));
 
-    let registry = RegistryClient::new(&env, &registry_id);
-    let tree = TreeClient::new(&env, &tree_id);
+    let registry = DaoRegistryClient::new(&env, &registry_id);
+    let tree = MembershipTreeClient::new(&env, &tree_id);
     let voting = VotingClient::new(&env, &voting_id);
 
     let admin = Address::generate(&env);

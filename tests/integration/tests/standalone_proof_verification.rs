@@ -23,19 +23,11 @@
 
 use soroban_sdk::{testutils::Address as _, Address, Bytes, BytesN, Env, String, Vec, U256};
 
-// Import contract clients
-mod dao_registry {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/dao_registry.wasm");
-}
-mod membership_sbt {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_sbt.wasm");
-}
-mod membership_tree {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_tree.wasm");
-}
-mod voting {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/voting.wasm");
-}
+// Import actual contract clients from crates (not WASM)
+use dao_registry::DaoRegistryClient;
+use membership_sbt::MembershipSbtClient;
+use membership_tree::MembershipTreeClient;
+use voting::{Proof, VerificationKey, VoteMode, VotingClient};
 
 fn hex_to_bytes<const N: usize>(env: &Env, hex: &str) -> BytesN<N> {
     let bytes = hex::decode(hex).expect("invalid hex");
@@ -54,11 +46,11 @@ fn hex_str_to_u256(env: &Env, hex: &str) -> U256 {
     U256::from_be_bytes(env, &Bytes::from_array(env, &padded))
 }
 
-fn get_real_proof(env: &Env) -> voting::Proof {
+fn get_real_proof(env: &Env) -> Proof {
     // Real proof from circuits/build/proof_soroban.json (BIG-ENDIAN!)
     // Generated with depth 18, 5 public signals (root, nullifier, daoId, proposalId, voteChoice)
     // G2 format: [c1, c0, c1, c0] (imaginary first)
-    voting::Proof {
+    Proof {
         a: hex_to_bytes(
             env,
             "02de5951501fe4408ea8bf4960106738d190525a270fe0b035139aac2fa762302bbb2f3f1d001d99b919a34b93a9aed831e7bd1f960d5981ae328dfd1845b8a8",
@@ -74,7 +66,7 @@ fn get_real_proof(env: &Env) -> voting::Proof {
     }
 }
 
-fn get_verification_key(env: &Env) -> voting::VerificationKey {
+fn get_verification_key(env: &Env) -> VerificationKey {
     // VK from circuits/build/verification_key_soroban.json (BIG-ENDIAN!)
     // Generated for 5 public signals: [root, nullifier, daoId, proposalId, voteChoice]
     // IC has 6 elements (n+1 for n public signals)
@@ -106,7 +98,7 @@ fn get_verification_key(env: &Env) -> voting::VerificationKey {
         "143c06565aad1cacd0ddbc0cfc6dd131c70392d29c16d8c80ed7f62ada52587b13e189e68fe2fe8806b272da3c5762a18b23680cdeda63faef014b7dd6806f21",
     ));
 
-    voting::VerificationKey {
+    VerificationKey {
         alpha: hex_to_bytes(
             env,
             "2d4d9aa7e302d9df41749d5507949d05dbea33fbb16c643b22f599a2be6df2e214bedd503c37ceb061d8ec60209fe345ce89830a19230301f076caff004d1926",
@@ -144,27 +136,27 @@ fn test_real_groth16_proof_verification() {
     println!("Step 1: Deploying contracts...");
     println!("==============================\n");
 
-    // Deploy Registry
-    let registry_address = env.register(dao_registry::WASM, ());
-    let registry_client = dao_registry::Client::new(&env, &registry_address);
+    // Deploy contracts using direct crate registration
+    let registry_address = env.register(dao_registry::DaoRegistry, ());
+    let registry_client = DaoRegistryClient::new(&env, &registry_address);
     println!("✅ Registry deployed");
 
     // Deploy SBT
-    let sbt_address = env.register(membership_sbt::WASM, (registry_address.clone(),));
-    let sbt_client = membership_sbt::Client::new(&env, &sbt_address);
+    let sbt_address = env.register(membership_sbt::MembershipSbt, (registry_address.clone(),));
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_address);
     println!("✅ SBT deployed");
 
     // Deploy Tree
-    let tree_address = env.register(membership_tree::WASM, (sbt_address.clone(),));
-    let tree_client = membership_tree::Client::new(&env, &tree_address);
+    let tree_address = env.register(membership_tree::MembershipTree, (sbt_address.clone(),));
+    let tree_client = MembershipTreeClient::new(&env, &tree_address);
     println!("✅ Tree deployed");
 
     // Deploy Voting
     let voting_address = env.register(
-        voting::WASM,
+        voting::Voting,
         (tree_address.clone(), registry_address.clone()),
     );
-    let voting_client = voting::Client::new(&env, &voting_address);
+    let voting_client = VotingClient::new(&env, &voting_address);
     println!("✅ Voting deployed\n");
 
     println!("Step 2: Creating DAO...");
@@ -244,7 +236,7 @@ fn test_real_groth16_proof_verification() {
         &content_cid,
         &end_time,
         &admin,
-        &voting::VoteMode::Fixed,
+        &VoteMode::Fixed,
     );
     println!("Proposal ID: {}\n", proposal_id);
 

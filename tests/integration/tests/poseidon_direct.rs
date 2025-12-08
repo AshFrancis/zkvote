@@ -50,39 +50,24 @@ fn test_empty_tree_root() {
 
     use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
-    // Import contracts
-    mod dao_registry {
-        soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/dao_registry.wasm");
-    }
-
-    mod membership_sbt {
-        soroban_sdk::contractimport!(
-            file = "../../target/wasm32v1-none/release/membership_sbt.wasm"
-        );
-    }
-
-    mod membership_tree {
-        soroban_sdk::contractimport!(
-            file = "../../target/wasm32v1-none/release/membership_tree.wasm"
-        );
-    }
-
-    use dao_registry::Client as RegistryClient;
-    use membership_tree::Client as TreeClient;
+    // Import actual contract clients from crates (not WASM)
+    use dao_registry::DaoRegistryClient;
+    use membership_sbt::MembershipSbtClient;
+    use membership_tree::MembershipTreeClient;
 
     let env = Env::default();
     env.mock_all_auths();
     env.cost_estimate().budget().reset_unlimited();
 
     // Deploy contracts
-    let registry_id = env.register(dao_registry::WASM, ());
-    let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
+    let registry_id = env.register(dao_registry::DaoRegistry, ());
+    let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
+    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
 
     let admin = Address::generate(&env);
 
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
 
     // Create DAO
     let dao_id = registry_client.create_dao(

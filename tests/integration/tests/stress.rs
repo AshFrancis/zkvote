@@ -14,26 +14,11 @@
 
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, U256};
 
-mod dao_registry {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/dao_registry.wasm");
-}
-
-mod membership_sbt {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_sbt.wasm");
-}
-
-mod membership_tree {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_tree.wasm");
-}
-
-mod voting {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/voting.wasm");
-}
-
-use dao_registry::Client as RegistryClient;
-use membership_sbt::Client as SbtClient;
-use membership_tree::Client as TreeClient;
-use voting::Client as VotingClient;
+// Import actual contract clients from crates (not WASM)
+use dao_registry::DaoRegistryClient;
+use membership_sbt::MembershipSbtClient;
+use membership_tree::MembershipTreeClient;
+use voting::{VerificationKey, VoteMode, VotingClient};
 
 fn zero_g1(env: &Env) -> BytesN<64> {
     BytesN::from_array(env, &[0u8; 64])
@@ -43,13 +28,13 @@ fn zero_g2(env: &Env) -> BytesN<128> {
     BytesN::from_array(env, &[0u8; 128])
 }
 
-fn dummy_vk(env: &Env) -> voting::VerificationKey {
+fn dummy_vk(env: &Env) -> VerificationKey {
     let mut ic = soroban_sdk::Vec::new(env);
     // IC needs 6 elements for 5 public signals (commitment is now private)
     for _ in 0..6 {
         ic.push_back(zero_g1(env));
     }
-    voting::VerificationKey {
+    VerificationKey {
         alpha: zero_g1(env),
         beta: zero_g2(env),
         gamma: zero_g2(env),
@@ -63,9 +48,9 @@ fn dummy_vk(env: &Env) -> voting::VerificationKey {
 fn setup_dao(
     env: &Env,
 ) -> (
-    RegistryClient<'_>,
-    SbtClient<'_>,
-    TreeClient<'_>,
+    DaoRegistryClient<'_>,
+    MembershipSbtClient<'_>,
+    MembershipTreeClient<'_>,
     VotingClient<'_>,
     Address,
     u64,
@@ -78,21 +63,21 @@ fn setup_dao_with_options(
     env: &Env,
     open_membership: bool,
 ) -> (
-    RegistryClient<'_>,
-    SbtClient<'_>,
-    TreeClient<'_>,
+    DaoRegistryClient<'_>,
+    MembershipSbtClient<'_>,
+    MembershipTreeClient<'_>,
     VotingClient<'_>,
     Address,
     u64,
 ) {
-    let registry_id = env.register(dao_registry::WASM, ());
-    let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
+    let registry_id = env.register(dao_registry::DaoRegistry, ());
+    let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
+    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let voting_id = env.register(voting::Voting, (tree_id.clone(), registry_id.clone()));
 
-    let registry = RegistryClient::new(env, &registry_id);
-    let sbt = SbtClient::new(env, &sbt_id);
-    let tree = TreeClient::new(env, &tree_id);
+    let registry = DaoRegistryClient::new(env, &registry_id);
+    let sbt = MembershipSbtClient::new(env, &sbt_id);
+    let tree = MembershipTreeClient::new(env, &tree_id);
     let voting = VotingClient::new(env, &voting_id);
 
     let admin = Address::generate(env);
@@ -151,7 +136,7 @@ fn stress_many_members_and_proposals() {
             &content_cid,
             &0u64,
             &admin,
-            &voting::VoteMode::Fixed,
+            &VoteMode::Fixed,
         );
         if i % 50 == 0 {
             println!("  Created {} proposals", i);
@@ -171,14 +156,14 @@ fn stress_many_daos() {
     env.mock_all_auths();
     env.cost_estimate().budget().reset_unlimited();
 
-    let registry_id = env.register(dao_registry::WASM, ());
-    let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
+    let registry_id = env.register(dao_registry::DaoRegistry, ());
+    let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
+    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let voting_id = env.register(voting::Voting, (tree_id.clone(), registry_id.clone()));
 
-    let registry = RegistryClient::new(&env, &registry_id);
-    let sbt = SbtClient::new(&env, &sbt_id);
-    let tree = TreeClient::new(&env, &tree_id);
+    let registry = DaoRegistryClient::new(&env, &registry_id);
+    let sbt = MembershipSbtClient::new(&env, &sbt_id);
+    let tree = MembershipTreeClient::new(&env, &tree_id);
     let voting = VotingClient::new(&env, &voting_id);
 
     println!("Creating 100 DAOs...");
@@ -267,9 +252,9 @@ fn stress_many_proposals_per_dao() {
         let end_time = if i % 2 == 0 { 0u64 } else { 86400u64 }; // Mix of no deadline and 1 day
 
         let mode = if i % 3 == 0 {
-            voting::VoteMode::Trailing
+            VoteMode::Trailing
         } else {
-            voting::VoteMode::Fixed
+            VoteMode::Fixed
         };
 
         let _ = voting.create_proposal(&dao_id, &title, &content_cid, &end_time, &admin, &mode);
@@ -326,14 +311,14 @@ fn stress_mixed_operations() {
     env.mock_all_auths();
     env.cost_estimate().budget().reset_unlimited();
 
-    let registry_id = env.register(dao_registry::WASM, ());
-    let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
+    let registry_id = env.register(dao_registry::DaoRegistry, ());
+    let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
+    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let voting_id = env.register(voting::Voting, (tree_id.clone(), registry_id.clone()));
 
-    let registry = RegistryClient::new(&env, &registry_id);
-    let sbt = SbtClient::new(&env, &sbt_id);
-    let tree = TreeClient::new(&env, &tree_id);
+    let registry = DaoRegistryClient::new(&env, &registry_id);
+    let sbt = MembershipSbtClient::new(&env, &sbt_id);
+    let tree = MembershipTreeClient::new(&env, &tree_id);
     let voting = VotingClient::new(&env, &voting_id);
 
     println!("Running mixed stress test...");
@@ -371,9 +356,9 @@ fn stress_mixed_operations() {
         for p in 0..num_proposals {
             let title = String::from_str(&env, &format!("P{}", p));
             let mode = if p % 2 == 0 {
-                voting::VoteMode::Fixed
+                VoteMode::Fixed
             } else {
-                voting::VoteMode::Trailing
+                VoteMode::Trailing
             };
             let _ = voting.create_proposal(
                 &dao_id,

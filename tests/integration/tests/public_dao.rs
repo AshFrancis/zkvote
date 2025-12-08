@@ -8,34 +8,18 @@
 
 use soroban_sdk::{testutils::Address as _, Address, Env, String, U256};
 
-// Import all contract clients
-mod dao_registry {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/dao_registry.wasm");
-}
-
-mod membership_sbt {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_sbt.wasm");
-}
-
-mod membership_tree {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_tree.wasm");
-}
-
-mod voting {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/voting.wasm");
-}
-
-use dao_registry::Client as RegistryClient;
-use membership_sbt::Client as SbtClient;
-use membership_tree::Client as TreeClient;
-use voting::{Client as VotingClient, VoteMode};
+// Import actual contract clients from crates (not WASM)
+use dao_registry::DaoRegistryClient;
+use membership_sbt::MembershipSbtClient;
+use membership_tree::MembershipTreeClient;
+use voting::{VoteMode, VotingClient};
 
 fn setup_contracts(env: &Env) -> (Address, Address, Address, Address, Address) {
     // Deploy contracts
-    let registry_id = env.register(dao_registry::WASM, ());
-    let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
+    let registry_id = env.register(dao_registry::DaoRegistry, ());
+    let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
+    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let voting_id = env.register(voting::Voting, (tree_id.clone(), registry_id.clone()));
 
     let admin = Address::generate(env);
 
@@ -101,7 +85,7 @@ fn test_public_dao_creation() {
     env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, _, _, _, admin) = setup_contracts(&env);
-    let registry_client = RegistryClient::new(&env, &registry_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
 
     // Create public DAO with membership_open=true
     let dao_id = registry_client.create_dao(
@@ -127,9 +111,9 @@ fn test_self_join_public_dao() {
     env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, tree_id, _, admin) = setup_contracts(&env);
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
 
     // Create public DAO
     let dao_id = registry_client.create_dao(
@@ -159,8 +143,8 @@ fn test_self_join_private_dao_fails() {
     env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, _, _, admin) = setup_contracts(&env);
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
 
     // Create private DAO (membership_open=false)
     let dao_id = registry_client.create_dao(
@@ -183,9 +167,9 @@ fn test_self_register_public_dao() {
     env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, tree_id, _, admin) = setup_contracts(&env);
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
 
     // Create public DAO
     let dao_id = registry_client.create_dao(
@@ -220,9 +204,9 @@ fn test_self_register_private_dao_fails() {
     env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, tree_id, _, admin) = setup_contracts(&env);
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
 
     // Create private DAO
     let dao_id = registry_client.create_dao(
@@ -253,10 +237,10 @@ fn test_member_creates_proposal_in_public_dao() {
     env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
     let voting_client = VotingClient::new(&env, &voting_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
 
     // Create public DAO with members_can_propose=true (any member can create proposals)
     let dao_id = registry_client.create_dao(
@@ -305,8 +289,8 @@ fn test_non_member_cannot_create_proposal_in_private_dao() {
     env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, _, tree_id, voting_id, admin) = setup_contracts(&env);
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create private DAO
@@ -350,9 +334,9 @@ fn test_member_cannot_propose_when_admin_only_mode() {
     env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create public DAO with members_can_propose=FALSE (admin-only proposal mode)
@@ -401,9 +385,9 @@ fn test_admin_can_propose_in_admin_only_mode() {
     env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO with members_can_propose=FALSE (admin-only proposal mode)
@@ -448,9 +432,9 @@ fn test_full_public_dao_flow() {
     env.cost_estimate().budget().reset_unlimited();
 
     let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create public DAO with members_can_propose=true (any member can create proposals)

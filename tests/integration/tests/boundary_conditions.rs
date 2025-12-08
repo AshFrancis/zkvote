@@ -6,32 +6,17 @@
 
 use soroban_sdk::{testutils::Address as _, Address, Env, String, U256};
 
-mod dao_registry {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/dao_registry.wasm");
-}
-
-mod membership_sbt {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_sbt.wasm");
-}
-
-mod membership_tree {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_tree.wasm");
-}
-
-mod voting {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/voting.wasm");
-}
-
-use dao_registry::Client as RegistryClient;
-use membership_sbt::Client as SbtClient;
-use membership_tree::Client as TreeClient;
-use voting::Client as VotingClient;
+// Import actual contract clients from crates (not WASM)
+use dao_registry::DaoRegistryClient;
+use membership_sbt::MembershipSbtClient;
+use membership_tree::MembershipTreeClient;
+use voting::{VerificationKey, VoteMode, VotingClient};
 
 fn setup_contracts(env: &Env) -> (Address, Address, Address, Address, Address) {
-    let registry_id = env.register(dao_registry::WASM, ());
-    let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
+    let registry_id = env.register(dao_registry::DaoRegistry, ());
+    let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
+    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let voting_id = env.register(voting::Voting, (tree_id.clone(), registry_id.clone()));
 
     let admin = Address::generate(env);
 
@@ -61,10 +46,10 @@ fn bn254_g2_generator(env: &Env) -> soroban_sdk::BytesN<128> {
     soroban_sdk::BytesN::from_array(env, &bytes)
 }
 
-fn create_mock_vk(env: &Env) -> voting::VerificationKey {
+fn create_mock_vk(env: &Env) -> VerificationKey {
     let g1 = bn254_g1_generator(env);
     let g2 = bn254_g2_generator(env);
-    voting::VerificationKey {
+    VerificationKey {
         alpha: g1.clone(),
         beta: g2.clone(),
         gamma: g2.clone(),
@@ -92,9 +77,9 @@ fn test_root_history_eviction_behavior() {
 
     let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
 
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create DAO
@@ -173,7 +158,7 @@ fn test_root_history_eviction_behavior() {
         &String::from_str(&env, ""),
         &(env.ledger().timestamp() + 86400),
         &proposer,
-        &voting::VoteMode::Trailing,
+        &VoteMode::Trailing,
     );
 
     assert_eq!(proposal_id, 1, "Should be able to create proposal");
@@ -193,9 +178,9 @@ fn test_multiple_daos_separate_root_histories() {
 
     let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
 
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
     let voting_client = VotingClient::new(&env, &voting_id);
 
     // Create TWO DAOs
@@ -277,9 +262,9 @@ fn test_tree_capacity_at_depth_5() {
 
     let (registry_id, sbt_id, tree_id, _voting_id, admin) = setup_contracts(&env);
 
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
 
     // Create DAO
     let dao_id = registry_client.create_dao(
@@ -320,9 +305,9 @@ fn test_tree_full_at_capacity() {
 
     let (registry_id, sbt_id, tree_id, _voting_id, admin) = setup_contracts(&env);
 
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
 
     // Create DAO
     let dao_id = registry_client.create_dao(
@@ -359,9 +344,9 @@ fn test_duplicate_commitment_rejected() {
 
     let (registry_id, sbt_id, tree_id, _voting_id, admin) = setup_contracts(&env);
 
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let sbt_client = SbtClient::new(&env, &sbt_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let sbt_client = MembershipSbtClient::new(&env, &sbt_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
 
     // Create DAO
     let dao_id = registry_client.create_dao(
@@ -396,8 +381,8 @@ fn test_tree_depth_exceeds_max() {
 
     let (registry_id, _sbt_id, tree_id, _voting_id, admin) = setup_contracts(&env);
 
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
 
     // Create DAO
     let dao_id = registry_client.create_dao(
@@ -421,8 +406,8 @@ fn test_tree_depth_zero_rejected() {
 
     let (registry_id, _sbt_id, tree_id, _voting_id, admin) = setup_contracts(&env);
 
-    let registry_client = RegistryClient::new(&env, &registry_id);
-    let tree_client = TreeClient::new(&env, &tree_id);
+    let registry_client = DaoRegistryClient::new(&env, &registry_id);
+    let tree_client = MembershipTreeClient::new(&env, &tree_id);
 
     // Create DAO
     let dao_id = registry_client.create_dao(

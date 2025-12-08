@@ -5,26 +5,11 @@
 
 use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
-mod dao_registry {
-    soroban_sdk::contractimport!(file = "../target/wasm32v1-none/release/dao_registry.wasm");
-}
-
-mod membership_sbt {
-    soroban_sdk::contractimport!(file = "../target/wasm32v1-none/release/membership_sbt.wasm");
-}
-
-mod membership_tree {
-    soroban_sdk::contractimport!(file = "../target/wasm32v1-none/release/membership_tree.wasm");
-}
-
-mod voting {
-    soroban_sdk::contractimport!(file = "../target/wasm32v1-none/release/voting.wasm");
-}
-
-use dao_registry::Client as RegistryClient;
-use membership_sbt::Client as SbtClient;
-use membership_tree::Client as TreeClient;
-use voting::Client as VotingClient;
+// Import actual contract clients from crates (not WASM)
+use dao_registry::DaoRegistryClient;
+use membership_sbt::MembershipSbtClient;
+use membership_tree::MembershipTreeClient;
+use voting::{VoteMode, VotingClient};
 
 #[test]
 #[ignore]
@@ -33,14 +18,14 @@ fn stress_many_proposals_and_members() {
     env.mock_all_auths();
     env.cost_estimate().budget().reset_unlimited();
 
-    let registry_id = env.register(dao_registry::WASM, ());
-    let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(),));
+    let registry_id = env.register(dao_registry::DaoRegistry, ());
+    let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
+    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let voting_id = env.register(voting::Voting, (tree_id.clone(), registry_id.clone()));
 
-    let registry = RegistryClient::new(&env, &registry_id);
-    let sbt = SbtClient::new(&env, &sbt_id);
-    let tree = TreeClient::new(&env, &tree_id);
+    let registry = DaoRegistryClient::new(&env, &registry_id);
+    let sbt = MembershipSbtClient::new(&env, &sbt_id);
+    let tree = MembershipTreeClient::new(&env, &tree_id);
     let voting = VotingClient::new(&env, &voting_id);
 
     let admin = Address::generate(&env);
@@ -58,6 +43,6 @@ fn stress_many_proposals_and_members() {
     // Create 100 proposals
     for i in 0..100u32 {
         let desc = String::from_str(&env, &format!("Prop {}", i));
-        let _pid = voting.create_proposal(&dao_id, &desc, &0u64, &admin, &voting::VoteMode::Fixed);
+        let _pid = voting.create_proposal(&dao_id, &desc, &String::from_str(&env, ""), &0u64, &admin, &VoteMode::Fixed);
     }
 }
