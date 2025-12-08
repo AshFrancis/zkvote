@@ -91,9 +91,24 @@ async function fetchProposals(
   daoId: number,
   publicKey: string | null
 ): Promise<Proposal[]> {
-  // Load proposals 1-5 (will need tracking of total count in production)
+  // Get proposal count from contract
+  const votingClient: VotingClient = publicKey
+    ? initializeContractClients(publicKey).voting
+    : getReadOnlyVoting();
+
+  let proposalCount = 5; // Default fallback
+  try {
+    const countResult = await votingClient.proposal_count({
+      dao_id: BigInt(daoId),
+    });
+    proposalCount = Number(countResult.result);
+  } catch (err) {
+    console.warn("Failed to get proposal count, using default:", err);
+  }
+
+  // Load all proposals (IDs start at 1)
   const proposalPromises = [];
-  for (let i = 1; i <= 5; i++) {
+  for (let i = 1; i <= proposalCount; i++) {
     proposalPromises.push(loadProposal({ daoId, proposalId: i, publicKey }));
   }
 
