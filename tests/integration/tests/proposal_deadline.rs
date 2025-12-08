@@ -11,34 +11,18 @@ use soroban_sdk::{
     Address, Env, String, U256,
 };
 
-// Import all contract clients
-mod dao_registry {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/dao_registry.wasm");
-}
-
-mod membership_sbt {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_sbt.wasm");
-}
-
-mod membership_tree {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/membership_tree.wasm");
-}
-
-mod voting {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/voting.wasm");
-}
-
-use dao_registry::Client as RegistryClient;
-use membership_sbt::Client as SbtClient;
-use membership_tree::Client as TreeClient;
-use voting::{Client as VotingClient, VoteMode};
+// Import actual contract clients from crates (not WASM)
+use dao_registry::DaoRegistryClient;
+use membership_sbt::MembershipSbtClient;
+use membership_tree::MembershipTreeClient;
+use voting::{VerificationKey, VoteMode, VotingClient};
 
 fn setup_contracts(env: &Env) -> (Address, Address, Address, Address, Address) {
-    // Deploy contracts
-    let registry_id = env.register(dao_registry::WASM, ());
-    let sbt_id = env.register(membership_sbt::WASM, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::WASM, (sbt_id.clone(),));
-    let voting_id = env.register(voting::WASM, (tree_id.clone(), registry_id.clone()));
+    // Deploy contracts using direct crate registration
+    let registry_id = env.register(dao_registry::DaoRegistry, ());
+    let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
+    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let voting_id = env.register(voting::Voting, (tree_id.clone(), registry_id.clone()));
 
     let admin = Address::generate(env);
 
@@ -52,9 +36,9 @@ fn test_create_proposal_with_future_deadline() {
 
     let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
 
-    let registry = RegistryClient::new(&env, &registry_id);
-    let sbt = SbtClient::new(&env, &sbt_id);
-    let tree = TreeClient::new(&env, &tree_id);
+    let registry = DaoRegistryClient::new(&env, &registry_id);
+    let sbt = MembershipSbtClient::new(&env, &sbt_id);
+    let tree = MembershipTreeClient::new(&env, &tree_id);
     let voting = VotingClient::new(&env, &voting_id);
 
     // Create DAO with admin
@@ -92,7 +76,7 @@ fn test_create_proposal_with_future_deadline() {
         soroban_sdk::BytesN::from_array(&env, &[0u8; 64]),
     ];
 
-    let mock_vk = voting::VerificationKey {
+    let mock_vk = VerificationKey {
         alpha: mock_alpha,
         beta: mock_beta,
         gamma: mock_gamma,
@@ -127,9 +111,9 @@ fn test_create_proposal_with_past_deadline_fails() {
 
     let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
 
-    let registry = RegistryClient::new(&env, &registry_id);
-    let sbt = SbtClient::new(&env, &sbt_id);
-    let tree = TreeClient::new(&env, &tree_id);
+    let registry = DaoRegistryClient::new(&env, &registry_id);
+    let sbt = MembershipSbtClient::new(&env, &sbt_id);
+    let tree = MembershipTreeClient::new(&env, &tree_id);
     let voting = VotingClient::new(&env, &voting_id);
 
     // Create DAO with admin
@@ -167,7 +151,7 @@ fn test_create_proposal_with_past_deadline_fails() {
         soroban_sdk::BytesN::from_array(&env, &[0u8; 64]),
     ];
 
-    let mock_vk = voting::VerificationKey {
+    let mock_vk = VerificationKey {
         alpha: mock_alpha,
         beta: mock_beta,
         gamma: mock_gamma,
@@ -204,9 +188,9 @@ fn test_create_proposal_with_no_deadline() {
 
     let (registry_id, sbt_id, tree_id, voting_id, admin) = setup_contracts(&env);
 
-    let registry = RegistryClient::new(&env, &registry_id);
-    let sbt = SbtClient::new(&env, &sbt_id);
-    let tree = TreeClient::new(&env, &tree_id);
+    let registry = DaoRegistryClient::new(&env, &registry_id);
+    let sbt = MembershipSbtClient::new(&env, &sbt_id);
+    let tree = MembershipTreeClient::new(&env, &tree_id);
     let voting = VotingClient::new(&env, &voting_id);
 
     // Create DAO with admin
@@ -244,7 +228,7 @@ fn test_create_proposal_with_no_deadline() {
         soroban_sdk::BytesN::from_array(&env, &[0u8; 64]),
     ];
 
-    let mock_vk = voting::VerificationKey {
+    let mock_vk = VerificationKey {
         alpha: mock_alpha,
         beta: mock_beta,
         gamma: mock_gamma,
