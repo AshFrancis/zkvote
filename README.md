@@ -229,7 +229,9 @@ The vote circuit (`circuits/vote.circom`) proves:
 3. **Nullifier**: `Poseidon(secret, daoId, proposalId) = nullifier`
 4. **Vote validity**: `voteChoice ∈ {0, 1}`
 
-Public signals: `[root, nullifier, daoId, proposalId, voteChoice, commitment]`
+Public signals: `[root, nullifier, daoId, proposalId, voteChoice]`
+
+Private signals: `secret, salt, commitment, pathElements, pathIndices`
 
 Tree depth: 18 levels (supports ~262,144 members per DAO)
 
