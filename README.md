@@ -177,7 +177,7 @@ cd frontend && npm run dev
 ```rust
 // Anyone can create a DAO (permissionless)
 let dao_id = registry.create_dao(
-    "My DAO",          // Max 256 chars
+    "My DAO",          // Max 24 chars
     creator_address    // Becomes admin automatically
 );
 ```
@@ -299,7 +299,7 @@ npm test               # Run tests
 - **Field Membership**: All public signals validated in BN254 scalar field
 
 ### DoS Protection
-- **DAO Names**: Max 256 characters
+- **DAO Names**: Max 24 characters
 - **Proposal Titles**: Max 100 bytes
 - **Tree Depth**: Max 18 levels
 - **Backend Rate Limiting**: 10 votes/min, 60 queries/min per IP
