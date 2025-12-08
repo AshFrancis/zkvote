@@ -96,6 +96,8 @@ export default function ProposalPage({ publicKey, kit, isInitializing: _isInitia
   const [registering, setRegistering] = useState(false);
   const [registrationStatus, setRegistrationStatus] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [isProposalNotFound, setIsProposalNotFound] = useState(false);
 
   const [isRegistered, setIsRegistered] = useState(() => {
     return publicKey && numericDaoId !== null ? !!getZKCredentials(numericDaoId, publicKey) : false;
@@ -242,6 +244,7 @@ export default function ProposalPage({ publicKey, kit, isInitializing: _isInitia
 
     setLoading(true);
     setError(null);
+    setIsProposalNotFound(false);
 
     try {
       // Use contract client like ProposalList does
@@ -285,6 +288,8 @@ export default function ProposalPage({ publicKey, kit, isInitializing: _isInitia
         }
       }
 
+      // Success - reset retry count
+      setRetryCount(0);
       setProposal({
         id: numericProposalId,
         title: proposalData.title,
@@ -304,7 +309,25 @@ export default function ProposalPage({ publicKey, kit, isInitializing: _isInitia
       // not from local ZK credentials (which persist after SBT revocation)
     } catch (err) {
       console.error("Failed to load proposal:", err);
-      setError(err instanceof Error ? err.message : "Failed to load proposal");
+      const errorMsg = err instanceof Error ? err.message : "Failed to load proposal";
+
+      // Detect "proposal not found" type errors (contract trap, simulation failure)
+      const isNotFound = errorMsg.includes("UnreachableCodeReached") ||
+                        errorMsg.includes("simulation failed") ||
+                        errorMsg.includes("InvalidAction");
+
+      if (isNotFound) {
+        setIsProposalNotFound(true);
+        // Auto-retry up to 3 times with increasing delay (proposal may be confirming)
+        if (retryCount < 3) {
+          setRetryCount(prev => prev + 1);
+          const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
+          setTimeout(() => loadProposal(), delay);
+          return; // Don't set loading to false yet
+        }
+      }
+
+      setError(isNotFound ? "Proposal not found - it may still be confirming on the network" : errorMsg);
     } finally {
       setLoading(false);
     }
@@ -462,8 +485,13 @@ export default function ProposalPage({ publicKey, kit, isInitializing: _isInitia
   // Show full page loading only if we have no cached DAO info
   if (loading && !dao) {
     return (
-      <div className="flex items-center justify-center p-8">
+      <div className="flex flex-col items-center justify-center gap-3 p-8">
         <LoadingSpinner size="lg" />
+        {retryCount > 0 && (
+          <p className="text-sm text-muted-foreground">
+            Waiting for proposal to confirm... (attempt {retryCount}/3)
+          </p>
+        )}
       </div>
     );
   }
@@ -522,7 +550,44 @@ export default function ProposalPage({ publicKey, kit, isInitializing: _isInitia
 
         <Card>
           <CardContent className="p-6">
-            <p className="text-destructive">{error || "Proposal not found"}</p>
+            {isProposalNotFound ? (
+              <div className="flex flex-col items-center gap-4 py-4">
+                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/30">
+                  <Clock className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div className="text-center">
+                  <h3 className="font-medium text-foreground mb-1">Proposal not found</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    This proposal may still be confirming on the network. Please wait a moment and try again.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate(`/daos/${daoSlugForNav}`)}
+                    className="gap-2"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    Back to DAO
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      setRetryCount(0);
+                      loadProposal();
+                    }}
+                    className="gap-2"
+                  >
+                    <Clock className="w-4 h-4" />
+                    Try Again
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-destructive">{error || "Proposal not found"}</p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -603,7 +668,7 @@ export default function ProposalPage({ publicKey, kit, isInitializing: _isInitia
             <Button
               variant="outline"
               size="sm"
-              onClick={() => navigate(`/daos/${daoSlugForNav}?tab=info`)}
+              onClick={() => navigate(`/daos/${daoSlugForNav}/info`)}
               className="gap-2"
             >
               <FileText className="w-4 h-4" /> Info
@@ -611,7 +676,7 @@ export default function ProposalPage({ publicKey, kit, isInitializing: _isInitia
             <Button
               variant="outline"
               size="sm"
-              onClick={() => navigate(`/daos/${daoSlugForNav}?tab=members`)}
+              onClick={() => navigate(`/daos/${daoSlugForNav}/members`)}
               className="gap-2"
             >
               <Users className="w-4 h-4" />

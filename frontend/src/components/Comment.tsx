@@ -78,14 +78,17 @@ export default function Comment({
     return initializeContractClients(publicKey);
   }, [publicKey]);
 
-  const isOwnComment =
-    comment.author === publicKey ||
-    (comment.author === null &&
-      comment.nullifier &&
-      canEditAnonymousComment(daoId, proposalId, comment.nullifier));
+  const isOwnPublicComment = comment.author === publicKey;
+  const isOwnAnonymousComment =
+    comment.author === null &&
+    comment.nullifier &&
+    canEditAnonymousComment(daoId, proposalId, comment.nullifier);
+  const isOwnComment = isOwnPublicComment || isOwnAnonymousComment;
 
-  const canEdit = isOwnComment && !comment.deleted;
-  const canDelete = (isOwnComment || isAdmin) && !comment.deleted;
+  // Only public comments can be edited (anonymous edit requires ZK proof - not yet implemented)
+  const canEdit = isOwnPublicComment && !comment.deleted;
+  // Both public and anonymous comments can be deleted (anonymous delete also needs ZK proof - TODO)
+  const canDelete = (isOwnPublicComment || isAdmin) && !comment.deleted;
   const canReply = depth === 0 && hasMembership && !comment.deleted;
   const hasRevisions = comment.revisionCids.length > 0;
   // Deleted comments should always show history if we have the original content CID
@@ -393,7 +396,8 @@ export default function Comment({
               parentId={comment.id}
               onSubmit={() => {
                 setShowReplyForm(false);
-                onRefresh();
+                // Small delay to allow backend to index the new comment
+                setTimeout(() => onRefresh(), 500);
               }}
               onCancel={() => setShowReplyForm(false)}
               placeholder="Write a reply..."

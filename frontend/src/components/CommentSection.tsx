@@ -120,7 +120,10 @@ export default function CommentSection({
           hasMembership={hasMembership}
           isRegistered={isRegistered}
           eligibleRoot={eligibleRoot}
-          onSubmit={handleRefresh}
+          onSubmit={() => {
+            // Small delay to allow backend to index the new comment
+            setTimeout(handleRefresh, 500);
+          }}
         />
 
         {/* Separator */}

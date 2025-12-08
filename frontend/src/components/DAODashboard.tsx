@@ -101,6 +101,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
   const [joining, setJoining] = useState(false);
   const [creatingProposal, setCreatingProposal] = useState(false);
   const [proposalKey, setProposalKey] = useState(0);
+  const [pendingProposal, setPendingProposal] = useState<{ title: string } | null>(null);
   // Use initialTab from URL route - no local state needed as navigation handles tab changes
   const activeTab = initialTab;
   const [metadata, setMetadata] = useState<DAOMetadata | null>(null);
@@ -544,8 +545,15 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
         notifyEvent(daoId, "proposal_created", txHash, { title: data.title, contentCid: data.contentCid });
       }
 
+      // Set pending state and navigate - the proposal list will show a "confirming" card
+      setPendingProposal({ title: data.title });
       navigateToTab('proposals');
-      setProposalKey(prev => prev + 1);
+
+      // Wait a moment for the transaction to propagate, then refresh
+      setTimeout(() => {
+        setPendingProposal(null);
+        setProposalKey(prev => prev + 1);
+      }, 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create proposal");
       console.error("Failed to create proposal:", err);
@@ -1068,6 +1076,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
           hasMembership={dao.hasMembership}
           vkSet={dao.vkSet}
           isInitializing={isInitializing}
+          pendingProposal={pendingProposal}
         />
       )}
 
