@@ -163,6 +163,11 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
   }, [activeTab, dao?.name]);
 
   const checkRegistrationStatus = async () => {
+    // Don't check during active registration to avoid race conditions
+    if (registering) {
+      return;
+    }
+
     const cached = publicKey ? getZKCredentials(daoId, publicKey) : null;
 
     if (!cached) {
@@ -442,6 +447,9 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
       setHasUnregisteredCredentials(false);
       setRegistrationStatus(alreadyRegistered ? "Credentials recovered!" : "Registration complete!");
       console.log(alreadyRegistered ? "Credentials recovered! Leaf index:" : "Registration successful! Leaf index:", leafIndex);
+
+      // Clear status after a short delay
+      setTimeout(() => setRegistrationStatus(null), 2000);
     } catch (err) {
       if (isUserRejection(err)) {
         console.log("User cancelled registration");
