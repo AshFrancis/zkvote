@@ -24,14 +24,18 @@ RUN cd src/contracts/comments && npm install --silent && npm run build || true
 
 # Set environment variables for build
 ARG VITE_RELAYER_URL
-ARG VITE_RELAYER_AUTH_TOKEN
 
 # Create .env file for Vite to pick up during build
-RUN echo "VITE_RELAYER_URL=${VITE_RELAYER_URL}" > .env && \
-    echo "VITE_RELAYER_AUTH_TOKEN=${VITE_RELAYER_AUTH_TOKEN}" >> .env
+# VITE_RELAYER_AUTH_TOKEN is passed as a build secret for security
+RUN echo "VITE_RELAYER_URL=${VITE_RELAYER_URL}" > .env
 
-# Build the frontend (skip tsc for deployment, vite handles transpilation)
-RUN npx vite build
+# Build the frontend with auth token from build secret
+# The --mount=type=secret makes the secret available only during this RUN command
+RUN --mount=type=secret,id=VITE_RELAYER_AUTH_TOKEN \
+    if [ -f /run/secrets/VITE_RELAYER_AUTH_TOKEN ]; then \
+      echo "VITE_RELAYER_AUTH_TOKEN=$(cat /run/secrets/VITE_RELAYER_AUTH_TOKEN)" >> .env; \
+    fi && \
+    npx vite build
 
 # Production stage - serve with nginx
 FROM nginx:alpine AS production
