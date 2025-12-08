@@ -106,6 +106,15 @@ router.post('/comment/anonymous', authGuard, commentLimiter, validateBody(anonym
       log('info', 'comment_anonymous_success', { daoId, proposalId, commentId });
       res.json({ success: true, commentId, txHash: sendResult.hash });
     } else {
+      // Log the actual failure reason
+      const resultXdr = 'resultXdr' in result ? result.resultXdr : undefined;
+      log('error', 'comment_anonymous_tx_failed', {
+        daoId,
+        proposalId,
+        txHash: sendResult.hash,
+        status: result.status,
+        resultXdr: resultXdr?.toXDR?.('base64')?.slice(0, 200),
+      });
       res.status(500).json({ error: 'Transaction failed', txHash: sendResult.hash });
     }
   } catch (err) {
