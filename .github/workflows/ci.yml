@@ -48,7 +48,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
@@ -76,7 +76,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: backend/package-lock.json
       - name: Install dependencies
@@ -89,6 +89,13 @@ jobs:
         run: npm test
         env:
           RELAYER_TEST_MODE: 'true'
+          SOROBAN_RPC_URL: 'https://soroban-testnet.stellar.org'
+          NETWORK_PASSPHRASE: 'Test SDF Network ; September 2015'
+          RELAYER_SECRET_KEY: 'SCZANGBA5AKIA7VTJQXBDKPQOBFZD3NWKNR3CQULPSFMJUADSHWFUCS'
+          RELAYER_AUTH_TOKEN: 'ci-test-token-placeholder-32-chars-min'
+          VOTING_CONTRACT_ID: 'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC'
+          TREE_CONTRACT_ID: 'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC'
+          COMMENTS_CONTRACT_ID: 'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC'
       - name: Security audit
         run: npm audit --audit-level=high || true
       - name: Build verification
@@ -104,7 +111,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: circuits/package-lock.json
       - name: Install dependencies
