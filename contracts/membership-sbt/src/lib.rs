@@ -8,6 +8,12 @@ const REGISTRY: Symbol = symbol_short!("registry");
 const VERSION: u32 = 1;
 const VERSION_KEY: Symbol = symbol_short!("ver");
 
+// TTL management: bump on every interaction to keep contract alive
+const INSTANCE_TTL_THRESHOLD: u32 = 120_960; // ~7 days
+const INSTANCE_TTL_EXTEND: u32 = 535_680; // ~31 days
+const PERSISTENT_TTL_THRESHOLD: u32 = 120_960;
+const PERSISTENT_TTL_EXTEND: u32 = 535_680;
+
 #[contracterror]
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum SbtError {
@@ -65,6 +71,18 @@ pub struct MembershipSbt;
 
 #[contractimpl]
 impl MembershipSbt {
+    fn bump_instance(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND);
+    }
+
+    fn bump_persistent<K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>>(env: &Env, key: &K) {
+        env.storage()
+            .persistent()
+            .extend_ttl(key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND);
+    }
+
     /// Constructor: Initialize contract with DAO Registry address
     pub fn __constructor(env: Env, registry: Address) {
         if env.storage().instance().has(&VERSION_KEY) {
@@ -95,11 +113,12 @@ impl MembershipSbt {
         // Add member at current index
         let index_key = DataKey::MemberAtIndex(dao_id, current_count);
         env.storage().persistent().set(&index_key, member);
+        Self::bump_persistent(env, &index_key);
 
         // Increment count
-        env.storage()
-            .persistent()
-            .set(&count_key, &(current_count + 1));
+        let new_count = current_count + 1;
+        env.storage().persistent().set(&count_key, &new_count);
+        Self::bump_persistent(env, &count_key);
     }
 
     /// Mint SBT to address for a specific DAO
@@ -113,6 +132,7 @@ impl MembershipSbt {
         admin: Address,
         encrypted_alias: Option<soroban_sdk::String>,
     ) {
+        Self::bump_instance(&env);
         // Verify admin authorization
         admin.require_auth();
 
@@ -141,6 +161,7 @@ impl MembershipSbt {
 
         // Set member
         env.storage().persistent().set(&member_key, &true);
+        Self::bump_persistent(&env, &member_key);
 
         // Clear revoked flag if it exists (allows re-minting)
         if env.storage().persistent().has(&revoked_key) {
@@ -151,6 +172,7 @@ impl MembershipSbt {
         if let Some(alias) = encrypted_alias {
             let alias_key = DataKey::Alias(dao_id, to.clone());
             env.storage().persistent().set(&alias_key, &alias);
+            Self::bump_persistent(&env, &alias_key);
         }
 
         // Add to enumeration list if new member
@@ -165,6 +187,7 @@ impl MembershipSbt {
     /// This function is called by the registry contract during create_and_init_dao
     /// to avoid re-entrancy issues. The registry is a trusted system contract.
     pub fn mint_from_registry(env: Env, dao_id: u64, to: Address) {
+        Self::bump_instance(&env);
         // Check not already minted
         if Self::has(env.clone(), dao_id, to.clone()) {
             panic_with_error!(&env, SbtError::AlreadyMinted);
@@ -172,6 +195,7 @@ impl MembershipSbt {
 
         let key = DataKey::Member(dao_id, to.clone());
         env.storage().persistent().set(&key, &true);
+        Self::bump_persistent(&env, &key);
 
         // Add to enumeration list
         Self::add_member_to_list(&env, dao_id, &to);
@@ -181,12 +205,16 @@ impl MembershipSbt {
 
     /// Check if address has SBT for a specific DAO (and is not revoked)
     pub fn has(env: Env, dao_id: u64, of: Address) -> bool {
+        Self::bump_instance(&env);
         let member_key = DataKey::Member(dao_id, of.clone());
         let revoked_key = DataKey::Revoked(dao_id, of);
 
         // Must have SBT AND not be revoked
-        let has_sbt = env.storage().persistent().get(&member_key).unwrap_or(false);
-        let is_revoked = env
+        let has_sbt: bool = env.storage().persistent().get(&member_key).unwrap_or(false);
+        if has_sbt {
+            Self::bump_persistent(&env, &member_key);
+        }
+        let is_revoked: bool = env
             .storage()
             .persistent()
             .get(&revoked_key)
@@ -197,6 +225,7 @@ impl MembershipSbt {
 
     /// Get registry address
     pub fn registry(env: Env) -> Address {
+        Self::bump_instance(&env);
         env.storage()
             .instance()
             .get(&REGISTRY)
@@ -205,13 +234,19 @@ impl MembershipSbt {
 
     /// Get encrypted alias for a member (if set)
     pub fn get_alias(env: Env, dao_id: u64, member: Address) -> Option<soroban_sdk::String> {
+        Self::bump_instance(&env);
         let key = DataKey::Alias(dao_id, member);
-        env.storage().persistent().get(&key)
+        let result: Option<soroban_sdk::String> = env.storage().persistent().get(&key);
+        if result.is_some() {
+            Self::bump_persistent(&env, &key);
+        }
+        result
     }
 
     /// Revoke an SBT (admin only)
     /// Sets revocation flag, keeping member entry and alias intact
     pub fn revoke(env: Env, dao_id: u64, member: Address, admin: Address) {
+        Self::bump_instance(&env);
         // Verify admin authorization
         admin.require_auth();
 
@@ -236,6 +271,7 @@ impl MembershipSbt {
         // Set revoked flag
         let revoked_key = DataKey::Revoked(dao_id, member.clone());
         env.storage().persistent().set(&revoked_key, &true);
+        Self::bump_persistent(&env, &revoked_key);
 
         SbtRevokeEvent { dao_id, member }.publish(&env);
     }
@@ -243,6 +279,7 @@ impl MembershipSbt {
     /// Leave DAO voluntarily (member self-revokes)
     /// Sets revocation flag, keeping member entry and alias intact
     pub fn leave(env: Env, dao_id: u64, member: Address) {
+        Self::bump_instance(&env);
         // Member must authorize their own departure
         member.require_auth();
 
@@ -255,6 +292,7 @@ impl MembershipSbt {
         // Set revoked flag
         let revoked_key = DataKey::Revoked(dao_id, member.clone());
         env.storage().persistent().set(&revoked_key, &true);
+        Self::bump_persistent(&env, &revoked_key);
 
         SbtLeaveEvent { dao_id, member }.publish(&env);
     }
@@ -267,6 +305,7 @@ impl MembershipSbt {
         member: Address,
         encrypted_alias: Option<soroban_sdk::String>,
     ) {
+        Self::bump_instance(&env);
         // Member must authorize
         member.require_auth();
 
@@ -295,6 +334,7 @@ impl MembershipSbt {
 
         // Set member
         env.storage().persistent().set(&member_key, &true);
+        Self::bump_persistent(&env, &member_key);
 
         // Clear revoked flag if it exists (allows re-joining)
         if env.storage().persistent().has(&revoked_key) {
@@ -305,6 +345,7 @@ impl MembershipSbt {
         if let Some(alias) = encrypted_alias {
             let alias_key = DataKey::Alias(dao_id, member.clone());
             env.storage().persistent().set(&alias_key, &alias);
+            Self::bump_persistent(&env, &alias_key);
         }
 
         // Add to enumeration list if new member
@@ -323,6 +364,7 @@ impl MembershipSbt {
         admin: Address,
         new_encrypted_alias: soroban_sdk::String,
     ) {
+        Self::bump_instance(&env);
         // Verify admin authorization
         admin.require_auth();
 
@@ -349,18 +391,29 @@ impl MembershipSbt {
         env.storage()
             .persistent()
             .set(&alias_key, &new_encrypted_alias);
+        Self::bump_persistent(&env, &alias_key);
     }
 
     /// Get total member count for a DAO
     pub fn get_member_count(env: Env, dao_id: u64) -> u64 {
+        Self::bump_instance(&env);
         let count_key = DataKey::MemberCount(dao_id);
-        env.storage().persistent().get(&count_key).unwrap_or(0)
+        let count: u64 = env.storage().persistent().get(&count_key).unwrap_or(0);
+        if count > 0 {
+            Self::bump_persistent(&env, &count_key);
+        }
+        count
     }
 
     /// Get member address at a specific index
     pub fn get_member_at_index(env: Env, dao_id: u64, index: u64) -> Option<Address> {
+        Self::bump_instance(&env);
         let index_key = DataKey::MemberAtIndex(dao_id, index);
-        env.storage().persistent().get(&index_key)
+        let result: Option<Address> = env.storage().persistent().get(&index_key);
+        if result.is_some() {
+            Self::bump_persistent(&env, &index_key);
+        }
+        result
     }
 
     /// Get a batch of members for a DAO
@@ -371,6 +424,7 @@ impl MembershipSbt {
         offset: u64,
         limit: u64,
     ) -> soroban_sdk::Vec<Address> {
+        Self::bump_instance(&env);
         let mut members = soroban_sdk::Vec::new(&env);
         let count = Self::get_member_count(env.clone(), dao_id);
 
@@ -388,6 +442,7 @@ impl MembershipSbt {
 
     /// Contract version for upgrade tracking.
     pub fn version(env: Env) -> u32 {
+        Self::bump_instance(&env);
         env.storage()
             .instance()
             .get(&VERSION_KEY)

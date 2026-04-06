@@ -29,7 +29,6 @@ test('vote returns coarse error when simulate disabled in test mode', async () =
       choice: true,
       nullifier: '0x1',
       root: '0x1',
-      commitment: '0x1',
       proof: { a: '0x', b: '0x', c: '0x' },
     });
   assert.equal(res.statusCode, 400);

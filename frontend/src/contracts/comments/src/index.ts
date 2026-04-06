@@ -32,9 +32,9 @@ if (typeof window !== 'undefined') {
 
 
 export const networks = {
-  standalone: {
-    networkPassphrase: "Standalone Network ; February 2017",
-    contractId: "CBCHAMOK6CW5ULRJ6CNFEOZLPUBN6AFAFHCFPBTEO6KLAHV33R7G26QF",
+  testnet: {
+    networkPassphrase: "Test SDF Network ; September 2015",
+    contractId: "CCUZNVADC24GEOPRD5A6PBCZGOQ6QOKJU6E5UBXI6RKDC7AWN5ATXNFF",
   }
 } as const
 
@@ -211,20 +211,20 @@ export interface Client {
    * Uses the same vote circuit as voting - just verifies membership without tracking nullifiers.
    * This allows multiple comments from the same user (different from voting which enforces uniqueness).
    */
-  add_anonymous_comment: ({dao_id, proposal_id, content_cid, parent_id, nullifier, root, commitment, vote_choice, proof}: {dao_id: u64, proposal_id: u64, content_cid: string, parent_id: Option<u64>, nullifier: u256, root: u256, commitment: u256, vote_choice: boolean, proof: Proof}, options?: MethodOptions) => Promise<AssembledTransaction<u64>>
+  add_anonymous_comment: ({dao_id, proposal_id, content_cid, parent_id, nullifier, root, vote_choice, proof}: {dao_id: u64, proposal_id: u64, content_cid: string, parent_id: Option<u64>, nullifier: u256, root: u256, vote_choice: boolean, proof: Proof}, options?: MethodOptions) => Promise<AssembledTransaction<u64>>
 
   /**
    * Construct and simulate a edit_anonymous_comment transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Edit an anonymous comment (requires proof with same nullifier)
    * We verify the user owns the comment by checking the stored nullifier
    */
-  edit_anonymous_comment: ({dao_id, proposal_id, comment_id, new_content_cid, nullifier, root, commitment, vote_choice, proof}: {dao_id: u64, proposal_id: u64, comment_id: u64, new_content_cid: string, nullifier: u256, root: u256, commitment: u256, vote_choice: boolean, proof: Proof}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+  edit_anonymous_comment: ({dao_id, proposal_id, comment_id, new_content_cid, nullifier, root, vote_choice, proof}: {dao_id: u64, proposal_id: u64, comment_id: u64, new_content_cid: string, nullifier: u256, root: u256, vote_choice: boolean, proof: Proof}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
    * Construct and simulate a delete_anonymous_comment transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Delete an anonymous comment (requires proof)
    */
-  delete_anonymous_comment: ({dao_id, proposal_id, comment_id, nullifier, root, commitment, vote_choice, proof}: {dao_id: u64, proposal_id: u64, comment_id: u64, nullifier: u256, root: u256, commitment: u256, vote_choice: boolean, proof: Proof}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+  delete_anonymous_comment: ({dao_id, proposal_id, comment_id, nullifier, root, vote_choice, proof}: {dao_id: u64, proposal_id: u64, comment_id: u64, nullifier: u256, root: u256, vote_choice: boolean, proof: Proof}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
 }
 export class Client extends ContractClient {
@@ -266,9 +266,9 @@ export class Client extends ContractClient {
         "AAAABQAAAAAAAAAAAAAAE0NvbW1lbnRDcmVhdGVkRXZlbnQAAAAAAQAAABVjb21tZW50X2NyZWF0ZWRfZXZlbnQAAAAAAAAEAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAAAAAAtwcm9wb3NhbF9pZAAAAAAGAAAAAQAAAAAAAAAKY29tbWVudF9pZAAAAAAABgAAAAAAAAAAAAAADGlzX2Fub255bW91cwAAAAEAAAAAAAAAAg==",
         "AAAABQAAAAAAAAAAAAAAE0NvbW1lbnREZWxldGVkRXZlbnQAAAAAAQAAABVjb21tZW50X2RlbGV0ZWRfZXZlbnQAAAAAAAAEAAAAAAAAAAZkYW9faWQAAAAAAAYAAAABAAAAAAAAAAtwcm9wb3NhbF9pZAAAAAAGAAAAAQAAAAAAAAAKY29tbWVudF9pZAAAAAAABgAAAAAAAAAAAAAACmRlbGV0ZWRfYnkAAAAAAAQAAAAAAAAAAg==",
         "AAAAAAAAABhBZG1pbiBkZWxldGUgYW55IGNvbW1lbnQAAAAUYWRtaW5fZGVsZXRlX2NvbW1lbnQAAAAEAAAAAAAAAAZkYW9faWQAAAAAAAYAAAAAAAAAC3Byb3Bvc2FsX2lkAAAAAAYAAAAAAAAACmNvbW1lbnRfaWQAAAAAAAYAAAAAAAAABWFkbWluAAAAAAAAEwAAAAA=",
-        "AAAAAAAAAP9BZGQgYW4gYW5vbnltb3VzIGNvbW1lbnQgKHJlcXVpcmVzIFpLIHByb29mIHdpdGggdm90ZSBjaXJjdWl0KQpVc2VzIHRoZSBzYW1lIHZvdGUgY2lyY3VpdCBhcyB2b3RpbmcgLSBqdXN0IHZlcmlmaWVzIG1lbWJlcnNoaXAgd2l0aG91dCB0cmFja2luZyBudWxsaWZpZXJzLgpUaGlzIGFsbG93cyBtdWx0aXBsZSBjb21tZW50cyBmcm9tIHRoZSBzYW1lIHVzZXIgKGRpZmZlcmVudCBmcm9tIHZvdGluZyB3aGljaCBlbmZvcmNlcyB1bmlxdWVuZXNzKS4AAAAAFWFkZF9hbm9ueW1vdXNfY29tbWVudAAAAAAAAAkAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAALcHJvcG9zYWxfaWQAAAAABgAAAAAAAAALY29udGVudF9jaWQAAAAAEAAAAAAAAAAJcGFyZW50X2lkAAAAAAAD6AAAAAYAAAAAAAAACW51bGxpZmllcgAAAAAAAAwAAAAAAAAABHJvb3QAAAAMAAAAAAAAAApjb21taXRtZW50AAAAAAAMAAAAAAAAAAt2b3RlX2Nob2ljZQAAAAABAAAAAAAAAAVwcm9vZgAAAAAAB9AAAAAFUHJvb2YAAAAAAAABAAAABg==",
-        "AAAAAAAAAINFZGl0IGFuIGFub255bW91cyBjb21tZW50IChyZXF1aXJlcyBwcm9vZiB3aXRoIHNhbWUgbnVsbGlmaWVyKQpXZSB2ZXJpZnkgdGhlIHVzZXIgb3ducyB0aGUgY29tbWVudCBieSBjaGVja2luZyB0aGUgc3RvcmVkIG51bGxpZmllcgAAAAAWZWRpdF9hbm9ueW1vdXNfY29tbWVudAAAAAAACQAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAtwcm9wb3NhbF9pZAAAAAAGAAAAAAAAAApjb21tZW50X2lkAAAAAAAGAAAAAAAAAA9uZXdfY29udGVudF9jaWQAAAAAEAAAAAAAAAAJbnVsbGlmaWVyAAAAAAAADAAAAAAAAAAEcm9vdAAAAAwAAAAAAAAACmNvbW1pdG1lbnQAAAAAAAwAAAAAAAAAC3ZvdGVfY2hvaWNlAAAAAAEAAAAAAAAABXByb29mAAAAAAAH0AAAAAVQcm9vZgAAAAAAAAA=",
-        "AAAAAAAAACxEZWxldGUgYW4gYW5vbnltb3VzIGNvbW1lbnQgKHJlcXVpcmVzIHByb29mKQAAABhkZWxldGVfYW5vbnltb3VzX2NvbW1lbnQAAAAIAAAAAAAAAAZkYW9faWQAAAAAAAYAAAAAAAAAC3Byb3Bvc2FsX2lkAAAAAAYAAAAAAAAACmNvbW1lbnRfaWQAAAAAAAYAAAAAAAAACW51bGxpZmllcgAAAAAAAAwAAAAAAAAABHJvb3QAAAAMAAAAAAAAAApjb21taXRtZW50AAAAAAAMAAAAAAAAAAt2b3RlX2Nob2ljZQAAAAABAAAAAAAAAAVwcm9vZgAAAAAAB9AAAAAFUHJvb2YAAAAAAAAA",
+        "AAAAAAAAAP9BZGQgYW4gYW5vbnltb3VzIGNvbW1lbnQgKHJlcXVpcmVzIFpLIHByb29mIHdpdGggdm90ZSBjaXJjdWl0KQpVc2VzIHRoZSBzYW1lIHZvdGUgY2lyY3VpdCBhcyB2b3RpbmcgLSBqdXN0IHZlcmlmaWVzIG1lbWJlcnNoaXAgd2l0aG91dCB0cmFja2luZyBudWxsaWZpZXJzLgpUaGlzIGFsbG93cyBtdWx0aXBsZSBjb21tZW50cyBmcm9tIHRoZSBzYW1lIHVzZXIgKGRpZmZlcmVudCBmcm9tIHZvdGluZyB3aGljaCBlbmZvcmNlcyB1bmlxdWVuZXNzKS4AAAAAFWFkZF9hbm9ueW1vdXNfY29tbWVudAAAAAAAAAgAAAAAAAAABmRhb19pZAAAAAAABgAAAAAAAAALcHJvcG9zYWxfaWQAAAAABgAAAAAAAAALY29udGVudF9jaWQAAAAAEAAAAAAAAAAJcGFyZW50X2lkAAAAAAAD6AAAAAYAAAAAAAAACW51bGxpZmllcgAAAAAAAAwAAAAAAAAABHJvb3QAAAAMAAAAAAAAAAt2b3RlX2Nob2ljZQAAAAABAAAAAAAAAAVwcm9vZgAAAAAAB9AAAAAFUHJvb2YAAAAAAAABAAAABg==",
+        "AAAAAAAAAINFZGl0IGFuIGFub255bW91cyBjb21tZW50IChyZXF1aXJlcyBwcm9vZiB3aXRoIHNhbWUgbnVsbGlmaWVyKQpXZSB2ZXJpZnkgdGhlIHVzZXIgb3ducyB0aGUgY29tbWVudCBieSBjaGVja2luZyB0aGUgc3RvcmVkIG51bGxpZmllcgAAAAAWZWRpdF9hbm9ueW1vdXNfY29tbWVudAAAAAAACAAAAAAAAAAGZGFvX2lkAAAAAAAGAAAAAAAAAAtwcm9wb3NhbF9pZAAAAAAGAAAAAAAAAApjb21tZW50X2lkAAAAAAAGAAAAAAAAAA9uZXdfY29udGVudF9jaWQAAAAAEAAAAAAAAAAJbnVsbGlmaWVyAAAAAAAADAAAAAAAAAAEcm9vdAAAAAwAAAAAAAAAC3ZvdGVfY2hvaWNlAAAAAAEAAAAAAAAABXByb29mAAAAAAAH0AAAAAVQcm9vZgAAAAAAAAA=",
+        "AAAAAAAAACxEZWxldGUgYW4gYW5vbnltb3VzIGNvbW1lbnQgKHJlcXVpcmVzIHByb29mKQAAABhkZWxldGVfYW5vbnltb3VzX2NvbW1lbnQAAAAHAAAAAAAAAAZkYW9faWQAAAAAAAYAAAAAAAAAC3Byb3Bvc2FsX2lkAAAAAAYAAAAAAAAACmNvbW1lbnRfaWQAAAAAAAYAAAAAAAAACW51bGxpZmllcgAAAAAAAAwAAAAAAAAABHJvb3QAAAAMAAAAAAAAAAt2b3RlX2Nob2ljZQAAAAABAAAAAAAAAAVwcm9vZgAAAAAAB9AAAAAFUHJvb2YAAAAAAAAA",
         "AAAAAQAAAA1Hcm90aDE2IFByb29mAAAAAAAAAAAAAAVQcm9vZgAAAAAAAAMAAAAAAAAAAWEAAAAAAAPuAAAAQAAAAAAAAAABYgAAAAAAA+4AAACAAAAAAAAAAAFjAAAAAAAD7gAAAEA=",
         "AAAABAAAAAAAAAAAAAAADEdyb3RoMTZFcnJvcgAAAAMAAAAxSUMgdmVjdG9yIGxlbmd0aCBkb2Vzbid0IG1hdGNoIHB1YmxpYyBzaWduYWxzICsgMQAAAAAAABBJY0xlbmd0aE1pc21hdGNoAAAAHgAAAElQdWJsaWMgc2lnbmFsIHZhbHVlID49IEJOMjU0IHNjYWxhciBmaWVsZCBtb2R1bHVzIChpbnZhbGlkIGZpZWxkIGVsZW1lbnQpAAAAAAAAEFNpZ25hbE5vdEluRmllbGQAAAAfAAAAG051bGxpZmllciBpcyB6ZXJvIChpbnZhbGlkKQAAAAAQSW52YWxpZE51bGxpZmllcgAAACA=",
         "AAAAAQAAACJHcm90aDE2IFZlcmlmaWNhdGlvbiBLZXkgZm9yIEJOMjU0AAAAAAAAAAAAD1ZlcmlmaWNhdGlvbktleQAAAAAFAAAAAAAAAAVhbHBoYQAAAAAAA+4AAABAAAAAAAAAAARiZXRhAAAD7gAAAIAAAAAAAAAABWRlbHRhAAAAAAAD7gAAAIAAAAAAAAAABWdhbW1hAAAAAAAD7gAAAIAAAAAAAAAAAmljAAAAAAPqAAAD7gAAAEA=" ]),

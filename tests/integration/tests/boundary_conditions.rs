@@ -15,7 +15,10 @@ use voting::{VerificationKey, VoteMode, VotingClient};
 fn setup_contracts(env: &Env) -> (Address, Address, Address, Address, Address) {
     let registry_id = env.register(dao_registry::DaoRegistry, ());
     let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let tree_id = env.register(
+        membership_tree::MembershipTree,
+        (sbt_id.clone(), registry_id.clone()),
+    );
     let voting_id = env.register(voting::Voting, (tree_id.clone(), registry_id.clone()));
 
     let admin = Address::generate(env);
@@ -139,9 +142,9 @@ fn test_root_history_eviction_behavior() {
     // Roots from early registrations may or may not be valid depending on
     // implementation details of the circular buffer
     // Let's verify the most recent roots are definitely valid
-    for i in 30..36 {
+    for (i, root) in roots.iter().enumerate().skip(30).take(6) {
         assert!(
-            tree_client.root_ok(&dao_id, &roots[i]),
+            tree_client.root_ok(&dao_id, root),
             "Recent root at index {} should be valid",
             i
         );

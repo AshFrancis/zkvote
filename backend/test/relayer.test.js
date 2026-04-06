@@ -88,7 +88,6 @@ test('vote rejects malformed proof hex', async () => {
       choice: true,
       nullifier: '0x01',
       root: '0x01',
-      commitment: '0x01',
       proof: { a: '0xz', b: '0x1', c: '0x1' },
     });
   assert.equal(res.statusCode, 400);
@@ -136,7 +135,6 @@ test('vote rejects all-zero proof components', async () => {
       choice: true,
       nullifier: '0x01',
       root: '0x01',
-      commitment: '0x01',
       proof: { a: zeroA, b: zeroB, c: zeroA },
     });
   assert.equal(res.statusCode, 400);
@@ -155,7 +153,6 @@ test('generic errors hide message when RELAYER_GENERIC_ERRORS=true', async () =>
       choice: true,
       nullifier: '0xz', // malformed
       root: '0x01',
-      commitment: '0x01',
       proof: { a: '0x' + '11'.repeat(64), b: '0x' + '22'.repeat(128), c: '0x' + '33'.repeat(64) },
     });
   assert.equal(res.statusCode, 400);

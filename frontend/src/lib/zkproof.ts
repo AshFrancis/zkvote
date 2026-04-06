@@ -24,7 +24,7 @@ export interface CommentProofInput {
   daoId: string;
   proposalId: string;
   commentNonce: string; // Nonce for multiple comments (0, 1, 2, ...)
-  commitment: string; // Identity commitment - private input (still public for comments)
+  commitment: string; // Identity commitment - used for proof generation (private circuit input)
   pathElements: string[];
   pathIndices: number[];
 }

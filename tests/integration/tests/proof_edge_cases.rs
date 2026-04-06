@@ -134,7 +134,10 @@ const REAL_NULLIFIER_HEX: &str = "0cbc551a937e12107e513efd646a4f32eec3f0d2c13053
 fn setup_contracts(env: &Env) -> (Address, Address, Address, Address, Address) {
     let registry_id = env.register(dao_registry::DaoRegistry, ());
     let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let tree_id = env.register(
+        membership_tree::MembershipTree,
+        (sbt_id.clone(), registry_id.clone()),
+    );
     let voting_id = env.register(voting::Voting, (tree_id.clone(), registry_id.clone()));
 
     let admin = Address::generate(env);

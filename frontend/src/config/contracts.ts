@@ -1,21 +1,23 @@
 // Deployed contract addresses and network configuration
-
-// Deploy version for cache invalidation (increment on each deployment)
-export const DEPLOY_VERSION = "v1.0.0-futurenet";
+// Auto-generated on Fri  3 Apr 2026 00:43:03 BST
 
 export const CONTRACTS = {
-  REGISTRY_ID: "CCPU3L56OKF73DY2UCADZG7MG7CTBP52N5K4BYXOY5MWV3FJ6OBPK2BY",
-  SBT_ID: "CB2X7TBDIF5OXX4Z2LESL2MX3FZ5GSPEBPUYGBOI3VREJWI6X7FGP7NU",
-  TREE_ID: "CDZFVEBB57T3GIMEEN5JITCNF25WF2KQZBTUBTXZDPOANKAP7Z4X5UDB",
-  VOTING_ID: "CAEQUA6WXDCKKSO3DN57RL6KXHIWREWPCFD3CLUXSQN653YRZEKIWKG4",
-  COMMENTS_ID: "CCJU5L3UFRRNXKOAQXNJ2SOQD5ZID3U4F4HAPF6RIC3KUE5FZG5APMH3",
+  REGISTRY_ID: "CBGK5YFR5544QNHUNR4WKB5ECL75DAY3R4M5UNALA42ZBPKOFNL5RM43",
+  SBT_ID: "CCHLRCF47DJFQY6AR2PE3WRDRT7SDKSQJSJUGU77COW7GZMY5YTEUWYX",
+  TREE_ID: "CAZC3WSRGE3PI6AZ3NHRKIZFVBEOOLFDP7RD6BMHIMRYV4VEYC42ARQZ",
+  VOTING_ID: "CCYGWEUNWOBHJ6JIHDMTK2XSSDVMQ7ZGBJQE6QR2VYD4FRQGZR5EYKJ2",
+  COMMENTS_ID: "CCUZNVADC24GEOPRD5A6PBCZGOQ6QOKJU6E5UBXI6RKDC7AWN5ATXNFF",
 } as const;
 
 export const NETWORK_CONFIG = {
-  rpcUrl: "https://rpc-futurenet.stellar.org",
-  networkPassphrase: "Test SDF Future Network ; October 2022",
-  networkName: "futurenet",
+  rpcUrl: "https://soroban-testnet.stellar.org",
+  networkPassphrase: "Test SDF Network ; September 2015",
+  networkName: "testnet",
 } as const;
+
+// Deployment version - changes on each deployment
+// Used for cache invalidation in frontend
+export const DEPLOY_VERSION = "1775173273";
 
 // Contract method names for type safety
 export const CONTRACT_METHODS = {

@@ -39,9 +39,9 @@ export default function DAOList({ onSelectDao, selectedDaoId, isConnected, userA
   // Log when query is enabled
   useEffect(() => {
     if (!isInitializing) {
-      console.log('[DAOList] Loading all DAOs', userAddress ? `for user ${userAddress.slice(0, 8)}...` : '');
+      if (import.meta.env.DEV) console.log('[DAOList] Loading all DAOs', userAddress ? `for user ${userAddress.slice(0, 8)}...` : '');
     } else {
-      console.log('[DAOList] Waiting for wallet initialization...');
+      if (import.meta.env.DEV) console.log('[DAOList] Waiting for wallet initialization...');
     }
   }, [isInitializing, userAddress]);
 

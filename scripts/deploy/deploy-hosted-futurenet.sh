@@ -144,7 +144,7 @@ success "Membership SBT deployed: $SBT_ID"
 sleep 5  # Wait for sequence number to sync
 
 # Deploy Membership Tree
-TREE_ID=$(deploy_contract "Membership Tree" "target/wasm32v1-none/release/membership_tree.wasm" --sbt_contract "$SBT_ID")
+TREE_ID=$(deploy_contract "Membership Tree" "target/wasm32v1-none/release/membership_tree.wasm" --sbt_contract "$SBT_ID" --registry "$REGISTRY_ID")
 if [ -z "$TREE_ID" ]; then
   echo "ERROR: Failed to deploy Membership Tree after multiple attempts"
   exit 1
@@ -285,9 +285,10 @@ while [ $TREE_INIT_ATTEMPT -le $TREE_INIT_ATTEMPTS ]; do
     --rpc-url "$RPC_URL" \
     --network-passphrase "$NETWORK_PASSPHRASE" \
     --source "$KEY_NAME" \
-    -- init_tree_from_registry \
+    -- init_tree \
     --dao_id "$DAO_ID" \
-    --depth 18 2>&1); then
+    --depth 18 \
+    --admin "$ADMIN_ADDRESS" 2>&1); then
     success "Merkle tree initialized (depth 18, capacity 262,144)"
     break
   else

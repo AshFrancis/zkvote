@@ -5,9 +5,9 @@ export * from '@stellar/stellar-sdk';
 export * as contract from '@stellar/stellar-sdk/contract';
 export * as rpc from '@stellar/stellar-sdk/rpc';
 export declare const networks: {
-    readonly standalone: {
-        readonly networkPassphrase: "Standalone Network ; February 2017";
-        readonly contractId: "CCRWUPUKDQO7S6L6CQ3QILG7IFKZDVBJXW7J7LNGYJBIW5YC4XBD5DYA";
+    readonly testnet: {
+        readonly networkPassphrase: "Test SDF Network ; September 2015";
+        readonly contractId: "CAZC3WSRGE3PI6AZ3NHRKIZFVBEOOLFDP7RD6BMHIMRYV4VEYC42ARQZ";
     };
 };
 export type DataKey = {
@@ -285,8 +285,9 @@ export declare class Client extends ContractClient {
     readonly options: ContractClientOptions;
     static deploy<T = Client>(
     /** Constructor/Initialization Args for the contract's `__constructor` method */
-    { sbt_contract }: {
+    { sbt_contract, registry }: {
         sbt_contract: string;
+        registry: string;
     }, 
     /** Options for initializing a Client as well as for calling a method, with extras specific to deploying. */
     options: MethodOptions & Omit<ContractClientOptions, "contractId"> & {

@@ -265,7 +265,6 @@ test('POST /comment/anonymous - requires authentication', async () => {
       parentId: null,
       nullifier: '0x1234',
       root: '0x5678',
-      commitment: '0xabcd',
       nonce: 0,
       proof: { a: '0x1', b: '0x2', c: '0x3' },
     });
@@ -285,7 +284,6 @@ test('POST /comment/anonymous - validates required fields', async () => {
       proposalId: 1,
       contentCid: 'bafybeihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku', // Valid CIDv1
       root: '11'.repeat(32), // 64 hex chars
-      commitment: '22'.repeat(32), // 64 hex chars
       proof: { a: '44'.repeat(64), b: '55'.repeat(128), c: '66'.repeat(64) },
     });
   assert.equal(res.statusCode, 400);
@@ -307,7 +305,6 @@ test('POST /comment/anonymous - validates required fields', async () => {
       contentCid: 'bafybeihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
       nullifier: '11'.repeat(32),
       root: '22'.repeat(32),
-      commitment: '33'.repeat(32),
       voteChoice: true,
     });
   assert.equal(res.statusCode, 400);
@@ -326,7 +323,6 @@ test('POST /comment/anonymous - validates voteChoice is boolean', async () => {
       contentCid: 'bafybeihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku', // Valid CIDv1
       nullifier: '11'.repeat(32), // 64 hex chars without 0x
       root: '22'.repeat(32),
-      commitment: '33'.repeat(32),
       voteChoice: 'invalid', // Should be boolean
       proof: { a: '44'.repeat(64), b: '55'.repeat(128), c: '66'.repeat(64) },
     });
@@ -355,7 +351,6 @@ test('POST /comment/anonymous - validates nullifier is within BN254 field', asyn
       contentCid: 'bafybeihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku', // Valid CIDv1
       nullifier: tooBig,
       root: '22'.repeat(32),
-      commitment: '33'.repeat(32),
       voteChoice: true,
       proof: { a: '44'.repeat(64), b: '55'.repeat(128), c: '66'.repeat(64) },
     });

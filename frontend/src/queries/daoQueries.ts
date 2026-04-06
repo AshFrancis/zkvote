@@ -8,6 +8,7 @@ export interface DaoInfo {
   name: string;
   admin: string;
   isAdmin: boolean;
+  membershipOpen: boolean;
 }
 
 /**
@@ -53,6 +54,7 @@ async function fetchDaoInfo(
     name: result.result.name,
     admin: result.result.admin,
     isAdmin: result.result.admin === publicKey,
+    membershipOpen: result.result.membership_open,
   };
 }
 

@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use super::*;
 use soroban_sdk::{testutils::Address as _, Env, String};
 
@@ -21,8 +19,8 @@ fn test_create_dao() {
     assert_eq!(info.id, 1);
     assert_eq!(info.admin, admin);
     assert_eq!(info.name, name);
-    assert_eq!(info.membership_open, false);
-    assert_eq!(info.members_can_propose, true);
+    assert!(!info.membership_open);
+    assert!(info.members_can_propose);
 }
 
 #[test]
@@ -300,7 +298,7 @@ fn test_membership_open_field() {
         &true,
         &None,
     );
-    assert_eq!(client.is_membership_open(&closed_dao_id), false);
+    assert!(!client.is_membership_open(&closed_dao_id));
 
     // Create open membership DAO
     let open_dao_id = client.create_dao(
@@ -310,14 +308,14 @@ fn test_membership_open_field() {
         &true,
         &None,
     );
-    assert_eq!(client.is_membership_open(&open_dao_id), true);
+    assert!(client.is_membership_open(&open_dao_id));
 
     // Verify info struct contains correct value
     let closed_info = client.get_dao(&closed_dao_id);
-    assert_eq!(closed_info.membership_open, false);
+    assert!(!closed_info.membership_open);
 
     let open_info = client.get_dao(&open_dao_id);
-    assert_eq!(open_info.membership_open, true);
+    assert!(open_info.membership_open);
 }
 
 #[test]
@@ -338,7 +336,7 @@ fn test_members_can_propose_field() {
         &true,
         &None,
     );
-    assert_eq!(client.members_can_propose(&members_propose_dao), true);
+    assert!(client.members_can_propose(&members_propose_dao));
 
     // Create DAO where only admin can propose
     let admin_only_dao = client.create_dao(
@@ -348,14 +346,14 @@ fn test_members_can_propose_field() {
         &false,
         &None,
     );
-    assert_eq!(client.members_can_propose(&admin_only_dao), false);
+    assert!(!client.members_can_propose(&admin_only_dao));
 
     // Verify info struct contains correct value
     let members_info = client.get_dao(&members_propose_dao);
-    assert_eq!(members_info.members_can_propose, true);
+    assert!(members_info.members_can_propose);
 
     let admin_info = client.get_dao(&admin_only_dao);
-    assert_eq!(admin_info.members_can_propose, false);
+    assert!(!admin_info.members_can_propose);
 }
 
 #[test]
@@ -376,15 +374,15 @@ fn test_set_proposal_mode() {
         &true,
         &None,
     );
-    assert_eq!(client.members_can_propose(&dao_id), true);
+    assert!(client.members_can_propose(&dao_id));
 
     // Change to admin-only mode
     client.set_proposal_mode(&dao_id, &false, &admin);
-    assert_eq!(client.members_can_propose(&dao_id), false);
+    assert!(!client.members_can_propose(&dao_id));
 
     // Change back to members-can-propose mode
     client.set_proposal_mode(&dao_id, &true, &admin);
-    assert_eq!(client.members_can_propose(&dao_id), true);
+    assert!(client.members_can_propose(&dao_id));
 }
 
 #[test]

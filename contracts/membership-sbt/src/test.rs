@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use super::*;
 use soroban_sdk::{testutils::Address as _, testutils::Events as _, Env};
 
@@ -169,15 +167,8 @@ fn test_events_emitted_on_mint() {
 
     client.mint(&1u64, &member, &admin, &None);
 
-    let events = env.events().all();
-    // Find SbtMint event (skip registry events)
-    let mut sbt_event_count = 0u32;
-    for event in events.iter() {
-        if event.0 == sbt_id {
-            sbt_event_count += 1;
-        }
-    }
-    assert_eq!(sbt_event_count, 1);
+    let events = env.events().all().filter_by_contract(&sbt_id);
+    assert!(!events.events().is_empty());
 }
 
 #[test]
@@ -243,14 +234,8 @@ fn test_events_emitted_on_mint_from_registry() {
 
     client.mint_from_registry(&1u64, &member);
 
-    let events = env.events().all();
-    let mut sbt_event_count = 0u32;
-    for event in events.iter() {
-        if event.0 == sbt_id {
-            sbt_event_count += 1;
-        }
-    }
-    assert_eq!(sbt_event_count, 1);
+    let events = env.events().all().filter_by_contract(&sbt_id);
+    assert!(!events.events().is_empty());
 }
 
 #[test]

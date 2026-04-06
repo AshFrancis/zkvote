@@ -47,7 +47,7 @@ async function getZeroHashes(): Promise<string[]> {
  * For a sparse tree (few leaves), most path elements will be zero hashes
  *
  * @param leafIndex Index of the leaf (0-based)
- * @param totalLeaves Total number of leaves currently in tree
+ * @param _totalLeaves Total number of leaves currently in tree
  * @param leaves All leaf values (commitments) in order
  * @returns Object with pathElements and pathIndices
  */

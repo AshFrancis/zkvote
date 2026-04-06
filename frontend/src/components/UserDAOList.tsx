@@ -39,10 +39,10 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
   useEffect(() => {
     // Wait for wallet to finish initializing before loading
     if (isInitializing) {
-      console.log('[UserDAOList] Waiting for wallet initialization...');
+      if (import.meta.env.DEV) console.log('[UserDAOList] Waiting for wallet initialization...');
       return;
     }
-    console.log('[UserDAOList] Loading user DAOs for:', userAddress);
+    if (import.meta.env.DEV) console.log('[UserDAOList] Loading user DAOs for:', userAddress);
     loadUserDaos();
   }, [userAddress, isInitializing]);
 

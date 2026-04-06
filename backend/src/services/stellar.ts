@@ -53,6 +53,29 @@ try {
 export const relayerKeypair = _relayerKeypair;
 
 // ============================================
+// SEQUENCE LOCK (TRANSACTION NONCE MUTEX)
+// ============================================
+
+/**
+ * Promise-based mutex to serialize transaction submissions.
+ * Prevents nonce race conditions when multiple requests try to
+ * build+submit transactions concurrently using the same relayer account.
+ */
+let sequenceLock: Promise<void> = Promise.resolve();
+
+export async function withSequenceLock<T>(fn: () => Promise<T>): Promise<T> {
+  const previous = sequenceLock;
+  let resolve: () => void;
+  sequenceLock = new Promise<void>(r => { resolve = r; });
+  await previous;
+  try {
+    return await fn();
+  } finally {
+    resolve!();
+  }
+}
+
+// ============================================
 // SOROBAN RPC CLIENT
 // ============================================
 
@@ -83,11 +106,16 @@ export async function callWithTimeout<T>(fn: () => Promise<T>, label: string): P
 }
 
 /**
- * Wait for transaction confirmation
+ * Wait for transaction confirmation.
+ *
+ * Polls getTransaction up to maxAttempts times (1 second apart).
+ * Note: callers may also wrap this in callWithTimeout for an outer
+ * deadline -- the two timeouts are intentionally independent: this
+ * loop controls polling cadence while callWithTimeout enforces a
+ * hard wall-clock limit.
  */
-export async function waitForTransaction(hash: string): Promise<StellarSdk.rpc.Api.GetTransactionResponse> {
+export async function waitForTransaction(hash: string, maxAttempts = 30): Promise<StellarSdk.rpc.Api.GetTransactionResponse> {
   let attempts = 0;
-  const maxAttempts = 30;
 
   while (attempts < maxAttempts) {
     const result = await (server as StellarSdk.rpc.Server).getTransaction(hash);

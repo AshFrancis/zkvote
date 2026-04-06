@@ -11,8 +11,8 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-# P25 Preview SDK with BN254 + Poseidon (release/v25-preview branch)
-soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "d64ed4c27f9d3c919d4c5369de40a9ba88163f2c" }
+# Soroban SDK with BN254 + Poseidon support (Protocol 25+)
+soroban-sdk = "25.3.0"
 num-bigint = "0.4"
 
 [profile.release]

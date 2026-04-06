@@ -22,7 +22,6 @@ import {
   type CommentWithContent,
   formatRelativeTime,
   truncateAddress,
-  canEditAnonymousComment,
   deleteComment,
   uploadCommentContent,
   editComment,
@@ -79,12 +78,6 @@ export default function Comment({
   }, [publicKey]);
 
   const isOwnPublicComment = comment.author === publicKey;
-  const isOwnAnonymousComment =
-    comment.author === null &&
-    comment.nullifier &&
-    canEditAnonymousComment(daoId, proposalId, comment.nullifier);
-  const isOwnComment = isOwnPublicComment || isOwnAnonymousComment;
-
   // Only public comments can be edited (anonymous edit requires ZK proof - not yet implemented)
   const canEdit = isOwnPublicComment && !comment.deleted;
   // Both public and anonymous comments can be deleted (anonymous delete also needs ZK proof - TODO)

@@ -96,7 +96,6 @@ export interface AnonymousCommentRequest {
   voteChoice: boolean;
   nullifier: U256Hex;
   root: U256Hex;
-  commitment: U256Hex;
   proof: Groth16Proof;
 }
 

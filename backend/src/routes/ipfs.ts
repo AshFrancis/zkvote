@@ -46,14 +46,18 @@ const upload = multer({
 
 interface CachedContent {
   data: unknown;
-  timestamp: number;
+  expiry: number;
 }
 
+const MAX_CACHE_SIZE = 500;
 const ipfsCache = new Map<string, CachedContent>();
 
 function getCachedContent(cid: string): unknown | null {
   const cached = ipfsCache.get(cid);
-  if (cached && Date.now() - cached.timestamp < LIMITS.IPFS_CACHE_TTL) {
+  if (cached && Date.now() < cached.expiry) {
+    // Move to end for LRU behavior (Map preserves insertion order)
+    ipfsCache.delete(cid);
+    ipfsCache.set(cid, cached);
     return cached.data;
   }
   ipfsCache.delete(cid);
@@ -61,16 +65,16 @@ function getCachedContent(cid: string): unknown | null {
 }
 
 function setCachedContent(cid: string, data: unknown): void {
-  ipfsCache.set(cid, { data, timestamp: Date.now() });
-  // Clean up old entries periodically
-  if (ipfsCache.size > 1000) {
-    const now = Date.now();
-    for (const [key, value] of ipfsCache) {
-      if (now - value.timestamp > LIMITS.IPFS_CACHE_TTL) {
-        ipfsCache.delete(key);
-      }
+  // If key already exists, delete first so re-insert moves it to the end
+  ipfsCache.delete(cid);
+  // Evict oldest entry (first key in Map) if at capacity
+  if (ipfsCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = ipfsCache.keys().next().value;
+    if (firstKey !== undefined) {
+      ipfsCache.delete(firstKey);
     }
   }
+  ipfsCache.set(cid, { data, expiry: Date.now() + LIMITS.IPFS_CACHE_TTL });
 }
 
 // ============================================

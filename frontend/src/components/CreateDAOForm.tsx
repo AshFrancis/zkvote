@@ -103,7 +103,7 @@ export function CreateDAOForm({ publicKey, kit, isInitializing, onCancel, onSucc
             const isTryAgainLater = errorMessage.includes("TRY_AGAIN_LATER");
 
             if (isTryAgainLater && attempt < maxRetries) {
-              console.log(`Transaction failed with TRY_AGAIN_LATER, retrying (attempt ${attempt}/${maxRetries})...`);
+              if (import.meta.env.DEV) console.log(`Transaction failed with TRY_AGAIN_LATER, retrying (attempt ${attempt}/${maxRetries})...`);
               await new Promise(resolve => setTimeout(resolve, 2000));
               continue;
             }
@@ -168,7 +168,7 @@ export function CreateDAOForm({ publicKey, kit, isInitializing, onCancel, onSucc
 
           const uploadResult = await uploadDAOMetadata(metadataToUpload);
           metadataCid = uploadResult.cid;
-          console.log("Metadata uploaded to IPFS:", metadataCid);
+          if (import.meta.env.DEV) console.log("Metadata uploaded to IPFS:", metadataCid);
         } catch (metadataErr) {
           console.error("Failed to upload profile metadata:", metadataErr);
           setError("Failed to upload profile. Continuing without profile metadata...");
@@ -176,7 +176,7 @@ export function CreateDAOForm({ publicKey, kit, isInitializing, onCancel, onSucc
         }
       }
 
-      console.log("Creating and initializing DAO...");
+      if (import.meta.env.DEV) console.log("Creating and initializing DAO...");
       setSuccess("Creating DAO (initializing tree and setting verification key)...");
 
       const createAndInitTx = await clients.daoRegistry.create_and_init_dao_no_reg(
@@ -200,11 +200,11 @@ export function CreateDAOForm({ publicKey, kit, isInitializing, onCancel, onSucc
       const result = await sendWithRetry(createAndInitTx);
 
       const newDaoId = Number(result?.result);
-      console.log(`DAO created and fully initialized with ID: ${newDaoId}${metadataCid ? ` with metadata CID: ${metadataCid}` : ''}`);
+      if (import.meta.env.DEV) console.log(`DAO created and fully initialized with ID: ${newDaoId}${metadataCid ? ` with metadata CID: ${metadataCid}` : ''}`);
 
       setSuccess(`DAO "${newDaoName}" created successfully! Redirecting...`);
 
-      console.log(`DAO "${newDaoName}" (ID: ${newDaoId}) fully initialized!`);
+      if (import.meta.env.DEV) console.log(`DAO "${newDaoName}" (ID: ${newDaoId}) fully initialized!`);
       const createdDaoName = newDaoName;
       setNewDaoName("");
       resetProfileFields();

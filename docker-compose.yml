@@ -1,0 +1,26 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_RELAYER_URL: https://server.zkvote.net
+    ports:
+      - "127.0.0.1:8081:8080"
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "127.0.0.1:3002:8080"
+    env_file:
+      - ./backend/.env.production
+    volumes:
+      - backend-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  backend-data:

@@ -116,7 +116,6 @@ export const anonymousCommentSchema = z.object({
     voteChoice: z.boolean({ required_error: 'voteChoice is required', invalid_type_error: 'voteChoice must be a boolean' }),
     nullifier: bn254Field,
     root: bn254Field,
-    commitment: bn254Field,
     proof: groth16Proof,
 });
 // ============================================

@@ -1,8 +1,13 @@
 /**
- * Deployment-aware caching utility
+ * Cache invalidation utility for deployment-aware cache clearing.
  *
- * All cache keys include the deployment version to ensure
- * caches are automatically invalidated after redeployment.
+ * Caching hierarchy:
+ * 1. React Query (TanStack) — primary cache for server state (queries/)
+ * 2. localStorage — persistent ZK credentials, DAO metadata, deployment version
+ * 3. sessionStorage — encryption keys (cleared on tab close)
+ *
+ * This module handles #2: clearing localStorage caches when the deployment
+ * version changes (new contract IDs after redeployment).
  */
 
 import { DEPLOY_VERSION, CONTRACTS, NETWORK_CONFIG } from '../config/contracts';
@@ -21,7 +26,7 @@ export function checkAndClearStaleCache(): boolean {
   const storedVersion = localStorage.getItem(VERSION_KEY);
 
   if (storedVersion !== DEPLOY_VERSION) {
-    console.log(`[Cache] Deployment version changed: ${storedVersion} -> ${DEPLOY_VERSION}`);
+    if (import.meta.env.DEV) console.log(`[Cache] Deployment version changed: ${storedVersion} -> ${DEPLOY_VERSION}`);
     clearAllZKVoteCaches();
     localStorage.setItem(VERSION_KEY, DEPLOY_VERSION);
     return true;
@@ -53,7 +58,7 @@ export function clearAllZKVoteCaches(): void {
     localStorage.removeItem(key);
   }
 
-  console.log(`[Cache] Cleared ${keysToRemove.length} stale cache entries`);
+  if (import.meta.env.DEV) console.log(`[Cache] Cleared ${keysToRemove.length} stale cache entries`);
 }
 
 /**

@@ -147,7 +147,10 @@ fn test_real_groth16_proof_verification() {
     println!("✅ SBT deployed");
 
     // Deploy Tree
-    let tree_address = env.register(membership_tree::MembershipTree, (sbt_address.clone(),));
+    let tree_address = env.register(
+        membership_tree::MembershipTree,
+        (sbt_address.clone(), registry_address.clone()),
+    );
     let tree_client = MembershipTreeClient::new(&env, &tree_address);
     println!("✅ Tree deployed");
 

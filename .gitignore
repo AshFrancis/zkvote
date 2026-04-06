@@ -13,6 +13,11 @@ yarn-error.log*
 .env
 .env.local
 .env.*.local
+.env.production
+.env.staging
+
+# Secrets
+secrets/
 
 # Circom / ZK
 circuits/*.r1cs
@@ -75,6 +80,7 @@ scripts/test/stress-accounts/*.csv
 # Test result files
 batch-zkproof-results-*.json
 frontend/test-results/
+frontend/coverage/
 
 # Proxy list
 Webshare 250 proxies.txt

@@ -7,8 +7,12 @@
     "relayer": "tsx src/index.ts",
     "dev:relayer": "tsx watch src/index.ts",
     "build": "tsc",
+    "lint": "eslint . && tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "RELAYER_TEST_MODE=true tsx --test test/*.test.js"
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "test": "RELAYER_TEST_MODE=true tsx --test test/*.test.js",
+    "test:coverage": "RELAYER_TEST_MODE=true node --import tsx --test --experimental-test-coverage test/*.test.js"
   },
   "keywords": [
     "stellar",
@@ -33,14 +37,20 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^7.6.11",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/multer": "^1.4.12",
     "@types/node": "^20.0.0",
+    "eslint": "^10.1.0",
+    "eslint-plugin-jsdoc": "^62.9.0",
+    "globals": "^17.4.0",
+    "prettier": "^3.8.1",
     "snarkjs": "^0.7.5",
     "supertest": "^7.1.4",
     "tsx": "^4.7.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "typescript-eslint": "^8.58.0"
   }
 }

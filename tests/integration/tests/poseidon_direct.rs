@@ -52,7 +52,7 @@ fn test_empty_tree_root() {
 
     // Import actual contract clients from crates (not WASM)
     use dao_registry::DaoRegistryClient;
-    use membership_sbt::MembershipSbtClient;
+
     use membership_tree::MembershipTreeClient;
 
     let env = Env::default();
@@ -62,7 +62,10 @@ fn test_empty_tree_root() {
     // Deploy contracts
     let registry_id = env.register(dao_registry::DaoRegistry, ());
     let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let tree_id = env.register(
+        membership_tree::MembershipTree,
+        (sbt_id.clone(), registry_id.clone()),
+    );
 
     let admin = Address::generate(&env);
 

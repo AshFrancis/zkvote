@@ -40,10 +40,10 @@ fn get_real_vk(env: &Env) -> VerificationKey {
 fn setup(
     env: &Env,
 ) -> (
-    DaoRegistryClient,
-    MembershipSbtClient,
-    MembershipTreeClient,
-    VotingClient,
+    DaoRegistryClient<'_>,
+    MembershipSbtClient<'_>,
+    MembershipTreeClient<'_>,
+    VotingClient<'_>,
     Address,
     u64,
 ) {
@@ -51,7 +51,10 @@ fn setup(
 
     let registry_id = env.register(dao_registry::DaoRegistry, ());
     let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let tree_id = env.register(
+        membership_tree::MembershipTree,
+        (sbt_id.clone(), registry_id.clone()),
+    );
     let voting_id = env.register(voting::Voting, (tree_id.clone(), registry_id.clone()));
 
     let registry = DaoRegistryClient::new(env, &registry_id);
@@ -121,7 +124,10 @@ fn budget_set_vk_within_limit() {
 
     let registry_id = env.register(dao_registry::DaoRegistry, ());
     let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let tree_id = env.register(
+        membership_tree::MembershipTree,
+        (sbt_id.clone(), registry_id.clone()),
+    );
     let voting_id = env.register(voting::Voting, (tree_id.clone(), registry_id.clone()));
 
     let registry = DaoRegistryClient::new(&env, &registry_id);

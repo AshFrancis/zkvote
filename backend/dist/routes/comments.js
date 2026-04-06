@@ -7,7 +7,7 @@ import { Router } from 'express';
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { config } from '../config.js';
 import { log } from '../services/logger.js';
-import { server, relayerKeypair, callWithTimeout, simulateWithBackoff, waitForTransaction, u256ToScVal, proofToScVal, } from '../services/stellar.js';
+import { server, relayerKeypair, callWithTimeout, simulateWithBackoff, waitForTransaction, withSequenceLock, u256ToScVal, proofToScVal, } from '../services/stellar.js';
 import { authGuard, commentLimiter, queryLimiter, validateBody } from '../middleware/index.js';
 import { anonymousCommentSchema } from '../validation/schemas.js';
 const router = Router();
@@ -19,12 +19,11 @@ const router = Router();
  */
 router.post('/comment/anonymous', authGuard, commentLimiter, validateBody(anonymousCommentSchema), (async (req, res) => {
     // Validated by anonymousCommentSchema middleware
-    const { daoId, proposalId, contentCid, parentId, voteChoice, nullifier, root, commitment, proof } = config.stripRequestBodies ? {} : req.body;
+    const { daoId, proposalId, contentCid, parentId, voteChoice, nullifier, root, proof } = config.stripRequestBodies ? {} : req.body;
     try {
         log('info', 'comment_anonymous_request', { daoId, proposalId });
         const scNullifier = u256ToScVal(nullifier);
         const scRoot = u256ToScVal(root);
-        const scCommitment = u256ToScVal(commitment);
         const scProof = proofToScVal(proof);
         const contract = new StellarSdk.Contract(config.commentsContractId);
         const args = [
@@ -34,42 +33,53 @@ router.post('/comment/anonymous', authGuard, commentLimiter, validateBody(anonym
             StellarSdk.nativeToScVal(parentId !== undefined && parentId !== null ? BigInt(parentId) : null),
             scNullifier,
             scRoot,
-            scCommitment,
             StellarSdk.nativeToScVal(voteChoice, { type: 'bool' }),
             scProof,
         ];
         const operation = contract.call('add_anonymous_comment', ...args);
-        const account = await server.getAccount(relayerKeypair.publicKey());
-        const tx = new StellarSdk.TransactionBuilder(account, {
-            fee: '100000',
-            networkPassphrase: config.networkPassphrase,
-        })
-            .addOperation(operation)
-            .setTimeout(30)
-            .build();
-        const simResult = await callWithTimeout(() => simulateWithBackoff(() => server.simulateTransaction(tx)), 'simulate_add_anonymous_comment');
-        if (!StellarSdk.rpc.Api.isSimulationSuccess(simResult)) {
-            const errorStr = typeof simResult.error === 'string'
-                ? simResult.error
-                : JSON.stringify(simResult.error);
-            log('warn', 'comment_anon_simulation_failed', { daoId, proposalId, error: errorStr, fullResult: JSON.stringify(simResult).slice(0, 500) });
-            return res
-                .status(400)
-                .json({ error: 'Failed to add anonymous comment (proof verification failed or invalid membership)', details: errorStr });
-        }
-        const commentId = simResult.result?.retval ? Number(StellarSdk.scValToNative(simResult.result.retval)) : null;
-        const preparedTx = StellarSdk.rpc.assembleTransaction(tx, simResult).build();
-        preparedTx.sign(relayerKeypair);
-        const sendResult = await callWithTimeout(() => server.sendTransaction(preparedTx), 'send_add_anonymous_comment');
-        if (sendResult.status === 'ERROR') {
-            return res.status(500).json({ error: 'Transaction submission failed' });
-        }
-        const result = await callWithTimeout(() => waitForTransaction(sendResult.hash), 'wait_for_anonymous_comment');
+        // Serialize account fetch + build + simulate + sign + submit under sequence lock
+        // to prevent nonce race conditions between concurrent requests
+        const { commentId, sendResult, result } = await withSequenceLock(async () => {
+            const account = await server.getAccount(relayerKeypair.publicKey());
+            const tx = new StellarSdk.TransactionBuilder(account, {
+                fee: '100000',
+                networkPassphrase: config.networkPassphrase,
+            })
+                .addOperation(operation)
+                .setTimeout(30)
+                .build();
+            const simResult = await callWithTimeout(() => simulateWithBackoff(() => server.simulateTransaction(tx)), 'simulate_add_anonymous_comment');
+            if (!StellarSdk.rpc.Api.isSimulationSuccess(simResult)) {
+                const errorStr = typeof simResult.error === 'string'
+                    ? simResult.error
+                    : JSON.stringify(simResult.error);
+                log('warn', 'comment_anon_simulation_failed', { daoId, proposalId, error: errorStr, fullResult: JSON.stringify(simResult).slice(0, 500) });
+                throw new Error(`SIMULATION_FAILED:${errorStr}`);
+            }
+            const cId = simResult.result?.retval ? Number(StellarSdk.scValToNative(simResult.result.retval)) : null;
+            const preparedTx = StellarSdk.rpc.assembleTransaction(tx, simResult).build();
+            preparedTx.sign(relayerKeypair);
+            const sr = await callWithTimeout(() => server.sendTransaction(preparedTx), 'send_add_anonymous_comment');
+            if (sr.status === 'ERROR') {
+                throw new Error('SUBMIT_FAILED');
+            }
+            const r = await callWithTimeout(() => waitForTransaction(sr.hash), 'wait_for_anonymous_comment');
+            return { commentId: cId, sendResult: sr, result: r };
+        });
         if (result.status === 'SUCCESS') {
             log('info', 'comment_anonymous_success', { daoId, proposalId, commentId });
             res.json({ success: true, commentId, txHash: sendResult.hash });
         }
         else {
+            // Log the actual failure reason
+            const resultXdr = 'resultXdr' in result ? result.resultXdr : undefined;
+            log('error', 'comment_anonymous_tx_failed', {
+                daoId,
+                proposalId,
+                txHash: sendResult.hash,
+                status: result.status,
+                resultXdr: resultXdr?.toXDR?.('base64')?.slice(0, 200),
+            });
             res.status(500).json({ error: 'Transaction failed', txHash: sendResult.hash });
         }
     }
@@ -78,7 +88,15 @@ router.post('/comment/anonymous', authGuard, commentLimiter, validateBody(anonym
         const errMsg = err.message || '';
         let statusCode = 500;
         let userMessage = 'Internal server error';
-        if (errMsg.includes('Timeout:')) {
+        if (errMsg.startsWith('SIMULATION_FAILED:')) {
+            statusCode = 400;
+            userMessage = 'Failed to add anonymous comment (proof verification failed or invalid membership)';
+        }
+        else if (errMsg === 'SUBMIT_FAILED') {
+            statusCode = 500;
+            userMessage = 'Transaction submission failed';
+        }
+        else if (errMsg.includes('Timeout:')) {
             statusCode = 504;
             userMessage = 'Request timeout - please try again';
         }
@@ -196,7 +214,7 @@ router.get('/comments/:daoId/:proposalId', queryLimiter, (async (req, res) => {
     }
     catch (err) {
         log('error', 'get_comments_failed', { daoId, proposalId, error: err.message });
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Failed to fetch comments' });
     }
 }));
 // ============================================
@@ -252,7 +270,8 @@ router.get('/comment/:daoId/:proposalId/:commentId', queryLimiter, (async (req, 
         }
     }
     catch (err) {
-        res.status(500).json({ error: err.message });
+        log('error', 'get_comment_failed', { daoId, proposalId, commentId, error: err.message });
+        res.status(500).json({ error: 'Failed to fetch comment' });
     }
 }));
 // ============================================
@@ -278,25 +297,28 @@ router.post('/comment/edit', authGuard, commentLimiter, (async (req, res) => {
             StellarSdk.nativeToScVal(newContentCid, { type: 'string' }),
         ];
         const operation = contract.call('edit_comment', ...args);
-        const account = await server.getAccount(relayerKeypair.publicKey());
-        const tx = new StellarSdk.TransactionBuilder(account, {
-            fee: '100000',
-            networkPassphrase: config.networkPassphrase,
-        })
-            .addOperation(operation)
-            .setTimeout(30)
-            .build();
-        const simResult = await callWithTimeout(() => simulateWithBackoff(() => server.simulateTransaction(tx)), 'simulate_edit_comment');
-        if (!StellarSdk.rpc.Api.isSimulationSuccess(simResult)) {
-            return res.status(400).json({ error: 'Failed to edit comment' });
-        }
-        const preparedTx = StellarSdk.rpc.assembleTransaction(tx, simResult).build();
-        preparedTx.sign(relayerKeypair);
-        const sendResult = await callWithTimeout(() => server.sendTransaction(preparedTx), 'send_edit_comment');
-        if (sendResult.status === 'ERROR') {
-            return res.status(500).json({ error: 'Transaction submission failed' });
-        }
-        const result = await callWithTimeout(() => waitForTransaction(sendResult.hash), 'wait_for_edit_comment');
+        const { sendResult, result } = await withSequenceLock(async () => {
+            const account = await server.getAccount(relayerKeypair.publicKey());
+            const tx = new StellarSdk.TransactionBuilder(account, {
+                fee: '100000',
+                networkPassphrase: config.networkPassphrase,
+            })
+                .addOperation(operation)
+                .setTimeout(30)
+                .build();
+            const simResult = await callWithTimeout(() => simulateWithBackoff(() => server.simulateTransaction(tx)), 'simulate_edit_comment');
+            if (!StellarSdk.rpc.Api.isSimulationSuccess(simResult)) {
+                throw new Error('SIMULATION_FAILED:Failed to edit comment');
+            }
+            const preparedTx = StellarSdk.rpc.assembleTransaction(tx, simResult).build();
+            preparedTx.sign(relayerKeypair);
+            const sr = await callWithTimeout(() => server.sendTransaction(preparedTx), 'send_edit_comment');
+            if (sr.status === 'ERROR') {
+                throw new Error('SUBMIT_FAILED');
+            }
+            const r = await callWithTimeout(() => waitForTransaction(sr.hash), 'wait_for_edit_comment');
+            return { sendResult: sr, result: r };
+        });
         if (result.status === 'SUCCESS') {
             log('info', 'comment_edit_success', { daoId, proposalId, commentId });
             res.json({ success: true, txHash: sendResult.hash });
@@ -306,8 +328,17 @@ router.post('/comment/edit', authGuard, commentLimiter, (async (req, res) => {
         }
     }
     catch (err) {
-        log('error', 'comment_edit_exception', { message: err.message });
-        res.status(500).json({ error: 'Internal server error' });
+        const errMsg = err.message || '';
+        log('error', 'comment_edit_exception', { message: errMsg });
+        if (errMsg.startsWith('SIMULATION_FAILED:')) {
+            res.status(400).json({ error: errMsg.slice('SIMULATION_FAILED:'.length) });
+        }
+        else if (errMsg === 'SUBMIT_FAILED') {
+            res.status(500).json({ error: 'Transaction submission failed' });
+        }
+        else {
+            res.status(500).json({ error: 'Internal server error' });
+        }
     }
 }));
 // ============================================
@@ -332,25 +363,28 @@ router.post('/comment/delete', authGuard, commentLimiter, (async (req, res) => {
             StellarSdk.xdr.ScVal.scvAddress(authorAddress.toScAddress()),
         ];
         const operation = contract.call('delete_comment', ...args);
-        const account = await server.getAccount(relayerKeypair.publicKey());
-        const tx = new StellarSdk.TransactionBuilder(account, {
-            fee: '100000',
-            networkPassphrase: config.networkPassphrase,
-        })
-            .addOperation(operation)
-            .setTimeout(30)
-            .build();
-        const simResult = await callWithTimeout(() => simulateWithBackoff(() => server.simulateTransaction(tx)), 'simulate_delete_comment');
-        if (!StellarSdk.rpc.Api.isSimulationSuccess(simResult)) {
-            return res.status(400).json({ error: 'Failed to delete comment' });
-        }
-        const preparedTx = StellarSdk.rpc.assembleTransaction(tx, simResult).build();
-        preparedTx.sign(relayerKeypair);
-        const sendResult = await callWithTimeout(() => server.sendTransaction(preparedTx), 'send_delete_comment');
-        if (sendResult.status === 'ERROR') {
-            return res.status(500).json({ error: 'Transaction submission failed' });
-        }
-        const result = await callWithTimeout(() => waitForTransaction(sendResult.hash), 'wait_for_delete_comment');
+        const { sendResult, result } = await withSequenceLock(async () => {
+            const account = await server.getAccount(relayerKeypair.publicKey());
+            const tx = new StellarSdk.TransactionBuilder(account, {
+                fee: '100000',
+                networkPassphrase: config.networkPassphrase,
+            })
+                .addOperation(operation)
+                .setTimeout(30)
+                .build();
+            const simResult = await callWithTimeout(() => simulateWithBackoff(() => server.simulateTransaction(tx)), 'simulate_delete_comment');
+            if (!StellarSdk.rpc.Api.isSimulationSuccess(simResult)) {
+                throw new Error('SIMULATION_FAILED:Failed to delete comment');
+            }
+            const preparedTx = StellarSdk.rpc.assembleTransaction(tx, simResult).build();
+            preparedTx.sign(relayerKeypair);
+            const sr = await callWithTimeout(() => server.sendTransaction(preparedTx), 'send_delete_comment');
+            if (sr.status === 'ERROR') {
+                throw new Error('SUBMIT_FAILED');
+            }
+            const r = await callWithTimeout(() => waitForTransaction(sr.hash), 'wait_for_delete_comment');
+            return { sendResult: sr, result: r };
+        });
         if (result.status === 'SUCCESS') {
             log('info', 'comment_delete_success', { daoId, proposalId, commentId });
             res.json({ success: true, txHash: sendResult.hash });
@@ -360,8 +394,17 @@ router.post('/comment/delete', authGuard, commentLimiter, (async (req, res) => {
         }
     }
     catch (err) {
-        log('error', 'comment_delete_exception', { message: err.message });
-        res.status(500).json({ error: 'Internal server error' });
+        const errMsg = err.message || '';
+        log('error', 'comment_delete_exception', { message: errMsg });
+        if (errMsg.startsWith('SIMULATION_FAILED:')) {
+            res.status(400).json({ error: errMsg.slice('SIMULATION_FAILED:'.length) });
+        }
+        else if (errMsg === 'SUBMIT_FAILED') {
+            res.status(500).json({ error: 'Transaction submission failed' });
+        }
+        else {
+            res.status(500).json({ error: 'Internal server error' });
+        }
     }
 }));
 export default router;

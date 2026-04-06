@@ -72,7 +72,10 @@ fn setup_dao_with_options(
 ) {
     let registry_id = env.register(dao_registry::DaoRegistry, ());
     let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let tree_id = env.register(
+        membership_tree::MembershipTree,
+        (sbt_id.clone(), registry_id.clone()),
+    );
     let voting_id = env.register(voting::Voting, (tree_id.clone(), registry_id.clone()));
 
     let registry = DaoRegistryClient::new(env, &registry_id);
@@ -158,7 +161,10 @@ fn stress_many_daos() {
 
     let registry_id = env.register(dao_registry::DaoRegistry, ());
     let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let tree_id = env.register(
+        membership_tree::MembershipTree,
+        (sbt_id.clone(), registry_id.clone()),
+    );
     let voting_id = env.register(voting::Voting, (tree_id.clone(), registry_id.clone()));
 
     let registry = DaoRegistryClient::new(&env, &registry_id);
@@ -313,7 +319,10 @@ fn stress_mixed_operations() {
 
     let registry_id = env.register(dao_registry::DaoRegistry, ());
     let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let tree_id = env.register(
+        membership_tree::MembershipTree,
+        (sbt_id.clone(), registry_id.clone()),
+    );
     let voting_id = env.register(voting::Voting, (tree_id.clone(), registry_id.clone()));
 
     let registry = DaoRegistryClient::new(&env, &registry_id);

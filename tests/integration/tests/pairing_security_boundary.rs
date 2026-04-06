@@ -121,7 +121,10 @@ fn test_pairing_security_boundary() {
     let sbt_address = env.register(membership_sbt::MembershipSbt, (registry_address.clone(),));
     let sbt_client = MembershipSbtClient::new(&env, &sbt_address);
 
-    let tree_address = env.register(membership_tree::MembershipTree, (sbt_address.clone(),));
+    let tree_address = env.register(
+        membership_tree::MembershipTree,
+        (sbt_address.clone(), registry_address.clone()),
+    );
     let tree_client = MembershipTreeClient::new(&env, &tree_address);
 
     let voting_address = env.register(

@@ -173,7 +173,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
                 }
               }
             } catch {
-              console.log("Cached registration invalid, clearing...");
+              if (import.meta.env.DEV) console.log("Cached registration invalid, clearing...");
               isRegistered = false;
             }
           }
@@ -249,38 +249,38 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
 
       const clients = initializeContractClients(publicKey);
 
-      console.log("[JoinDAO] Starting join for DAO:", dao.id);
+      if (import.meta.env.DEV) console.log("[JoinDAO] Starting join for DAO:", dao.id);
       const joinTx = await clients.membershipSbt.self_join({
         dao_id: BigInt(dao.id),
         member: publicKey,
         encrypted_alias: undefined,
       });
 
-      console.log("[JoinDAO] Transaction prepared, waiting for signature...");
+      if (import.meta.env.DEV) console.log("[JoinDAO] Transaction prepared, waiting for signature...");
       const result = await joinTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
-      console.log("[JoinDAO] signAndSend completed:", result);
+      if (import.meta.env.DEV) console.log("[JoinDAO] signAndSend completed:", result);
 
       // Notify relayer of member joined event
       const txHash = extractTxHash(result);
-      console.log("[JoinDAO] Transaction hash:", txHash);
+      if (import.meta.env.DEV) console.log("[JoinDAO] Transaction hash:", txHash);
       if (txHash) {
         notifyEvent(dao.id, "member_added", txHash, { member: publicKey });
       }
 
       // Verify membership was actually created on-chain BEFORE updating cache/UI
       // Add a small delay and retry to handle RPC propagation delay
-      console.log("[JoinDAO] Verifying membership on-chain...");
+      if (import.meta.env.DEV) console.log("[JoinDAO] Verifying membership on-chain...");
       let membershipConfirmed = false;
       for (let attempt = 0; attempt < 6; attempt++) {
         if (attempt > 0) {
-          console.log(`[JoinDAO] Retrying membership check (attempt ${attempt + 1}/6)...`);
+          if (import.meta.env.DEV) console.log(`[JoinDAO] Retrying membership check (attempt ${attempt + 1}/6)...`);
           await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds between retries
         }
         const membershipCheck = await clients.membershipSbt.has({
           dao_id: BigInt(dao.id),
           of: publicKey,
         });
-        console.log(`[JoinDAO] Membership check result (attempt ${attempt + 1}):`, membershipCheck.result);
+        if (import.meta.env.DEV) console.log(`[JoinDAO] Membership check result (attempt ${attempt + 1}):`, membershipCheck.result);
         if (membershipCheck.result) {
           membershipConfirmed = true;
           break;
@@ -292,13 +292,13 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
       }
 
       // Clear cache and reload only after confirming membership
-      console.log("[JoinDAO] Membership confirmed, updating UI...");
+      if (import.meta.env.DEV) console.log("[JoinDAO] Membership confirmed, updating UI...");
       localStorage.removeItem(PUBLIC_DAO_CACHE_KEY);
       await loadPublicDAO();
-      console.log("[JoinDAO] Join completed successfully");
+      if (import.meta.env.DEV) console.log("[JoinDAO] Join completed successfully");
     } catch (err) {
       if (isUserRejection(err)) {
-        console.log("[JoinDAO] User cancelled joining DAO");
+        if (import.meta.env.DEV) console.log("[JoinDAO] User cancelled joining DAO");
       } else {
         const errorMessage = err instanceof Error ? err.message : String(err);
         setError(errorMessage);
@@ -321,7 +321,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
 
       let secret, salt, commitment;
 
-      console.log("[Registration] Step 1: Generating deterministic credentials from wallet signature...");
+      if (import.meta.env.DEV) console.log("[Registration] Step 1: Generating deterministic credentials from wallet signature...");
       try {
         const credentials = await generateDeterministicZKCredentials(kit, dao.id);
         secret = credentials.secret;
@@ -332,10 +332,10 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
         throw err;
       }
 
-      console.log("[Registration] Step 1 complete - Generated voting credentials");
+      if (import.meta.env.DEV) console.log("[Registration] Step 1 complete - Generated voting credentials");
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      console.log("[Registration] Step 2: Registering commitment in Merkle tree...");
+      if (import.meta.env.DEV) console.log("[Registration] Step 2: Registering commitment in Merkle tree...");
       const clients = initializeContractClients(publicKey);
 
       // Helper to check if error is CommitmentExists (error #5 from tree contract)
@@ -367,7 +367,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
       for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
           if (attempt > 0) {
-            console.log(`[Registration] Retrying transaction (attempt ${attempt + 1}/${maxRetries})...`);
+            if (import.meta.env.DEV) console.log(`[Registration] Retrying transaction (attempt ${attempt + 1}/${maxRetries})...`);
             // Longer delay for NoSbt errors (SBT confirmation can take time)
             const delay = noSbtRetryCount > 0 ? 3000 : 2000;
             await new Promise(resolve => setTimeout(resolve, delay));
@@ -380,15 +380,15 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
             member: publicKey,
           });
 
-          console.log("[Registration] Calling signAndSend...");
+          if (import.meta.env.DEV) console.log("[Registration] Calling signAndSend...");
           const result = await registerTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
-          console.log("[Registration] Step 2 complete - Transaction signed and sent:", result);
+          if (import.meta.env.DEV) console.log("[Registration] Step 2 complete - Transaction signed and sent:", result);
           registerTxHash = extractTxHash(result);
           break; // Success, exit retry loop
         } catch (err: unknown) {
           // Check if this is a CommitmentExists error - means we're already registered
           if (isCommitmentExistsError(err)) {
-            console.log("[Registration] Commitment already exists on-chain - recovering credentials");
+            if (import.meta.env.DEV) console.log("[Registration] Commitment already exists on-chain - recovering credentials");
             alreadyRegistered = true;
             break; // Not an error, exit retry loop
           }
@@ -396,13 +396,13 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
           // Check if this is a NoSbt error - SBT not confirmed yet, can be retried
           if (isNoSbtError(err) && attempt < maxRetries - 1) {
             noSbtRetryCount++;
-            console.log(`[Registration] SBT membership not confirmed yet (NoSbt error), waiting for blockchain confirmation... (attempt ${noSbtRetryCount})`);
+            if (import.meta.env.DEV) console.log(`[Registration] SBT membership not confirmed yet (NoSbt error), waiting for blockchain confirmation... (attempt ${noSbtRetryCount})`);
             continue; // Retry after delay
           }
 
           // Check if this is a txBadSeq error - can be retried
           if (isBadSeqError(err) && attempt < maxRetries - 1) {
-            console.log("[Registration] Got txBadSeq error (stale sequence number), will retry...");
+            if (import.meta.env.DEV) console.log("[Registration] Got txBadSeq error (stale sequence number), will retry...");
             continue; // Retry with fresh transaction
           }
 
@@ -422,11 +422,11 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
       }
 
       // Retry get_leaf_index with delays to handle RPC propagation
-      console.log("[Registration] Verifying registration on-chain...");
+      if (import.meta.env.DEV) console.log("[Registration] Verifying registration on-chain...");
       let leafIndex: number = NaN;
       for (let attempt = 0; attempt < 6; attempt++) {
         if (attempt > 0) {
-          console.log(`[Registration] Retrying get_leaf_index (attempt ${attempt + 1}/6)...`);
+          if (import.meta.env.DEV) console.log(`[Registration] Retrying get_leaf_index (attempt ${attempt + 1}/6)...`);
           await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds between retries
         }
 
@@ -436,12 +436,12 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
             commitment: BigInt(commitment),
           });
 
-          console.log(`[Registration] get_leaf_index result (attempt ${attempt + 1}):`, leafIndexResult.result);
+          if (import.meta.env.DEV) console.log(`[Registration] get_leaf_index result (attempt ${attempt + 1}):`, leafIndexResult.result);
 
           // Check if result is an error object (Err variant from Rust Result)
           const rawResult = leafIndexResult.result;
           if (rawResult && typeof rawResult === 'object' && 'error' in rawResult) {
-            console.log(`[Registration] Got error response, will retry...`);
+            if (import.meta.env.DEV) console.log(`[Registration] Got error response, will retry...`);
             continue;
           }
 
@@ -450,11 +450,11 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
 
           if (!isNaN(parsedIndex)) {
             leafIndex = parsedIndex;
-            console.log(`[Registration] Got valid leaf index: ${leafIndex}`);
+            if (import.meta.env.DEV) console.log(`[Registration] Got valid leaf index: ${leafIndex}`);
             break;
           }
         } catch (queryErr) {
-          console.log(`[Registration] Query error on attempt ${attempt + 1}:`, queryErr);
+          if (import.meta.env.DEV) console.log(`[Registration] Query error on attempt ${attempt + 1}:`, queryErr);
         }
       }
 
@@ -469,7 +469,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
         notifyEvent(dao.id, "voter_registered", registerTxHash, { commitment, leafIndex });
       }
 
-      console.log(alreadyRegistered ? "[Registration] Credentials recovered! Leaf index:" : "[Registration] Registration successful! Leaf index:", leafIndex);
+      if (import.meta.env.DEV) console.log(alreadyRegistered ? "[Registration] Credentials recovered! Leaf index:" : "[Registration] Registration successful! Leaf index:", leafIndex);
 
       // Immediately update local state to reflect registration (optimistic update)
       setDao(prev => prev ? { ...prev, isRegistered: true } : prev);
@@ -478,7 +478,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
       await loadPublicDAO();
     } catch (err) {
       if (isUserRejection(err)) {
-        console.log("User cancelled registration");
+        if (import.meta.env.DEV) console.log("User cancelled registration");
       } else {
         const errorMessage = err instanceof Error ? err.message : String(err);
         setError(errorMessage);
@@ -534,7 +534,7 @@ export default function PublicVotes({ publicKey, isConnected, isInitializing = f
       setProposalKey(prev => prev + 1);
     } catch (err) {
       if (isUserRejection(err)) {
-        console.log("User cancelled proposal creation");
+        if (import.meta.env.DEV) console.log("User cancelled proposal creation");
       } else {
         const errorMessage = err instanceof Error ? err.message : String(err);
         setError(errorMessage);

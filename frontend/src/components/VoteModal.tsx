@@ -64,7 +64,7 @@ export default function VoteModal({
 
       if (!cached) {
         // Try to regenerate from wallet signature
-        console.log("[Vote] No cached credentials, attempting to regenerate...");
+        if (import.meta.env.DEV) console.log("[Vote] No cached credentials, regenerating...");
 
         if (!kit) {
           throw new Error("You must register for voting first. Please click 'Register for Voting' button.");
@@ -87,7 +87,7 @@ export default function VoteModal({
         // Cache for next time
         storeZKCredentials(daoId, publicKey, credentials, leafIndex);
 
-        console.log("[Vote] Credentials regenerated successfully");
+        if (import.meta.env.DEV) console.log("[Vote] Credentials regenerated");
       } else {
         secret = cached.secret;
         salt = cached.salt;
@@ -95,10 +95,7 @@ export default function VoteModal({
         leafIndex = cached.leafIndex;
       }
 
-      console.log("Using credentials:");
-      console.log("Secret:", secret);
-      console.log("Salt:", salt);
-      console.log("Leaf Index:", leafIndex);
+      if (import.meta.env.DEV) console.log("Using credentials (leaf index:", leafIndex, ")");
 
       // Step 2: Select root based on vote mode
       // Fixed mode: Use snapshot root from proposal creation
@@ -107,22 +104,19 @@ export default function VoteModal({
       if (voteMode === "Fixed") {
         setProgress("Using proposal snapshot root (Fixed mode)...");
         root = eligibleRoot;
-        console.log("Fixed mode - using snapshot root (eligible_root):", root.toString());
+        if (import.meta.env.DEV) console.log("Fixed mode - using snapshot root");
       } else {
         setProgress("Fetching current root (Trailing mode)...");
         const currentRootResult = await clients.membershipTree.current_root({ dao_id: BigInt(daoId) });
         root = currentRootResult.result;
-        console.log("Trailing mode - using current root:", root.toString());
-        console.log("(eligible_root was:", eligibleRoot.toString(), ")");
+        if (import.meta.env.DEV) console.log("Trailing mode - using current root");
       }
 
       // Step 3: Get Merkle path from contract
       setProgress("Fetching Merkle path from tree...");
       const { pathElements, pathIndices } = await getMerklePath(leafIndex, daoId, publicKey);
 
-      console.log("Merkle path computed:");
-      console.log("Path elements:", pathElements);
-      console.log("Path indices:", pathIndices);
+      if (import.meta.env.DEV) console.log("Merkle path computed");
 
       // Step 4: Compute nullifier using Poseidon hash
       // nullifier = Poseidon(secret, daoId, proposalId)
@@ -154,15 +148,9 @@ export default function VoteModal({
         pathIndices,
       };
 
-      console.log("=== PROOF INPUT DEBUG ===");
-      console.log("Root (eligible_root):", root.toString());
-      console.log("Commitment:", commitment);
-      console.log("Secret:", secret);
-      console.log("Salt:", salt);
-      console.log("LeafIndex:", leafIndex);
-      console.log("Path elements:", pathElements);
-      console.log("Full proof input:", proofInput);
-      console.log("========================");
+      if (import.meta.env.DEV) {
+        console.log("Proof input ready, generating proof...");
+      }
 
       const { proof, publicSignals } = await generateVoteProof(
         proofInput,
@@ -179,8 +167,7 @@ export default function VoteModal({
         "/circuits/verification_key.json"
       );
 
-      console.log("Local proof verification result:", isValid);
-      console.log("Public signals:", publicSignals);
+      if (import.meta.env.DEV) console.log("Local proof verification:", isValid);
 
       if (!isValid) {
         throw new Error("Proof verification failed locally! This indicates a bug in proof generation.");
@@ -234,7 +221,7 @@ export default function VoteModal({
       }
 
       const result = await response.json();
-      console.log("Vote submitted successfully:", result);
+      if (import.meta.env.DEV) console.log("Vote submitted successfully:", result);
 
       setStep("success");
       setTimeout(() => {

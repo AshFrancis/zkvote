@@ -27,6 +27,12 @@ function credentialKey(daoId: number, publicKey: string) {
 // - Clear warning text in the signing message
 // - Domain separation in the message format
 // - Users should only sign on the official ZKVote application
+//
+// KNOWN TRADE-OFFS:
+// 1. Deterministic credentials from wallet signatures can be phished if user signs
+//    the same message on a malicious site. Mitigated by domain separation in message text.
+// 2. Credentials are stored in localStorage (persists across sessions).
+//    XSS or malicious extensions can read them. Consider encrypting at rest.
 export async function generateDeterministicZKCredentials(
   kit: StellarWalletsKit,
   daoId: number
@@ -113,7 +119,7 @@ export function storeZKCredentials(daoId: number, publicKey: string, credentials
     leafIndex,
     registeredAt: Date.now(),
   }));
-  console.log(`Stored ZK credentials for DAO ${daoId}, user ${publicKey.substring(0, 8)}...`);
+  if (import.meta.env.DEV) console.log(`Stored ZK credentials for DAO ${daoId}, user ${publicKey.substring(0, 8)}...`);
 }
 
 // Retrieve ZK credentials from localStorage
@@ -146,18 +152,18 @@ export async function getOrRegenerateZKCredentials(
   // Try to load from cache first
   const cached = getZKCredentials(daoId, publicKey);
   if (cached) {
-    console.log(`[ZK] Using cached credentials for DAO ${daoId}`);
+    if (import.meta.env.DEV) console.log(`[ZK] Using cached credentials for DAO ${daoId}`);
     return cached;
   }
 
   // No cache and no wallet = can't regenerate
   if (!kit) {
-    console.log(`[ZK] No credentials in cache and no wallet connected`);
+    if (import.meta.env.DEV) console.log(`[ZK] No credentials in cache and no wallet connected`);
     return null;
   }
 
   // Regenerate from wallet signature
-  console.log(`[ZK] Regenerating credentials from wallet signature for DAO ${daoId}...`);
+  if (import.meta.env.DEV) console.log(`[ZK] Regenerating credentials from wallet signature for DAO ${daoId}...`);
   try {
     // Credentials generated but not used - leaf index lookup not yet implemented
     await generateDeterministicZKCredentials(kit, daoId);
@@ -165,7 +171,7 @@ export async function getOrRegenerateZKCredentials(
     // Get leaf index from contract (this requires on-chain lookup)
     // For now, return null and require explicit registration
     // In the future, we could query the tree contract to find the leaf index
-    console.log(`[ZK] Credentials regenerated, but leaf index unknown. User must re-register.`);
+    if (import.meta.env.DEV) console.log(`[ZK] Credentials regenerated, but leaf index unknown. User must re-register.`);
     return null;
 
     // Future enhancement: Query contract for leaf index

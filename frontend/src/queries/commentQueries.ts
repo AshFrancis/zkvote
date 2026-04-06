@@ -26,6 +26,7 @@ async function fetchCommentsWithContent(
   const rawComments: CommentInfo[] = await fetchComments(daoId, proposalId);
 
   // Fetch content for each comment in parallel
+  // TODO: Consider adding a batch /ipfs/batch endpoint on the relayer to reduce N+1 fetches
   const contentMap = new Map<string, CommentMetadata | null>();
   await Promise.all(
     rawComments.map(async (c) => {

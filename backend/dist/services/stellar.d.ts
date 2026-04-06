@@ -30,15 +30,22 @@ export type SorobanServer = StellarSdk.rpc.Server | TestServer;
 export declare const relayerKeypair: StellarSdk.Keypair | {
     publicKey: () => string;
 };
+export declare function withSequenceLock<T>(fn: () => Promise<T>): Promise<T>;
 export declare const server: SorobanServer;
 /**
  * Call RPC with timeout
  */
 export declare function callWithTimeout<T>(fn: () => Promise<T>, label: string): Promise<T>;
 /**
- * Wait for transaction confirmation
+ * Wait for transaction confirmation.
+ *
+ * Polls getTransaction up to maxAttempts times (1 second apart).
+ * Note: callers may also wrap this in callWithTimeout for an outer
+ * deadline -- the two timeouts are intentionally independent: this
+ * loop controls polling cadence while callWithTimeout enforces a
+ * hard wall-clock limit.
  */
-export declare function waitForTransaction(hash: string): Promise<StellarSdk.rpc.Api.GetTransactionResponse>;
+export declare function waitForTransaction(hash: string, maxAttempts?: number): Promise<StellarSdk.rpc.Api.GetTransactionResponse>;
 /**
  * Simulate with backoff/retry
  */

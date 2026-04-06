@@ -1,4 +1,5 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)]
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
     BytesN, Env, String, Symbol, Vec,
@@ -7,6 +8,12 @@ use soroban_sdk::{
 const DAO_COUNT: Symbol = symbol_short!("dao_cnt");
 const VERSION: u32 = 1;
 const VERSION_KEY: Symbol = symbol_short!("ver");
+
+// TTL management: bump on every interaction to keep contract alive
+const INSTANCE_TTL_THRESHOLD: u32 = 120_960; // ~7 days
+const INSTANCE_TTL_EXTEND: u32 = 535_680; // ~31 days
+const PERSISTENT_TTL_THRESHOLD: u32 = 120_960;
+const PERSISTENT_TTL_EXTEND: u32 = 535_680;
 
 #[contracterror]
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -77,6 +84,18 @@ pub struct DaoRegistry;
 
 #[contractimpl]
 impl DaoRegistry {
+    fn bump_instance(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND);
+    }
+
+    fn bump_persistent<K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>>(env: &Env, key: &K) {
+        env.storage()
+            .persistent()
+            .extend_ttl(key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND);
+    }
+
     /// Create a new DAO (permissionless).
     /// Creator automatically becomes the admin.
     /// Cannot create DAOs for other people - you can only create your own DAO.
@@ -90,6 +109,7 @@ impl DaoRegistry {
         members_can_propose: bool,
         metadata_cid: Option<String>,
     ) -> u64 {
+        Self::bump_instance(&env);
         creator.require_auth();
 
         // Validate name length to prevent DoS
@@ -119,6 +139,7 @@ impl DaoRegistry {
 
         let key = Self::dao_key(dao_id);
         env.storage().persistent().set(&key, &info);
+        Self::bump_persistent(&env, &key);
 
         DaoCreateEvent {
             dao_id,
@@ -132,26 +153,33 @@ impl DaoRegistry {
 
     /// Get DAO info
     pub fn get_dao(env: Env, dao_id: u64) -> DaoInfo {
+        Self::bump_instance(&env);
         let key = Self::dao_key(dao_id);
-        env.storage()
+        let info: DaoInfo = env
+            .storage()
             .persistent()
             .get(&key)
-            .unwrap_or_else(|| panic_with_error!(&env, RegistryError::DaoNotFound))
+            .unwrap_or_else(|| panic_with_error!(&env, RegistryError::DaoNotFound));
+        Self::bump_persistent(&env, &key);
+        info
     }
 
     /// Check if DAO exists
     pub fn dao_exists(env: Env, dao_id: u64) -> bool {
+        Self::bump_instance(&env);
         let key = Self::dao_key(dao_id);
         env.storage().persistent().has(&key)
     }
 
     /// Get admin of a DAO
     pub fn get_admin(env: Env, dao_id: u64) -> Address {
+        // bump_instance called inside get_dao
         Self::get_dao(env, dao_id).admin
     }
 
     /// Transfer admin rights (current admin only)
     pub fn transfer_admin(env: Env, dao_id: u64, new_admin: Address) {
+        Self::bump_instance(&env);
         let key = Self::dao_key(dao_id);
         let mut info: DaoInfo = env
             .storage()
@@ -164,6 +192,7 @@ impl DaoRegistry {
         let old_admin = info.admin.clone();
         info.admin = new_admin.clone();
         env.storage().persistent().set(&key, &info);
+        Self::bump_persistent(&env, &key);
 
         AdminXferEvent {
             dao_id,
@@ -175,16 +204,19 @@ impl DaoRegistry {
 
     /// Get total number of DAOs created
     pub fn dao_count(env: Env) -> u64 {
+        Self::bump_instance(&env);
         env.storage().instance().get(&DAO_COUNT).unwrap_or(0)
     }
 
     /// Check if a DAO has open membership
     pub fn is_membership_open(env: Env, dao_id: u64) -> bool {
+        // bump_instance called inside get_dao
         Self::get_dao(env, dao_id).membership_open
     }
 
     /// Check if members can create proposals (vs admin-only)
     pub fn members_can_propose(env: Env, dao_id: u64) -> bool {
+        // bump_instance called inside get_dao
         Self::get_dao(env, dao_id).members_can_propose
     }
 
@@ -192,6 +224,7 @@ impl DaoRegistry {
     /// If `members_can_propose` is true, any member can create proposals.
     /// If false, only the DAO admin can create proposals.
     pub fn set_proposal_mode(env: Env, dao_id: u64, members_can_propose: bool, admin: Address) {
+        Self::bump_instance(&env);
         admin.require_auth();
 
         let key = Self::dao_key(dao_id);
@@ -208,12 +241,14 @@ impl DaoRegistry {
 
         info.members_can_propose = members_can_propose;
         env.storage().persistent().set(&key, &info);
+        Self::bump_persistent(&env, &key);
     }
 
     /// Set membership open/closed (admin only).
     /// If `membership_open` is true, users can join (mint SBT) themselves.
     /// If false, only the admin can add members.
     pub fn set_membership_open(env: Env, dao_id: u64, membership_open: bool, admin: Address) {
+        Self::bump_instance(&env);
         admin.require_auth();
 
         let key = Self::dao_key(dao_id);
@@ -230,10 +265,12 @@ impl DaoRegistry {
 
         info.membership_open = membership_open;
         env.storage().persistent().set(&key, &info);
+        Self::bump_persistent(&env, &key);
     }
 
     /// Set DAO name (admin only). Max 100 characters.
     pub fn set_name(env: Env, dao_id: u64, name: String, admin: Address) {
+        Self::bump_instance(&env);
         admin.require_auth();
 
         // Validate name length
@@ -255,12 +292,14 @@ impl DaoRegistry {
 
         info.name = name;
         env.storage().persistent().set(&key, &info);
+        Self::bump_persistent(&env, &key);
     }
 
     /// Set DAO metadata CID (admin only).
     /// The CID points to IPFS JSON with description, images, and links.
     /// Pass None to clear metadata.
     pub fn set_metadata_cid(env: Env, dao_id: u64, metadata_cid: Option<String>, admin: Address) {
+        Self::bump_instance(&env);
         admin.require_auth();
 
         // Validate CID length if provided
@@ -284,6 +323,7 @@ impl DaoRegistry {
 
         info.metadata_cid = metadata_cid;
         env.storage().persistent().set(&key, &info);
+        Self::bump_persistent(&env, &key);
     }
 
     /// Get DAO metadata CID
@@ -311,6 +351,7 @@ impl DaoRegistry {
         tree_depth: u32,
         vk: VerificationKey,
     ) -> u64 {
+        Self::bump_instance(&env);
         creator.require_auth();
 
         // Validate name length to prevent DoS
@@ -339,6 +380,7 @@ impl DaoRegistry {
 
         let key = Self::dao_key(dao_id);
         env.storage().persistent().set(&key, &info);
+        Self::bump_persistent(&env, &key);
 
         DaoCreateEvent {
             dao_id,
@@ -398,6 +440,7 @@ impl DaoRegistry {
         creator_commitment: soroban_sdk::U256,
         vk: VerificationKey,
     ) -> u64 {
+        Self::bump_instance(&env);
         creator.require_auth();
 
         // Validate name length to prevent DoS
@@ -419,6 +462,7 @@ impl DaoRegistry {
 
         let key = Self::dao_key(dao_id);
         env.storage().persistent().set(&key, &info);
+        Self::bump_persistent(&env, &key);
 
         DaoCreateEvent {
             dao_id,
@@ -472,6 +516,7 @@ impl DaoRegistry {
 
     /// Contract version for upgrade tracking.
     pub fn version(env: Env) -> u32 {
+        Self::bump_instance(&env);
         env.storage()
             .instance()
             .get(&VERSION_KEY)

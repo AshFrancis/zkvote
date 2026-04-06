@@ -5,8 +5,13 @@
  * Also propagates content to public IPFS gateways for redundancy.
  */
 import { PinataSDK } from "pinata";
+// ============================================
+// LOGGER
+// ============================================
+import { createLogger } from './logger.js';
+const ipfsLogger = createLogger('ipfs');
 const log = (level, event, meta = {}) => {
-    console.log(JSON.stringify({ level, event, ts: new Date().toISOString(), ...meta }));
+    ipfsLogger[level](event, meta);
 };
 // ============================================
 // MODULE STATE
@@ -257,22 +262,29 @@ export async function fetchContent(cid) {
         // Public gateway - direct URL
         url = `${gatewayUrl}/ipfs/${cid}`;
     }
-    const response = await fetch(url);
-    if (!response.ok) {
-        throw new Error(`Failed to fetch from IPFS: ${response.status} ${response.statusText}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    try {
+        const response = await fetch(url, { signal: controller.signal });
+        if (!response.ok) {
+            throw new Error(`Failed to fetch from IPFS: ${response.status} ${response.statusText}`);
+        }
+        const contentType = response.headers.get("content-type") || "application/json";
+        let data;
+        if (contentType.includes("application/json")) {
+            data = await response.json();
+        }
+        else {
+            data = await response.text();
+        }
+        return {
+            data,
+            contentType
+        };
     }
-    const contentType = response.headers.get("content-type") || "application/json";
-    let data;
-    if (contentType.includes("application/json")) {
-        data = await response.json();
+    finally {
+        clearTimeout(timeout);
     }
-    else {
-        data = await response.text();
-    }
-    return {
-        data,
-        contentType
-    };
 }
 /**
  * Fetch raw content (e.g., image) from IPFS via Pinata gateway
@@ -305,17 +317,24 @@ export async function fetchRawContent(cid) {
         // Public gateway - direct URL
         url = `${gatewayUrl}/ipfs/${cid}`;
     }
-    const response = await fetch(url);
-    if (!response.ok) {
-        throw new Error(`Failed to fetch from IPFS: ${response.status} ${response.statusText}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    try {
+        const response = await fetch(url, { signal: controller.signal });
+        if (!response.ok) {
+            throw new Error(`Failed to fetch from IPFS: ${response.status} ${response.statusText}`);
+        }
+        const contentType = response.headers.get("content-type") || "application/octet-stream";
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        return {
+            buffer,
+            contentType
+        };
     }
-    const contentType = response.headers.get("content-type") || "application/octet-stream";
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    return {
-        buffer,
-        contentType
-    };
+    finally {
+        clearTimeout(timeout);
+    }
 }
 /**
  * Check if Pinata is initialized and healthy (SDK v2.x)

@@ -18,7 +18,10 @@ fn setup_contracts(env: &Env) -> (Address, Address, Address, Address, Address) {
     // Deploy contracts
     let registry_id = env.register(dao_registry::DaoRegistry, ());
     let sbt_id = env.register(membership_sbt::MembershipSbt, (registry_id.clone(),));
-    let tree_id = env.register(membership_tree::MembershipTree, (sbt_id.clone(),));
+    let tree_id = env.register(
+        membership_tree::MembershipTree,
+        (sbt_id.clone(), registry_id.clone()),
+    );
     let voting_id = env.register(voting::Voting, (tree_id.clone(), registry_id.clone()));
 
     let admin = Address::generate(env);
@@ -101,7 +104,7 @@ fn test_public_dao_creation() {
     assert!(registry_client.is_membership_open(&dao_id));
 
     let dao_info = registry_client.get_dao(&dao_id);
-    assert_eq!(dao_info.membership_open, true);
+    assert!(dao_info.membership_open);
 }
 
 #[test]

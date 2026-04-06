@@ -60,7 +60,6 @@ export declare const anonymousCommentSchema: z.ZodObject<{
     voteChoice: z.ZodBoolean;
     nullifier: z.ZodEffects<z.ZodString, string, string>;
     root: z.ZodEffects<z.ZodString, string, string>;
-    commitment: z.ZodEffects<z.ZodString, string, string>;
     proof: z.ZodObject<{
         a: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
         b: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
@@ -81,7 +80,6 @@ export declare const anonymousCommentSchema: z.ZodObject<{
         c: string;
     };
     nullifier: string;
-    commitment: string;
     daoId: number;
     proposalId: number;
     root: string;
@@ -95,7 +93,6 @@ export declare const anonymousCommentSchema: z.ZodObject<{
         c: string;
     };
     nullifier: string;
-    commitment: string;
     daoId: number;
     proposalId: number;
     root: string;

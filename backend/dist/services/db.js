@@ -12,8 +12,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 const DB_FILE = path.join(DATA_DIR, 'zkvote.db');
+// ============================================
+// LOGGER
+// ============================================
+import { createLogger } from './logger.js';
+const dbLogger = createLogger('db');
 const log = (level, event, meta = {}) => {
-    console.log(JSON.stringify({ level, event, ts: new Date().toISOString(), ...meta }));
+    dbLogger[level](event, meta);
 };
 // ============================================
 // DATABASE INSTANCE
@@ -52,6 +57,7 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
     CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp DESC);
     CREATE INDEX IF NOT EXISTS idx_events_ledger ON events(ledger DESC);
+    CREATE INDEX IF NOT EXISTS idx_events_dao_type ON events(dao_id, type);
 
     -- Metadata table for tracking state
     CREATE TABLE IF NOT EXISTS metadata (

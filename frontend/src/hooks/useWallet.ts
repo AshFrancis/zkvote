@@ -98,7 +98,7 @@ export function useWallet() {
 
       if (!storedWalletId) {
         // No previous connection, skip auto-reconnect
-        console.log('[useWallet] No stored wallet, skipping auto-reconnect. isInitializing -> false');
+        if (import.meta.env.DEV) console.log('[useWallet] No stored wallet, skipping auto-reconnect. isInitializing -> false');
         setWallet(prev => ({ ...prev, isInitializing: false }));
         return;
       }
@@ -108,7 +108,7 @@ export function useWallet() {
         globalKit!.setWallet(storedWalletId);
         const { address } = await globalKit!.getAddress();
         if (address) {
-          console.log("[useWallet] Auto-reconnected to wallet:", address, "isInitializing -> false");
+          if (import.meta.env.DEV) console.log("[useWallet] Auto-reconnected to wallet:", address, "isInitializing -> false");
           setWallet({
             publicKey: address,
             isConnected: true,
@@ -118,7 +118,7 @@ export function useWallet() {
         }
       } catch {
         // Auto-reconnect failed, clear stored wallet
-        console.log("[useWallet] Auto-reconnect failed, user needs to reconnect manually. isInitializing -> false");
+        if (import.meta.env.DEV) console.log("[useWallet] Auto-reconnect failed, user needs to reconnect manually. isInitializing -> false");
         safeLocalStorageRemove("selectedWalletId");
         setWallet(prev => ({ ...prev, isInitializing: false }));
       }

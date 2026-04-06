@@ -61,7 +61,7 @@ export function handleTransactionError(
   errorMessage?: string
 ): boolean {
   if (isUserRejection(err)) {
-    console.log("User cancelled the transaction");
+    if (import.meta.env.DEV) console.log("User cancelled the transaction");
     return true;
   }
 

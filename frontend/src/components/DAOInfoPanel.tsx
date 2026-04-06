@@ -229,7 +229,7 @@ export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPan
         }
       } catch {
         // Tree not initialized yet - use defaults
-        console.log("Tree not initialized for DAO:", daoId);
+        if (import.meta.env.DEV) console.log("Tree not initialized for DAO:", daoId);
       }
 
       // Fetch VK version

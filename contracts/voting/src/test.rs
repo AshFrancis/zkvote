@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use super::*;
 use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Env, String};
 
@@ -2733,3 +2731,10 @@ fn test_vote_rejects_zero_nullifier() {
     // This should panic with InvalidNullifier
     voting_client.vote(&dao_id, &proposal_id, &true, &zero_nullifier, &root, &proof);
 }
+
+// === UNTESTED EDGE CASES ===
+// - Tree full (2^18 leaves) behavior
+// - Vote counter (u64) overflow
+// - TTL expiration and data recovery
+// - Cross-contract partial failure rollback in create_and_init_dao
+// - Concurrent DAO creation in same ledger

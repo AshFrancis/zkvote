@@ -5,9 +5,9 @@ export * from '@stellar/stellar-sdk';
 export * as contract from '@stellar/stellar-sdk/contract';
 export * as rpc from '@stellar/stellar-sdk/rpc';
 export declare const networks: {
-    readonly standalone: {
-        readonly networkPassphrase: "Standalone Network ; February 2017";
-        readonly contractId: "CBCHAMOK6CW5ULRJ6CNFEOZLPUBN6AFAFHCFPBTEO6KLAHV33R7G26QF";
+    readonly testnet: {
+        readonly networkPassphrase: "Test SDF Network ; September 2015";
+        readonly contractId: "CCUZNVADC24GEOPRD5A6PBCZGOQ6QOKJU6E5UBXI6RKDC7AWN5ATXNFF";
     };
 };
 export type DataKey = {
@@ -261,14 +261,13 @@ export interface Client {
      * Uses the same vote circuit as voting - just verifies membership without tracking nullifiers.
      * This allows multiple comments from the same user (different from voting which enforces uniqueness).
      */
-    add_anonymous_comment: ({ dao_id, proposal_id, content_cid, parent_id, nullifier, root, commitment, vote_choice, proof }: {
+    add_anonymous_comment: ({ dao_id, proposal_id, content_cid, parent_id, nullifier, root, vote_choice, proof }: {
         dao_id: u64;
         proposal_id: u64;
         content_cid: string;
         parent_id: Option<u64>;
         nullifier: u256;
         root: u256;
-        commitment: u256;
         vote_choice: boolean;
         proof: Proof;
     }, options?: MethodOptions) => Promise<AssembledTransaction<u64>>;
@@ -277,14 +276,13 @@ export interface Client {
      * Edit an anonymous comment (requires proof with same nullifier)
      * We verify the user owns the comment by checking the stored nullifier
      */
-    edit_anonymous_comment: ({ dao_id, proposal_id, comment_id, new_content_cid, nullifier, root, commitment, vote_choice, proof }: {
+    edit_anonymous_comment: ({ dao_id, proposal_id, comment_id, new_content_cid, nullifier, root, vote_choice, proof }: {
         dao_id: u64;
         proposal_id: u64;
         comment_id: u64;
         new_content_cid: string;
         nullifier: u256;
         root: u256;
-        commitment: u256;
         vote_choice: boolean;
         proof: Proof;
     }, options?: MethodOptions) => Promise<AssembledTransaction<null>>;
@@ -292,13 +290,12 @@ export interface Client {
      * Construct and simulate a delete_anonymous_comment transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
      * Delete an anonymous comment (requires proof)
      */
-    delete_anonymous_comment: ({ dao_id, proposal_id, comment_id, nullifier, root, commitment, vote_choice, proof }: {
+    delete_anonymous_comment: ({ dao_id, proposal_id, comment_id, nullifier, root, vote_choice, proof }: {
         dao_id: u64;
         proposal_id: u64;
         comment_id: u64;
         nullifier: u256;
         root: u256;
-        commitment: u256;
         vote_choice: boolean;
         proof: Proof;
     }, options?: MethodOptions) => Promise<AssembledTransaction<null>>;

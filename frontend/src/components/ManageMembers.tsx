@@ -273,7 +273,7 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
       }
 
       // Step 1: Revoke the SBT (sets revoked flag)
-      console.log('[handleRemoveMember] Step 1: Revoking SBT...');
+      if (import.meta.env.DEV) console.log('[handleRemoveMember] Step 1: Revoking SBT...');
       const revokeTx = await clients.membershipSbt.revoke({
         dao_id: BigInt(daoId),
         member: address,
@@ -281,10 +281,10 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
       });
 
       await revokeTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
-      console.log('[handleRemoveMember] SBT revoked');
+      if (import.meta.env.DEV) console.log('[handleRemoveMember] SBT revoked');
 
       // Step 2: Remove member from Merkle tree (zeros their leaf)
-      console.log('[handleRemoveMember] Step 2: Removing from Merkle tree...');
+      if (import.meta.env.DEV) console.log('[handleRemoveMember] Step 2: Removing from Merkle tree...');
       const removeTx = await clients.membershipTree.remove_member({
         dao_id: BigInt(daoId),
         member: address,
@@ -292,7 +292,7 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
       });
 
       const removeResult = await removeTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
-      console.log('[handleRemoveMember] Member removed from tree');
+      if (import.meta.env.DEV) console.log('[handleRemoveMember] Member removed from tree');
 
       // Notify relayer of member revoked event
       const txHash = extractTxHash(removeResult);

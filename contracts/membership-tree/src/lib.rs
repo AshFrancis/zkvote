@@ -7,6 +7,7 @@ use soroban_sdk::{
 mod poseidon_params;
 
 const SBT_CONTRACT: Symbol = symbol_short!("sbt");
+const REGISTRY: Symbol = symbol_short!("registry");
 // FIFO history of Merkle roots - older roots are evicted. See THREAT_MODEL.md for impact.
 const MAX_ROOT_HISTORY: u32 = 30;
 // Circuit depth must match vote.circom. Supports ~262K members (2^18 = 262,144)
@@ -14,6 +15,12 @@ const MAX_TREE_DEPTH: u32 = 18;
 const ZEROS_CACHE: Symbol = symbol_short!("zeros");
 const VERSION: u32 = 1;
 const VERSION_KEY: Symbol = symbol_short!("ver");
+
+// TTL management: bump on every interaction to keep contract alive
+const INSTANCE_TTL_THRESHOLD: u32 = 120_960; // ~7 days
+const INSTANCE_TTL_EXTEND: u32 = 535_680; // ~31 days
+const PERSISTENT_TTL_THRESHOLD: u32 = 120_960;
+const PERSISTENT_TTL_EXTEND: u32 = 535_680;
 
 // Poseidon params cache keys (stored in persistent storage)
 const POSEIDON_MDS: Symbol = symbol_short!("pos_mds");
@@ -113,9 +120,21 @@ pub struct MembershipTree;
 
 #[contractimpl]
 impl MembershipTree {
+    fn bump_instance(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND);
+    }
+
+    fn bump_persistent<K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>>(env: &Env, key: &K) {
+        env.storage()
+            .persistent()
+            .extend_ttl(key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND);
+    }
+
     /// Constructor: Initialize contract with SBT contract address
     /// Also pre-computes zeros cache to avoid expensive initialization during first DAO creation
-    pub fn __constructor(env: Env, sbt_contract: Address) {
+    pub fn __constructor(env: Env, sbt_contract: Address, registry: Address) {
         if env.storage().instance().has(&VERSION_KEY) {
             panic_with_error!(&env, TreeError::AlreadyInitialized);
         }
@@ -127,6 +146,7 @@ impl MembershipTree {
         .publish(&env);
 
         env.storage().instance().set(&SBT_CONTRACT, &sbt_contract);
+        env.storage().instance().set(&REGISTRY, &registry);
 
         // Pre-initialize zeros cache during deployment to spread the cost
         // This avoids hitting budget limits during first DAO creation
@@ -143,6 +163,7 @@ impl MembershipTree {
     /// Initialize a tree for a specific DAO
     /// Only DAO admin can initialize (via SBT contract which checks registry)
     pub fn init_tree(env: Env, dao_id: u64, depth: u32, admin: Address) {
+        Self::bump_instance(&env);
         admin.require_auth();
 
         // Verify admin owns the DAO via SBT -> Registry chain
@@ -172,36 +193,37 @@ impl MembershipTree {
 
         // Store tree parameters
         env.storage().persistent().set(&depth_key, &depth);
-        env.storage()
-            .persistent()
-            .set(&DataKey::NextLeafIndex(dao_id), &0u32);
+        Self::bump_persistent(&env, &depth_key);
+        let next_leaf_key = DataKey::NextLeafIndex(dao_id);
+        env.storage().persistent().set(&next_leaf_key, &0u32);
+        Self::bump_persistent(&env, &next_leaf_key);
 
         // Initialize root index counter
-        env.storage()
-            .persistent()
-            .set(&DataKey::NextRootIndex(dao_id), &0u32);
+        let next_root_key = DataKey::NextRootIndex(dao_id);
+        env.storage().persistent().set(&next_root_key, &0u32);
+        Self::bump_persistent(&env, &next_root_key);
 
         // Initialize filled subtrees with zeros (use cached zeros for O(1) lookup)
         let mut filled = Vec::new(&env);
         for level in 0..depth {
             filled.push_back(Self::zero_at_level(&env, level));
         }
-        env.storage()
-            .persistent()
-            .set(&DataKey::FilledSubtrees(dao_id), &filled);
+        let filled_key = DataKey::FilledSubtrees(dao_id);
+        env.storage().persistent().set(&filled_key, &filled);
+        Self::bump_persistent(&env, &filled_key);
 
         // Initialize root history with empty tree root (cached zero at depth level)
         let empty_root = Self::zero_at_level(&env, depth);
         let mut roots = Vec::new(&env);
         roots.push_back(empty_root.clone());
-        env.storage()
-            .persistent()
-            .set(&DataKey::Roots(dao_id), &roots);
+        let roots_key = DataKey::Roots(dao_id);
+        env.storage().persistent().set(&roots_key, &roots);
+        Self::bump_persistent(&env, &roots_key);
 
         // Store root index for empty root
-        env.storage()
-            .persistent()
-            .set(&DataKey::RootIndex(dao_id, empty_root.clone()), &0u32);
+        let root_idx_key = DataKey::RootIndex(dao_id, empty_root.clone());
+        env.storage().persistent().set(&root_idx_key, &0u32);
+        Self::bump_persistent(&env, &root_idx_key);
 
         TreeInitEvent {
             dao_id,
@@ -216,6 +238,15 @@ impl MembershipTree {
     /// This function is called by the registry contract during create_and_init_dao
     /// to avoid re-entrancy issues. The registry is a trusted system contract.
     pub fn init_tree_from_registry(env: Env, dao_id: u64, depth: u32) {
+        Self::bump_instance(&env);
+        // Verify caller is the registry contract
+        let registry: Address = env
+            .storage()
+            .instance()
+            .get(&REGISTRY)
+            .unwrap_or_else(|| panic_with_error!(&env, TreeError::NotAdmin));
+        registry.require_auth();
+
         if depth == 0 || depth > MAX_TREE_DEPTH {
             panic_with_error!(&env, TreeError::InvalidDepth);
         }
@@ -227,36 +258,37 @@ impl MembershipTree {
 
         // Store tree parameters
         env.storage().persistent().set(&depth_key, &depth);
-        env.storage()
-            .persistent()
-            .set(&DataKey::NextLeafIndex(dao_id), &0u32);
+        Self::bump_persistent(&env, &depth_key);
+        let next_leaf_key = DataKey::NextLeafIndex(dao_id);
+        env.storage().persistent().set(&next_leaf_key, &0u32);
+        Self::bump_persistent(&env, &next_leaf_key);
 
         // Initialize root index counter
-        env.storage()
-            .persistent()
-            .set(&DataKey::NextRootIndex(dao_id), &0u32);
+        let next_root_key = DataKey::NextRootIndex(dao_id);
+        env.storage().persistent().set(&next_root_key, &0u32);
+        Self::bump_persistent(&env, &next_root_key);
 
         // Initialize filled subtrees with zeros (use cached zeros for O(1) lookup)
         let mut filled = Vec::new(&env);
         for level in 0..depth {
             filled.push_back(Self::zero_at_level(&env, level));
         }
-        env.storage()
-            .persistent()
-            .set(&DataKey::FilledSubtrees(dao_id), &filled);
+        let filled_key = DataKey::FilledSubtrees(dao_id);
+        env.storage().persistent().set(&filled_key, &filled);
+        Self::bump_persistent(&env, &filled_key);
 
         // Initialize root history with empty tree root (cached zero at depth level)
         let empty_root = Self::zero_at_level(&env, depth);
         let mut roots = Vec::new(&env);
         roots.push_back(empty_root.clone());
-        env.storage()
-            .persistent()
-            .set(&DataKey::Roots(dao_id), &roots);
+        let roots_key = DataKey::Roots(dao_id);
+        env.storage().persistent().set(&roots_key, &roots);
+        Self::bump_persistent(&env, &roots_key);
 
         // Store root index for empty root
-        env.storage()
-            .persistent()
-            .set(&DataKey::RootIndex(dao_id, empty_root.clone()), &0u32);
+        let root_idx_key = DataKey::RootIndex(dao_id, empty_root.clone());
+        env.storage().persistent().set(&root_idx_key, &0u32);
+        Self::bump_persistent(&env, &root_idx_key);
 
         TreeInitEvent {
             dao_id,
@@ -272,6 +304,15 @@ impl MembershipTree {
     /// to automatically register the creator's commitment.
     /// The registry is trusted to have already verified SBT ownership.
     pub fn register_from_registry(env: Env, dao_id: u64, commitment: U256, member: Address) {
+        Self::bump_instance(&env);
+        // Verify caller is the registry contract
+        let registry: Address = env
+            .storage()
+            .instance()
+            .get(&REGISTRY)
+            .unwrap_or_else(|| panic_with_error!(&env, TreeError::NotAdmin));
+        registry.require_auth();
+
         // Check tree is initialized
         let depth_key = DataKey::TreeDepth(dao_id);
         if !env.storage().persistent().has(&depth_key) {
@@ -311,19 +352,24 @@ impl MembershipTree {
             Self::insert_leaf(&env, dao_id, commitment.clone(), next_index, depth);
 
         // Update next index
+        let next_leaf_key = DataKey::NextLeafIndex(dao_id);
         env.storage()
             .persistent()
-            .set(&DataKey::NextLeafIndex(dao_id), &(next_index + 1));
+            .set(&next_leaf_key, &(next_index + 1));
+        Self::bump_persistent(&env, &next_leaf_key);
 
         // Store leaf index for this commitment
         env.storage().persistent().set(&leaf_key, &next_index);
+        Self::bump_persistent(&env, &leaf_key);
 
         // Store member -> index mapping
         env.storage().persistent().set(&member_key, &next_index);
+        Self::bump_persistent(&env, &member_key);
 
         // Store leaf value
         let leaf_value_key = DataKey::LeafValue(dao_id, next_index);
         env.storage().persistent().set(&leaf_value_key, &commitment);
+        Self::bump_persistent(&env, &leaf_value_key);
 
         CommitEvent {
             dao_id,
@@ -337,6 +383,7 @@ impl MembershipTree {
 
     /// Register a commitment with explicit caller (requires SBT membership)
     pub fn register_with_caller(env: Env, dao_id: u64, commitment: U256, caller: Address) {
+        Self::bump_instance(&env);
         caller.require_auth();
 
         // Verify caller has SBT for this DAO
@@ -390,19 +437,24 @@ impl MembershipTree {
             Self::insert_leaf(&env, dao_id, commitment.clone(), next_index, depth);
 
         // Update next index
+        let next_leaf_key = DataKey::NextLeafIndex(dao_id);
         env.storage()
             .persistent()
-            .set(&DataKey::NextLeafIndex(dao_id), &(next_index + 1));
+            .set(&next_leaf_key, &(next_index + 1));
+        Self::bump_persistent(&env, &next_leaf_key);
 
         // Store leaf index for this commitment
         env.storage().persistent().set(&leaf_key, &next_index);
+        Self::bump_persistent(&env, &leaf_key);
 
         // Store member -> index mapping
         env.storage().persistent().set(&member_key, &next_index);
+        Self::bump_persistent(&env, &member_key);
 
         // Store leaf value
         let leaf_value_key = DataKey::LeafValue(dao_id, next_index);
         env.storage().persistent().set(&leaf_value_key, &commitment);
+        Self::bump_persistent(&env, &leaf_value_key);
 
         CommitEvent {
             dao_id,
@@ -417,6 +469,7 @@ impl MembershipTree {
     /// Self-register a commitment in a public DAO (requires SBT membership)
     /// For public DAOs, anyone with an SBT can register their commitment
     pub fn self_register(env: Env, dao_id: u64, commitment: U256, member: Address) {
+        Self::bump_instance(&env);
         member.require_auth();
 
         // Get SBT contract and verify membership
@@ -488,19 +541,24 @@ impl MembershipTree {
             Self::insert_leaf(&env, dao_id, commitment.clone(), next_index, depth);
 
         // Update next index
+        let next_leaf_key = DataKey::NextLeafIndex(dao_id);
         env.storage()
             .persistent()
-            .set(&DataKey::NextLeafIndex(dao_id), &(next_index + 1));
+            .set(&next_leaf_key, &(next_index + 1));
+        Self::bump_persistent(&env, &next_leaf_key);
 
         // Store leaf index for this commitment
         env.storage().persistent().set(&leaf_key, &next_index);
+        Self::bump_persistent(&env, &leaf_key);
 
         // Store member -> index mapping
         env.storage().persistent().set(&member_key, &next_index);
+        Self::bump_persistent(&env, &member_key);
 
         // Store leaf value
         let leaf_value_key = DataKey::LeafValue(dao_id, next_index);
         env.storage().persistent().set(&leaf_value_key, &commitment);
+        Self::bump_persistent(&env, &leaf_value_key);
 
         CommitEvent {
             dao_id,
@@ -514,12 +572,14 @@ impl MembershipTree {
 
     /// Get current root for a DAO
     pub fn current_root(env: Env, dao_id: u64) -> U256 {
+        Self::bump_instance(&env);
         let roots_key = DataKey::Roots(dao_id);
         let roots: Vec<U256> = env
             .storage()
             .persistent()
             .get(&roots_key)
             .unwrap_or_else(|| panic_with_error!(&env, TreeError::TreeNotInitialized));
+        Self::bump_persistent(&env, &roots_key);
         roots
             .get(roots.len().saturating_sub(1))
             .unwrap_or_else(|| panic_with_error!(&env, TreeError::TreeNotInitialized))
@@ -532,6 +592,7 @@ impl MembershipTree {
 
     /// Check if a root is valid (in history)
     pub fn root_ok(env: Env, dao_id: u64, root: U256) -> bool {
+        Self::bump_instance(&env);
         let roots_key = DataKey::Roots(dao_id);
         if !env.storage().persistent().has(&roots_key) {
             return false;
@@ -556,10 +617,15 @@ impl MembershipTree {
 
     /// Get root index for a specific root (for vote mode validation)
     pub fn root_idx(env: Env, dao_id: u64, root: U256) -> u32 {
-        env.storage()
+        Self::bump_instance(&env);
+        let key = DataKey::RootIndex(dao_id, root);
+        let idx: u32 = env
+            .storage()
             .persistent()
-            .get(&DataKey::RootIndex(dao_id, root))
-            .unwrap_or_else(|| panic_with_error!(&env, TreeError::RootNotFound))
+            .get(&key)
+            .unwrap_or_else(|| panic_with_error!(&env, TreeError::RootNotFound));
+        Self::bump_persistent(&env, &key);
+        idx
     }
 
     /// Get current root index (for proposal creation)
@@ -570,15 +636,20 @@ impl MembershipTree {
 
     /// Get leaf index for a commitment
     pub fn get_leaf_index(env: Env, dao_id: u64, commitment: U256) -> u32 {
+        Self::bump_instance(&env);
         let key = DataKey::LeafIndex(dao_id, commitment);
-        env.storage()
+        let idx: u32 = env
+            .storage()
             .persistent()
             .get(&key)
-            .unwrap_or_else(|| panic_with_error!(&env, TreeError::MemberNotInTree))
+            .unwrap_or_else(|| panic_with_error!(&env, TreeError::MemberNotInTree));
+        Self::bump_persistent(&env, &key);
+        idx
     }
 
     /// Get tree info for a DAO
     pub fn get_tree_info(env: Env, dao_id: u64) -> (u32, u32, U256) {
+        Self::bump_instance(&env);
         let depth: u32 = env
             .storage()
             .persistent()
@@ -601,6 +672,7 @@ impl MembershipTree {
     /// This optimized version reads stored node hashes directly (O(depth) reads)
     /// instead of reconstructing subtrees (which was O(n * log n) hashes).
     pub fn get_merkle_path(env: Env, dao_id: u64, leaf_index: u32) -> (Vec<U256>, Vec<u32>) {
+        Self::bump_instance(&env);
         let depth: u32 = env
             .storage()
             .persistent()
@@ -623,7 +695,7 @@ impl MembershipTree {
 
         for level in 0..depth {
             // Determine if current node is left (0) or right (1) child
-            let is_left = current_index % 2 == 0;
+            let is_left = current_index.is_multiple_of(2);
             path_indices.push_back(if is_left { 0 } else { 1 });
 
             // Calculate sibling index at THIS LEVEL
@@ -664,6 +736,7 @@ impl MembershipTree {
 
     /// Get SBT contract address
     pub fn sbt_contr(env: Env) -> Address {
+        Self::bump_instance(&env);
         env.storage()
             .instance()
             .get(&SBT_CONTRACT)
@@ -673,6 +746,7 @@ impl MembershipTree {
     /// Pre-initialize the zeros cache to avoid budget issues during first tree operations.
     /// This should be called once during deployment to precompute zero values for all levels.
     pub fn init_zeros_cache(env: Env) {
+        Self::bump_instance(&env);
         Self::ensure_zeros_cache(&env);
     }
 
@@ -680,6 +754,7 @@ impl MembershipTree {
     /// Only callable by DAO admin
     /// This zeros the leaf in the Merkle tree, preventing proofs against new roots
     pub fn remove_member(env: Env, dao_id: u64, member: Address, admin: Address) {
+        Self::bump_instance(&env);
         admin.require_auth();
 
         // Verify admin owns the DAO via SBT -> Registry chain
@@ -723,9 +798,9 @@ impl MembershipTree {
 
         // Update min_valid_root_index - all roots before this are now invalid for Trailing mode
         // This prevents removed members from using old proofs
-        env.storage()
-            .persistent()
-            .set(&DataKey::MinValidRootIdx(dao_id), &root_index);
+        let min_root_key = DataKey::MinValidRootIdx(dao_id);
+        env.storage().persistent().set(&min_root_key, &root_index);
+        Self::bump_persistent(&env, &min_root_key);
 
         // Also revoke the member's SBT in the same transaction
         // The admin has already called require_auth(), so the SBT contract will accept this
@@ -754,6 +829,7 @@ impl MembershipTree {
     /// Clears their leaf index mapping so they can re-register with a new commitment
     /// The admin should also re-mint their SBT via the membership-sbt contract
     pub fn reinstate_member(env: Env, dao_id: u64, member: Address, admin: Address) {
+        Self::bump_instance(&env);
         admin.require_auth();
 
         // Verify admin is the DAO admin via cross-contract call
@@ -810,27 +886,38 @@ impl MembershipTree {
     /// Get revocation timestamp for a commitment (returns None if never revoked)
     /// Used by voting contract to check if member was revoked
     pub fn revok_at(env: Env, dao_id: u64, commitment: U256) -> Option<u64> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::RevokedAt(dao_id, commitment))
+        Self::bump_instance(&env);
+        let key = DataKey::RevokedAt(dao_id, commitment);
+        let result: Option<u64> = env.storage().persistent().get(&key);
+        if result.is_some() {
+            Self::bump_persistent(&env, &key);
+        }
+        result
     }
 
     /// Get reinstatement timestamp for a commitment (returns None if never reinstated)
     /// Used by voting contract to check if member was reinstated after revocation
     pub fn reinst_at(env: Env, dao_id: u64, commitment: U256) -> Option<u64> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::ReinstatedAt(dao_id, commitment))
+        Self::bump_instance(&env);
+        let key = DataKey::ReinstatedAt(dao_id, commitment);
+        let result: Option<u64> = env.storage().persistent().get(&key);
+        if result.is_some() {
+            Self::bump_persistent(&env, &key);
+        }
+        result
     }
 
     /// Get the minimum valid root index for a DAO
     /// Roots with index < min_valid_root_index are invalid for Trailing mode proposals
     /// Returns 0 if no members have been removed
     pub fn min_root(env: Env, dao_id: u64) -> u32 {
-        env.storage()
-            .persistent()
-            .get(&DataKey::MinValidRootIdx(dao_id))
-            .unwrap_or(0)
+        Self::bump_instance(&env);
+        let key = DataKey::MinValidRootIdx(dao_id);
+        let result: u32 = env.storage().persistent().get(&key).unwrap_or(0);
+        if result > 0 {
+            Self::bump_persistent(&env, &key);
+        }
+        result
     }
 
     // Internal: Insert leaf and update tree
@@ -854,25 +941,30 @@ impl MembershipTree {
                 current_hash = Self::hash_pair(env, &current_hash, &zero);
                 // Store intermediate node hash at level+1 (since level 0 is leaves)
                 let parent_index = current_index / 2;
-                env.storage().persistent().set(
-                    &DataKey::NodeHash(dao_id, level + 1, parent_index),
-                    &current_hash,
-                );
+                let node_key = DataKey::NodeHash(dao_id, level + 1, parent_index);
+                env.storage().persistent().set(&node_key, &current_hash);
+                Self::bump_persistent(env, &node_key);
                 current_index = parent_index;
             }
 
-            env.storage()
-                .persistent()
-                .set(&DataKey::FilledSubtrees(dao_id), &filled);
+            let filled_key = DataKey::FilledSubtrees(dao_id);
+            env.storage().persistent().set(&filled_key, &filled);
+            Self::bump_persistent(env, &filled_key);
 
             // Update root history
+            let roots_key = DataKey::Roots(dao_id);
             let mut roots: Vec<U256> = env
                 .storage()
                 .persistent()
-                .get(&DataKey::Roots(dao_id))
+                .get(&roots_key)
                 .unwrap_or_else(|| panic_with_error!(env, TreeError::TreeNotInitialized));
             roots.push_back(current_hash.clone());
             if roots.len() > MAX_ROOT_HISTORY {
+                // Clean up RootIndex for evicted root
+                if let Some(evicted_root) = roots.get(0) {
+                    let evicted_key = DataKey::RootIndex(dao_id, evicted_root);
+                    env.storage().persistent().remove(&evicted_key);
+                }
                 let mut new_roots = Vec::new(env);
                 for i in 1..roots.len() {
                     if let Some(r) = roots.get(i) {
@@ -881,25 +973,21 @@ impl MembershipTree {
                 }
                 roots = new_roots;
             }
-            env.storage()
-                .persistent()
-                .set(&DataKey::Roots(dao_id), &roots);
+            env.storage().persistent().set(&roots_key, &roots);
+            Self::bump_persistent(env, &roots_key);
 
             // Get and increment root index
-            let root_index: u32 = env
-                .storage()
-                .persistent()
-                .get(&DataKey::NextRootIndex(dao_id))
-                .unwrap_or(0);
+            let next_root_key = DataKey::NextRootIndex(dao_id);
+            let root_index: u32 = env.storage().persistent().get(&next_root_key).unwrap_or(0);
             env.storage()
                 .persistent()
-                .set(&DataKey::NextRootIndex(dao_id), &(root_index + 1));
+                .set(&next_root_key, &(root_index + 1));
+            Self::bump_persistent(env, &next_root_key);
 
             // Store root index mapping
-            env.storage().persistent().set(
-                &DataKey::RootIndex(dao_id, current_hash.clone()),
-                &root_index,
-            );
+            let root_idx_key = DataKey::RootIndex(dao_id, current_hash.clone());
+            env.storage().persistent().set(&root_idx_key, &root_index);
+            Self::bump_persistent(env, &root_idx_key);
 
             return (current_hash, root_index);
         }
@@ -909,8 +997,8 @@ impl MembershipTree {
         let mut current_index = index;
 
         for i in 0..depth {
-            let level = i as u32;
-            if current_index % 2 == 0 {
+            let level = i;
+            if current_index.is_multiple_of(2) {
                 // Left child - update filled subtree at this level
                 filled.set(level, current_hash.clone());
                 let zero_at_level = Self::zero_at_level(env, level);
@@ -924,29 +1012,34 @@ impl MembershipTree {
             }
             // Store intermediate node hash at level+1 (since level 0 is leaves)
             let parent_index = current_index / 2;
-            env.storage().persistent().set(
-                &DataKey::NodeHash(dao_id, level + 1, parent_index),
-                &current_hash,
-            );
+            let node_key = DataKey::NodeHash(dao_id, level + 1, parent_index);
+            env.storage().persistent().set(&node_key, &current_hash);
+            Self::bump_persistent(env, &node_key);
             current_index = parent_index;
         }
 
         // Save updated filled subtrees
-        env.storage()
-            .persistent()
-            .set(&DataKey::FilledSubtrees(dao_id), &filled);
+        let filled_key = DataKey::FilledSubtrees(dao_id);
+        env.storage().persistent().set(&filled_key, &filled);
+        Self::bump_persistent(env, &filled_key);
 
         // Update root history with FIFO cap
+        let roots_key = DataKey::Roots(dao_id);
         let mut roots: Vec<U256> = env
             .storage()
             .persistent()
-            .get(&DataKey::Roots(dao_id))
+            .get(&roots_key)
             .unwrap_or_else(|| panic_with_error!(env, TreeError::TreeNotInitialized));
 
         roots.push_back(current_hash.clone());
 
         // Maintain max roots cap (FIFO)
         if roots.len() > MAX_ROOT_HISTORY {
+            // Clean up RootIndex for evicted root
+            if let Some(evicted_root) = roots.get(0) {
+                let evicted_key = DataKey::RootIndex(dao_id, evicted_root);
+                env.storage().persistent().remove(&evicted_key);
+            }
             let mut new_roots = Vec::new(env);
             for i in 1..roots.len() {
                 if let Some(r) = roots.get(i) {
@@ -956,25 +1049,21 @@ impl MembershipTree {
             roots = new_roots;
         }
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::Roots(dao_id), &roots);
+        env.storage().persistent().set(&roots_key, &roots);
+        Self::bump_persistent(env, &roots_key);
 
         // Get and increment root index
-        let root_index: u32 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::NextRootIndex(dao_id))
-            .unwrap_or(0);
+        let next_root_key = DataKey::NextRootIndex(dao_id);
+        let root_index: u32 = env.storage().persistent().get(&next_root_key).unwrap_or(0);
         env.storage()
             .persistent()
-            .set(&DataKey::NextRootIndex(dao_id), &(root_index + 1));
+            .set(&next_root_key, &(root_index + 1));
+        Self::bump_persistent(env, &next_root_key);
 
         // Store root index mapping
-        env.storage().persistent().set(
-            &DataKey::RootIndex(dao_id, current_hash.clone()),
-            &root_index,
-        );
+        let root_idx_key = DataKey::RootIndex(dao_id, current_hash.clone());
+        env.storage().persistent().set(&root_idx_key, &root_index);
+        Self::bump_persistent(env, &root_idx_key);
 
         (current_hash, root_index)
     }
@@ -990,16 +1079,16 @@ impl MembershipTree {
             .unwrap_or_else(|| panic_with_error!(env, TreeError::TreeNotInitialized));
 
         // Update the leaf value
-        env.storage()
-            .persistent()
-            .set(&DataKey::LeafValue(dao_id, leaf_index), &new_value);
+        let leaf_val_key = DataKey::LeafValue(dao_id, leaf_index);
+        env.storage().persistent().set(&leaf_val_key, &new_value);
+        Self::bump_persistent(env, &leaf_val_key);
 
         // Recompute path from leaf to root
         let mut current_index = leaf_index;
         let mut current_hash = new_value;
 
         for level in 0..depth {
-            let is_left = current_index % 2 == 0;
+            let is_left = current_index.is_multiple_of(2);
             let sibling_index = if is_left {
                 current_index + 1
             } else {
@@ -1031,25 +1120,30 @@ impl MembershipTree {
 
             // Store updated node hash at level+1
             let parent_index = current_index / 2;
-            env.storage().persistent().set(
-                &DataKey::NodeHash(dao_id, level + 1, parent_index),
-                &current_hash,
-            );
+            let node_key = DataKey::NodeHash(dao_id, level + 1, parent_index);
+            env.storage().persistent().set(&node_key, &current_hash);
+            Self::bump_persistent(env, &node_key);
 
             current_index = parent_index;
         }
 
         // Update root history with FIFO cap
+        let roots_key = DataKey::Roots(dao_id);
         let mut roots: Vec<U256> = env
             .storage()
             .persistent()
-            .get(&DataKey::Roots(dao_id))
+            .get(&roots_key)
             .unwrap_or_else(|| panic_with_error!(env, TreeError::TreeNotInitialized));
 
         roots.push_back(current_hash.clone());
 
         // Maintain max roots cap (FIFO)
         if roots.len() > MAX_ROOT_HISTORY {
+            // Clean up RootIndex for evicted root
+            if let Some(evicted_root) = roots.get(0) {
+                let evicted_key = DataKey::RootIndex(dao_id, evicted_root);
+                env.storage().persistent().remove(&evicted_key);
+            }
             let mut new_roots = Vec::new(env);
             for i in 1..roots.len() {
                 if let Some(r) = roots.get(i) {
@@ -1059,25 +1153,21 @@ impl MembershipTree {
             roots = new_roots;
         }
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::Roots(dao_id), &roots);
+        env.storage().persistent().set(&roots_key, &roots);
+        Self::bump_persistent(env, &roots_key);
 
         // Get and increment root index
-        let root_index: u32 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::NextRootIndex(dao_id))
-            .unwrap_or(0);
+        let next_root_key = DataKey::NextRootIndex(dao_id);
+        let root_index: u32 = env.storage().persistent().get(&next_root_key).unwrap_or(0);
         env.storage()
             .persistent()
-            .set(&DataKey::NextRootIndex(dao_id), &(root_index + 1));
+            .set(&next_root_key, &(root_index + 1));
+        Self::bump_persistent(env, &next_root_key);
 
         // Store root index mapping
-        env.storage().persistent().set(
-            &DataKey::RootIndex(dao_id, current_hash.clone()),
-            &root_index,
-        );
+        let root_idx_key = DataKey::RootIndex(dao_id, current_hash.clone());
+        env.storage().persistent().set(&root_idx_key, &root_index);
+        Self::bump_persistent(env, &root_idx_key);
 
         (current_hash, root_index)
     }
@@ -1092,7 +1182,9 @@ impl MembershipTree {
         let mds = poseidon_params::get_mds3(env);
         let rc = poseidon_params::get_rc3(env);
         env.storage().persistent().set(&POSEIDON_MDS, &mds);
+        Self::bump_persistent(env, &POSEIDON_MDS);
         env.storage().persistent().set(&POSEIDON_RC, &rc);
+        Self::bump_persistent(env, &POSEIDON_RC);
     }
 
     // Internal: Poseidon hash of two U256 values using cached params
@@ -1177,6 +1269,7 @@ impl MembershipTree {
 
     /// Contract version for upgrade tracking.
     pub fn version(env: Env) -> u32 {
+        Self::bump_instance(&env);
         env.storage()
             .instance()
             .get(&VERSION_KEY)

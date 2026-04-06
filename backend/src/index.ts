@@ -24,6 +24,7 @@ import {
   triggerDaoMembershipSync,
 } from './services/sync.js';
 import { startIndexer, stopIndexer } from './services/indexer.js';
+import { startTTLRenewal, stopTTLRenewal } from './services/ttl.js';
 
 // Middleware
 import { csrfGuard, requestLogger, errorHandler } from './middleware/index.js';
@@ -101,39 +102,21 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const PORT = config.port;
 
   app.listen(PORT, async () => {
-    logger.info('server_started', { port: PORT });
-    console.log(`\n🚀 ZKVote Relayer running on http://localhost:${PORT}`);
-    console.log(`   Network: ${config.networkPassphrase}`);
-    console.log(`   RPC URL: ${config.rpcUrl}`);
-    console.log(`   Relayer: ${relayerKeypair.publicKey()}`);
+    logger.info('server_started', {
+      port: PORT,
+      network: config.networkPassphrase,
+      rpcUrl: config.rpcUrl,
+      relayer: relayerKeypair.publicKey(),
+    });
 
-    console.log('\nCore Endpoints:');
-    console.log('  GET  /health              - Health check');
-    console.log('  GET  /ready               - Readiness check');
-    console.log('  GET  /config              - Public configuration');
-    console.log('  POST /vote                - Submit anonymous vote (ZK)');
-    console.log('  GET  /proposal/:dao/:prop - Get proposal results');
-    console.log('  GET  /root/:dao           - Get current Merkle root');
-    console.log('  GET  /events/:daoId       - Get events for a DAO');
-    console.log('  POST /events/notify       - Notify relayer of event (with txHash)');
-    console.log('  GET  /indexer/status      - Get indexer status');
+    // Keep the startup banner on stdout for human-readable output
+    console.log(`\nZKVote Relayer running on http://localhost:${PORT}`);
 
-    console.log('\nComment Endpoints:');
-    console.log('  POST /comment/anonymous   - Submit anonymous comment (ZK)');
-    console.log('  GET  /comments/:dao/:prop - Get comments for proposal');
-    console.log('  GET  /comments/:dao/:prop/nonce - Get next comment nonce');
-    console.log('  GET  /comment/:dao/:prop/:id - Get single comment');
-    console.log('  POST /comment/edit        - Edit public comment');
-    console.log('  POST /comment/delete      - Delete public comment');
-
-    if (config.ipfsEnabled) {
-      console.log('\nIPFS Endpoints:');
-      console.log('  POST /ipfs/image          - Upload image to IPFS');
-      console.log('  POST /ipfs/metadata       - Upload metadata to IPFS');
-      console.log('  GET  /ipfs/:cid           - Fetch content from IPFS (JSON)');
-      console.log('  GET  /ipfs/image/:cid     - Fetch raw image from IPFS');
-      console.log('  GET  /ipfs/health         - IPFS health check');
-    }
+    logger.info('endpoints_registered', {
+      core: ['/health', '/ready', '/config', '/vote', '/proposal/:dao/:prop', '/root/:dao', '/events/:daoId', '/events/notify', '/indexer/status'],
+      comments: ['/comment/anonymous', '/comments/:dao/:prop', '/comments/:dao/:prop/nonce', '/comment/:dao/:prop/:id', '/comment/edit', '/comment/delete'],
+      ipfs: config.ipfsEnabled ? ['/ipfs/image', '/ipfs/metadata', '/ipfs/:cid', '/ipfs/image/:cid', '/ipfs/health'] : [],
+    });
 
     // Initialize Pinata
     if (config.ipfsEnabled && config.pinataJwt) {
@@ -177,6 +160,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         startMembershipSync();
       }
     }
+
+    // Start TTL renewal service (prevents contract data from expiring)
+    startTTLRenewal();
   });
 
   // Graceful shutdown
@@ -185,6 +171,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     stopIndexer();
     stopDaoSync();
     stopMembershipSync();
+    stopTTLRenewal();
     process.exit(0);
   });
 
@@ -193,6 +180,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     stopIndexer();
     stopDaoSync();
     stopMembershipSync();
+    stopTTLRenewal();
     process.exit(0);
   });
 }

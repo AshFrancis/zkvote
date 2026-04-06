@@ -161,6 +161,6 @@ test('fetchContent handles non-existent CID gracefully', skipIfNoJwt, async () =
 
   await assert.rejects(
     () => fetchContent(fakeCid),
-    /Failed to fetch from IPFS/
+    /Failed to fetch from IPFS|aborted/i
   );
 });

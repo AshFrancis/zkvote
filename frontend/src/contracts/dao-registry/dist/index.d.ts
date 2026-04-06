@@ -5,9 +5,9 @@ export * from '@stellar/stellar-sdk';
 export * as contract from '@stellar/stellar-sdk/contract';
 export * as rpc from '@stellar/stellar-sdk/rpc';
 export declare const networks: {
-    readonly standalone: {
-        readonly networkPassphrase: "Standalone Network ; February 2017";
-        readonly contractId: "CCZXSO3ODKLZ5NMDYXMP6Q265B5LJZLZX4DYNYMODNA47X2RXAROOOSI";
+    readonly testnet: {
+        readonly networkPassphrase: "Test SDF Network ; September 2015";
+        readonly contractId: "CBGK5YFR5544QNHUNR4WKB5ECL75DAY3R4M5UNALA42ZBPKOFNL5RM43";
     };
 };
 export interface DaoInfo {

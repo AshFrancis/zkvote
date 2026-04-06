@@ -91,14 +91,11 @@ export interface IndexedDao {
 // LOGGER
 // ============================================
 
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+import { createLogger } from './logger.js';
 
-interface LogMeta {
-  [key: string]: unknown;
-}
-
-const log = (level: LogLevel, event: string, meta: LogMeta = {}): void => {
-  console.log(JSON.stringify({ level, event, ts: new Date().toISOString(), ...meta }));
+const dbLogger = createLogger('db');
+const log = (level: 'debug' | 'info' | 'warn' | 'error', event: string, meta: Record<string, unknown> = {}): void => {
+  dbLogger[level](event, meta);
 };
 
 // ============================================
@@ -142,6 +139,7 @@ export function initDb(): DatabaseType {
     CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
     CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp DESC);
     CREATE INDEX IF NOT EXISTS idx_events_ledger ON events(ledger DESC);
+    CREATE INDEX IF NOT EXISTS idx_events_dao_type ON events(dao_id, type);
 
     -- Metadata table for tracking state
     CREATE TABLE IF NOT EXISTS metadata (

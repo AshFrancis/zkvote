@@ -49,9 +49,11 @@ export async function syncDaosFromContract() {
             dbService.setDaosSyncTime(new Date().toISOString());
             return 0;
         }
-        // Fetch each DAO
+        // Fetch each DAO with bounded parallelism
         const daos = [];
-        for (let i = 1; i <= daoCount; i++) {
+        const daoIds = Array.from({ length: daoCount }, (_, i) => i + 1);
+        const DAO_CHUNK_SIZE = 5;
+        const fetchDao = async (i) => {
             try {
                 const daoAccount = await server.getAccount(relayerKeypair.publicKey());
                 const getOp = contract.call('get_dao', StellarSdk.nativeToScVal(i, { type: 'u64' }));
@@ -79,6 +81,10 @@ export async function syncDaosFromContract() {
             catch (err) {
                 log('warn', 'dao_fetch_failed', { daoId: i, error: err.message });
             }
+        };
+        for (let i = 0; i < daoIds.length; i += DAO_CHUNK_SIZE) {
+            const chunk = daoIds.slice(i, i + DAO_CHUNK_SIZE);
+            await Promise.all(chunk.map(id => fetchDao(id)));
         }
         // Save to database
         if (daos.length > 0) {
@@ -200,9 +206,11 @@ export async function syncAllMemberships() {
             daoAdminsCache.set(dao.id, dao.creator);
         }
     }
-    // Sync each DAO sequentially
-    for (const dao of daos) {
-        await syncDaoMembership(dao.id);
+    // Sync DAOs with bounded parallelism
+    const MEMBERSHIP_CHUNK_SIZE = 5;
+    for (let i = 0; i < daos.length; i += MEMBERSHIP_CHUNK_SIZE) {
+        const chunk = daos.slice(i, i + MEMBERSHIP_CHUNK_SIZE);
+        await Promise.all(chunk.map(dao => syncDaoMembership(dao.id)));
     }
     log('info', 'membership_sync_complete', { daoCount: daos.length });
 }

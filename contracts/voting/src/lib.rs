@@ -27,10 +27,11 @@
 //! See documentation in `set_vk()` for detailed point validation strategy.
 
 #![no_std]
+#![allow(clippy::too_many_arguments)]
 #[allow(unused_imports)]
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype,
-    crypto::bn254::{Fr, G1Affine, G2Affine},
+    crypto::bn254::{Bn254G1Affine, Bn254G2Affine, Fr},
     panic_with_error, symbol_short, Address, Bytes, BytesN, Env, IntoVal, String, Symbol, Vec,
     U256,
 };
@@ -42,6 +43,12 @@ const TREE_CONTRACT: Symbol = symbol_short!("tree");
 const REGISTRY: Symbol = symbol_short!("registry");
 const VERSION: u32 = 1;
 const VERSION_KEY: Symbol = symbol_short!("ver");
+
+// TTL management: bump on every interaction to keep contract alive
+const INSTANCE_TTL_THRESHOLD: u32 = 120_960; // ~7 days
+const INSTANCE_TTL_EXTEND: u32 = 535_680; // ~31 days
+const PERSISTENT_TTL_THRESHOLD: u32 = 120_960;
+const PERSISTENT_TTL_EXTEND: u32 = 535_680;
 
 #[contracterror]
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -103,7 +110,8 @@ pub enum DataKey {
     VotingKey(u64),            // dao_id -> latest VerificationKey
     VkVersion(u64),            // dao_id -> current VK version
     VkByVersion(u64, u32),     // (dao_id, vk_version) -> VerificationKey
-    VerifyOverride,            // Test-only: force verify_groth16 result (unused in prod)
+    /// Test-only: overrides proof verification. Not used in production.
+    VerifyOverride,
 }
 
 #[contracttype]
@@ -204,6 +212,18 @@ pub struct Voting;
 
 #[contractimpl]
 impl Voting {
+    fn bump_instance(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND);
+    }
+
+    fn bump_persistent<K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>>(env: &Env, key: &K) {
+        env.storage()
+            .persistent()
+            .extend_ttl(key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND);
+    }
+
     /// Constructor: Initialize contract with MembershipTree address
     pub fn __constructor(env: Env, tree_contract: Address, registry: Address) {
         // Prevent accidental re-initialization
@@ -234,6 +254,7 @@ impl Voting {
 
     /// Set verification key for a DAO (admin only)
     pub fn set_vk(env: Env, dao_id: u64, vk: VerificationKey, admin: Address) {
+        Self::bump_instance(&env);
         admin.require_auth();
         Self::assert_admin(&env, dao_id, &admin);
         // Validate VK size to prevent DoS attacks
@@ -305,9 +326,10 @@ impl Voting {
 
         let key = DataKey::VotingKey(dao_id);
         env.storage().persistent().set(&key, &vk);
-        env.storage()
-            .persistent()
-            .set(&DataKey::VkByVersion(dao_id, new_version), &vk);
+        Self::bump_persistent(&env, &key);
+        let vk_ver_key = DataKey::VkByVersion(dao_id, new_version);
+        env.storage().persistent().set(&vk_ver_key, &vk);
+        Self::bump_persistent(&env, &vk_ver_key);
 
         VKSetEvent { dao_id }.publish(&env);
     }
@@ -349,6 +371,7 @@ impl Voting {
         let current_version: u32 = env.storage().persistent().get(&version_key).unwrap_or(0);
         let new_version = current_version + 1;
         env.storage().persistent().set(&version_key, &new_version);
+        Self::bump_persistent(env, &version_key);
         new_version
     }
 
@@ -356,6 +379,7 @@ impl Voting {
     /// This function is called by the registry contract during create_and_init_dao
     /// to avoid re-entrancy issues. The registry is a trusted system contract.
     pub fn set_vk_from_registry(env: Env, dao_id: u64, vk: VerificationKey) {
+        Self::bump_instance(&env);
         Self::validate_vk(&env, &vk);
 
         // Bump VK version
@@ -363,9 +387,10 @@ impl Voting {
 
         let key = DataKey::VotingKey(dao_id);
         env.storage().persistent().set(&key, &vk);
-        env.storage()
-            .persistent()
-            .set(&DataKey::VkByVersion(dao_id, new_version), &vk);
+        Self::bump_persistent(&env, &key);
+        let vk_ver_key = DataKey::VkByVersion(dao_id, new_version);
+        env.storage().persistent().set(&vk_ver_key, &vk);
+        Self::bump_persistent(&env, &vk_ver_key);
 
         VKSetEvent { dao_id }.publish(&env);
     }
@@ -384,6 +409,7 @@ impl Voting {
         creator: Address,
         vote_mode: VoteMode,
     ) -> u64 {
+        // bump_instance called inside create_proposal_with_version
         Self::create_proposal_with_version(
             env,
             dao_id,
@@ -407,6 +433,7 @@ impl Voting {
         vote_mode: VoteMode,
         vk_version: u32,
     ) -> u64 {
+        // bump_instance called inside create_proposal_with_version
         Self::create_proposal_with_version(
             env,
             dao_id,
@@ -429,6 +456,7 @@ impl Voting {
         vote_mode: VoteMode,
         vk_version: Option<u32>,
     ) -> u64 {
+        Self::bump_instance(&env);
         creator.require_auth();
 
         // Validate title length to prevent DoS
@@ -551,6 +579,7 @@ impl Voting {
 
         let key = DataKey::Proposal(dao_id, proposal_id);
         env.storage().persistent().set(&key, &proposal);
+        Self::bump_persistent(&env, &key);
 
         ProposalEvent {
             dao_id,
@@ -599,6 +628,7 @@ impl Voting {
         root: U256,
         proof: Proof,
     ) {
+        Self::bump_instance(&env);
         // SECURITY: Validate public signals are within BN254 scalar field FIRST
         // This prevents modular reduction attacks where values >= r verify identically
         // to their reduced equivalents but are stored as different keys.
@@ -725,6 +755,7 @@ impl Voting {
 
         // Mark nullifier as used
         env.storage().persistent().set(&null_key, &true);
+        Self::bump_persistent(&env, &null_key);
 
         // Update vote count
         if vote_choice {
@@ -733,6 +764,7 @@ impl Voting {
             proposal.no_votes += 1;
         }
         env.storage().persistent().set(&prop_key, &proposal);
+        Self::bump_persistent(&env, &prop_key);
 
         VoteEvent {
             dao_id,
@@ -745,11 +777,15 @@ impl Voting {
 
     /// Get proposal info
     pub fn get_proposal(env: Env, dao_id: u64, proposal_id: u64) -> ProposalInfo {
+        Self::bump_instance(&env);
         let key = DataKey::Proposal(dao_id, proposal_id);
-        env.storage()
+        let proposal: ProposalInfo = env
+            .storage()
             .persistent()
             .get(&key)
-            .expect("proposal not found")
+            .expect("proposal not found");
+        Self::bump_persistent(&env, &key);
+        proposal
     }
 
     /// Get vote mode for a proposal
@@ -776,6 +812,7 @@ impl Voting {
 
     /// Get proposal count for a DAO
     pub fn proposal_count(env: Env, dao_id: u64) -> u64 {
+        Self::bump_instance(&env);
         env.storage()
             .instance()
             .get(&DataKey::ProposalCount(dao_id))
@@ -784,12 +821,14 @@ impl Voting {
 
     /// Check if nullifier has been used
     pub fn is_nullifier_used(env: Env, dao_id: u64, proposal_id: u64, nullifier: U256) -> bool {
+        Self::bump_instance(&env);
         let key = DataKey::Nullifier(dao_id, proposal_id, nullifier);
         env.storage().persistent().has(&key)
     }
 
     /// Get tree contract address
     pub fn tree_contract(env: Env) -> Address {
+        Self::bump_instance(&env);
         env.storage()
             .instance()
             .get(&TREE_CONTRACT)
@@ -798,6 +837,7 @@ impl Voting {
 
     /// Get registry contract address (cached at construction)
     pub fn registry(env: Env) -> Address {
+        Self::bump_instance(&env);
         env.storage()
             .instance()
             .get(&REGISTRY)
@@ -812,6 +852,7 @@ impl Voting {
 
     /// Close a proposal explicitly (idempotent). End time still enforced in vote.
     pub fn close_proposal(env: Env, dao_id: u64, proposal_id: u64, admin: Address) {
+        Self::bump_instance(&env);
         admin.require_auth();
         Self::assert_admin(&env, dao_id, &admin);
         let key = DataKey::Proposal(dao_id, proposal_id);
@@ -827,6 +868,7 @@ impl Voting {
         if proposal.state != ProposalState::Closed {
             proposal.state = ProposalState::Closed;
             env.storage().persistent().set(&key, &proposal);
+            Self::bump_persistent(&env, &key);
             ProposalClosedEvent {
                 dao_id,
                 proposal_id,
@@ -838,6 +880,7 @@ impl Voting {
 
     /// Archive a proposal (idempotent). Prevents further votes and signals off-chain cleanup.
     pub fn archive_proposal(env: Env, dao_id: u64, proposal_id: u64, admin: Address) {
+        Self::bump_instance(&env);
         admin.require_auth();
         Self::assert_admin(&env, dao_id, &admin);
         let key = DataKey::Proposal(dao_id, proposal_id);
@@ -854,6 +897,7 @@ impl Voting {
         if proposal.state != ProposalState::Archived {
             proposal.state = ProposalState::Archived;
             env.storage().persistent().set(&key, &proposal);
+            Self::bump_persistent(&env, &key);
             ProposalArchivedEvent {
                 dao_id,
                 proposal_id,
@@ -865,6 +909,7 @@ impl Voting {
 
     /// Contract version for upgrade tracking.
     pub fn version(env: Env) -> u32 {
+        Self::bump_instance(&env);
         env.storage()
             .instance()
             .get(&VERSION_KEY)
@@ -873,24 +918,31 @@ impl Voting {
 
     /// Get current VK version for a DAO
     pub fn vk_version(env: Env, dao_id: u64) -> u32 {
-        env.storage()
-            .persistent()
-            .get(&DataKey::VkVersion(dao_id))
-            .unwrap_or(0)
+        Self::bump_instance(&env);
+        let key = DataKey::VkVersion(dao_id);
+        let ver: u32 = env.storage().persistent().get(&key).unwrap_or(0);
+        if ver > 0 {
+            Self::bump_persistent(&env, &key);
+        }
+        ver
     }
 
     /// Get the current VK for a DAO (used by other contracts like comments)
     pub fn get_vk(env: Env, dao_id: u64) -> VerificationKey {
+        Self::bump_instance(&env);
+        let vk_ver_key = DataKey::VkVersion(dao_id);
         let version: u32 = env
             .storage()
             .persistent()
-            .get(&DataKey::VkVersion(dao_id))
+            .get(&vk_ver_key)
             .unwrap_or_else(|| panic_with_error!(&env, VotingError::VkNotSet));
+        Self::bump_persistent(&env, &vk_ver_key);
         Self::get_vk_by_version(&env, dao_id, version)
     }
 
     /// Get a specific VK version for observability/off-chain verification
     pub fn vk_for_version(env: Env, dao_id: u64, version: u32) -> VerificationKey {
+        Self::bump_instance(&env);
         Self::get_vk_by_version(&env, dao_id, version)
     }
 

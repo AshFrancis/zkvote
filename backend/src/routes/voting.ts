@@ -15,6 +15,7 @@ import {
   callWithTimeout,
   simulateWithBackoff,
   waitForTransaction,
+  withSequenceLock,
   u256ToScVal,
   proofToScVal,
   scValToU256Hex,
@@ -65,68 +66,74 @@ router.post('/vote', authGuard, voteLimiter, validateBody(voteSchema), (async (r
 
     const operation = contract.call('vote', ...args);
 
-    // Get relayer account
-    const account = await (server as StellarSdk.rpc.Server).getAccount(relayerKeypair.publicKey());
+    // Serialize account fetch + build + simulate + sign + submit under sequence lock
+    // to prevent nonce race conditions between concurrent requests
+    const { sendResult, result } = await withSequenceLock(async () => {
+      // Get relayer account
+      const account = await (server as StellarSdk.rpc.Server).getAccount(relayerKeypair.publicKey());
 
-    // Build transaction
-    const tx = new StellarSdk.TransactionBuilder(account, {
-      fee: '100000',
-      networkPassphrase: config.networkPassphrase,
-    })
-      .addOperation(operation)
-      .setTimeout(30)
-      .build();
+      // Build transaction
+      const tx = new StellarSdk.TransactionBuilder(account, {
+        fee: '100000',
+        networkPassphrase: config.networkPassphrase,
+      })
+        .addOperation(operation)
+        .setTimeout(30)
+        .build();
 
-    // Simulate
-    log('info', 'simulate_vote', { daoId, proposalId });
-    const simResult = await callWithTimeout(
-      () => simulateWithBackoff(() => (server as StellarSdk.rpc.Server).simulateTransaction(tx)),
-      'simulate_vote'
-    );
+      // Simulate
+      log('info', 'simulate_vote', { daoId, proposalId });
+      const simResult = await callWithTimeout(
+        () => simulateWithBackoff(() => (server as StellarSdk.rpc.Server).simulateTransaction(tx)),
+        'simulate_vote'
+      );
 
-    if (!StellarSdk.rpc.Api.isSimulationSuccess(simResult)) {
-      log('warn', 'simulation_failed', { daoId, proposalId, error: simResult.error });
+      if (!StellarSdk.rpc.Api.isSimulationSuccess(simResult)) {
+        log('warn', 'simulation_failed', { daoId, proposalId, error: simResult.error });
 
-      let errorMessage = 'Transaction simulation failed';
-      if (simResult.error) {
-        const errorStr = JSON.stringify(simResult.error);
-        if (errorStr.includes('already voted')) {
-          errorMessage = 'You have already voted on this proposal';
-        } else if (errorStr.includes('voting period closed')) {
-          errorMessage = 'Voting period has ended';
-        } else if (errorStr.includes('invalid proof')) {
-          errorMessage = 'Invalid vote proof';
-        } else if (errorStr.includes('root must match')) {
-          errorMessage = 'You are not eligible to vote on this proposal';
-        } else if (errorStr.includes('proposal not found')) {
-          errorMessage = 'Proposal not found';
-        } else if (errorStr.includes('UnreachableCodeReached')) {
-          errorMessage = 'Invalid proof or contract error (proof verification failed)';
+        let errorMessage = 'Transaction simulation failed';
+        if (simResult.error) {
+          const errorStr = JSON.stringify(simResult.error);
+          if (errorStr.includes('already voted')) {
+            errorMessage = 'You have already voted on this proposal';
+          } else if (errorStr.includes('voting period closed')) {
+            errorMessage = 'Voting period has ended';
+          } else if (errorStr.includes('invalid proof')) {
+            errorMessage = 'Invalid vote proof';
+          } else if (errorStr.includes('root must match')) {
+            errorMessage = 'You are not eligible to vote on this proposal';
+          } else if (errorStr.includes('proposal not found')) {
+            errorMessage = 'Proposal not found';
+          } else if (errorStr.includes('UnreachableCodeReached')) {
+            errorMessage = 'Invalid proof or contract error (proof verification failed)';
+          }
         }
+
+        throw new Error(`SIMULATION_FAILED:${errorMessage}`);
       }
 
-      return res.status(400).json({ error: errorMessage });
-    }
+      // Prepare and sign
+      const preparedTx = StellarSdk.rpc.assembleTransaction(tx, simResult).build();
+      preparedTx.sign(relayerKeypair as StellarSdk.Keypair);
 
-    // Prepare and sign
-    const preparedTx = StellarSdk.rpc.assembleTransaction(tx, simResult).build();
-    preparedTx.sign(relayerKeypair as StellarSdk.Keypair);
+      // Submit
+      log('info', 'submit_vote', { daoId, proposalId });
+      const sr = await callWithTimeout(
+        () => (server as StellarSdk.rpc.Server).sendTransaction(preparedTx),
+        'send_vote'
+      );
 
-    // Submit
-    log('info', 'submit_vote', { daoId, proposalId });
-    const sendResult = await callWithTimeout(
-      () => (server as StellarSdk.rpc.Server).sendTransaction(preparedTx),
-      'send_vote'
-    );
+      if (sr.status === 'ERROR') {
+        log('error', 'submit_failed', { daoId, proposalId, error: sr.errorResult });
+        throw new Error('SUBMIT_FAILED');
+      }
 
-    if (sendResult.status === 'ERROR') {
-      log('error', 'submit_failed', { daoId, proposalId, error: sendResult.errorResult });
-      return res.status(500).json({ error: 'Transaction submission failed' });
-    }
+      // Wait for confirmation
+      log('info', 'submitted', { txHash: sr.hash, daoId, proposalId });
+      const r = await callWithTimeout(() => waitForTransaction(sr.hash), 'wait_for_vote');
 
-    // Wait for confirmation
-    log('info', 'submitted', { txHash: sendResult.hash, daoId, proposalId });
-    const result = await callWithTimeout(() => waitForTransaction(sendResult.hash), 'wait_for_vote');
+      return { sendResult: sr, result: r };
+    });
 
     if (result.status === 'SUCCESS') {
       log('info', 'vote_success', { txHash: sendResult.hash, daoId, proposalId });
@@ -150,7 +157,13 @@ router.post('/vote', authGuard, voteLimiter, validateBody(voteSchema), (async (r
     let statusCode = 500;
     let userMessage = 'Internal server error';
 
-    if (errMsg.includes('Timeout:')) {
+    if (errMsg.startsWith('SIMULATION_FAILED:')) {
+      statusCode = 400;
+      userMessage = errMsg.slice('SIMULATION_FAILED:'.length);
+    } else if (errMsg === 'SUBMIT_FAILED') {
+      statusCode = 500;
+      userMessage = 'Transaction submission failed';
+    } else if (errMsg.includes('Timeout:')) {
       statusCode = 504;
       userMessage = 'Request timeout - please try again';
     } else if (errMsg.includes('Transaction not found after timeout')) {

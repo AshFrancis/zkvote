@@ -15,10 +15,11 @@
 //! The voteChoice signal is ignored for comments - we just verify membership.
 
 #![no_std]
+#![allow(clippy::too_many_arguments)]
 #[allow(unused_imports)]
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype,
-    crypto::bn254::{Fr, G1Affine, G2Affine},
+    crypto::bn254::{Bn254G1Affine, Bn254G2Affine, Fr},
     panic_with_error, symbol_short, Address, Bytes, BytesN, Env, IntoVal, String, Symbol, Vec,
     U256,
 };
@@ -30,6 +31,12 @@ const TREE_CONTRACT: Symbol = symbol_short!("tree");
 const REGISTRY: Symbol = symbol_short!("registry");
 const VERSION: u32 = 2;
 const VERSION_KEY: Symbol = symbol_short!("ver");
+
+// TTL management: bump on every interaction to keep contract alive
+const INSTANCE_TTL_THRESHOLD: u32 = 120_960; // ~7 days
+const INSTANCE_TTL_EXTEND: u32 = 535_680; // ~31 days
+const PERSISTENT_TTL_THRESHOLD: u32 = 120_960;
+const PERSISTENT_TTL_EXTEND: u32 = 535_680;
 
 #[contracterror]
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -149,6 +156,18 @@ pub struct Comments;
 
 #[contractimpl]
 impl Comments {
+    fn bump_instance(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND);
+    }
+
+    fn bump_persistent<K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>>(env: &Env, key: &K) {
+        env.storage()
+            .persistent()
+            .extend_ttl(key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND);
+    }
+
     /// Constructor: Initialize contract with MembershipTree, Voting, and Registry contract addresses
     pub fn __constructor(
         env: Env,
@@ -295,6 +314,7 @@ impl Comments {
         parent_id: Option<u64>,
         author: Address,
     ) -> u64 {
+        Self::bump_instance(&env);
         author.require_auth();
 
         if content_cid.len() > MAX_CID_LEN {
@@ -336,6 +356,7 @@ impl Comments {
 
         let key = DataKey::Comment(dao_id, proposal_id, comment_id);
         env.storage().persistent().set(&key, &comment);
+        Self::bump_persistent(&env, &key);
 
         CommentCreatedEvent {
             dao_id,
@@ -359,10 +380,10 @@ impl Comments {
         parent_id: Option<u64>,
         nullifier: U256,
         root: U256,
-        commitment: U256,
         vote_choice: bool, // From vote circuit - we ignore the value, just verify the proof
         proof: Proof,
     ) -> u64 {
+        Self::bump_instance(&env);
         // SECURITY: Validate public signals are within BN254 scalar field FIRST
         // This prevents modular reduction attacks where values >= r verify identically
         Self::assert_in_field(&env, &nullifier);
@@ -418,10 +439,6 @@ impl Comments {
             choice_signal
         ];
 
-        // Ignore commitment parameter - it's not used for verification since the vote
-        // circuit computes commitment internally from secret+salt (private inputs)
-        let _ = commitment;
-
         if !Self::verify_groth16(&env, &vk, &proof, &pub_signals) {
             panic_with_error!(&env, CommentsError::InvalidProof);
         }
@@ -449,6 +466,7 @@ impl Comments {
 
         let key = DataKey::Comment(dao_id, proposal_id, comment_id);
         env.storage().persistent().set(&key, &comment);
+        Self::bump_persistent(&env, &key);
 
         CommentCreatedEvent {
             dao_id,
@@ -470,6 +488,7 @@ impl Comments {
         new_content_cid: String,
         author: Address,
     ) {
+        Self::bump_instance(&env);
         author.require_auth();
 
         if new_content_cid.len() > MAX_CID_LEN {
@@ -500,6 +519,7 @@ impl Comments {
         comment.updated_at = env.ledger().timestamp();
 
         env.storage().persistent().set(&key, &comment);
+        Self::bump_persistent(&env, &key);
 
         CommentEditedEvent {
             dao_id,
@@ -519,10 +539,10 @@ impl Comments {
         new_content_cid: String,
         nullifier: U256,
         root: U256,
-        commitment: U256,
         vote_choice: bool, // From vote circuit - we ignore the value
         proof: Proof,
     ) {
+        Self::bump_instance(&env);
         // SECURITY: Validate public signals are within BN254 scalar field FIRST
         Self::assert_in_field(&env, &nullifier);
         Self::assert_in_field(&env, &root);
@@ -576,9 +596,6 @@ impl Comments {
             choice_signal
         ];
 
-        // Ignore commitment parameter - it's not used for verification
-        let _ = commitment;
-
         if !Self::verify_groth16(&env, &vk, &proof, &pub_signals) {
             panic_with_error!(&env, CommentsError::InvalidProof);
         }
@@ -591,6 +608,7 @@ impl Comments {
         comment.updated_at = env.ledger().timestamp();
 
         env.storage().persistent().set(&key, &comment);
+        Self::bump_persistent(&env, &key);
 
         CommentEditedEvent {
             dao_id,
@@ -608,6 +626,7 @@ impl Comments {
         comment_id: u64,
         author: Address,
     ) {
+        Self::bump_instance(&env);
         author.require_auth();
 
         let key = DataKey::Comment(dao_id, proposal_id, comment_id);
@@ -631,6 +650,7 @@ impl Comments {
         comment.updated_at = env.ledger().timestamp();
 
         env.storage().persistent().set(&key, &comment);
+        Self::bump_persistent(&env, &key);
 
         CommentDeletedEvent {
             dao_id,
@@ -649,10 +669,10 @@ impl Comments {
         comment_id: u64,
         nullifier: U256,
         root: U256,
-        commitment: U256,
         vote_choice: bool, // From vote circuit - we ignore the value
         proof: Proof,
     ) {
+        Self::bump_instance(&env);
         // SECURITY: Validate public signals are within BN254 scalar field FIRST
         Self::assert_in_field(&env, &nullifier);
         Self::assert_in_field(&env, &root);
@@ -696,9 +716,6 @@ impl Comments {
             choice_signal
         ];
 
-        // Ignore commitment parameter - it's not used for verification
-        let _ = commitment;
-
         if !Self::verify_groth16(&env, &vk, &proof, &pub_signals) {
             panic_with_error!(&env, CommentsError::InvalidProof);
         }
@@ -708,6 +725,7 @@ impl Comments {
         comment.updated_at = env.ledger().timestamp();
 
         env.storage().persistent().set(&key, &comment);
+        Self::bump_persistent(&env, &key);
 
         CommentDeletedEvent {
             dao_id,
@@ -726,6 +744,7 @@ impl Comments {
         comment_id: u64,
         admin: Address,
     ) {
+        Self::bump_instance(&env);
         admin.require_auth();
         Self::assert_admin(&env, dao_id, &admin);
 
@@ -745,6 +764,7 @@ impl Comments {
         comment.updated_at = env.ledger().timestamp();
 
         env.storage().persistent().set(&key, &comment);
+        Self::bump_persistent(&env, &key);
 
         CommentDeletedEvent {
             dao_id,
@@ -757,15 +777,20 @@ impl Comments {
 
     /// Get a single comment
     pub fn get_comment(env: Env, dao_id: u64, proposal_id: u64, comment_id: u64) -> CommentInfo {
+        Self::bump_instance(&env);
         let key = DataKey::Comment(dao_id, proposal_id, comment_id);
-        env.storage()
+        let comment: CommentInfo = env
+            .storage()
             .persistent()
             .get(&key)
-            .unwrap_or_else(|| panic_with_error!(&env, CommentsError::CommentNotFound))
+            .unwrap_or_else(|| panic_with_error!(&env, CommentsError::CommentNotFound));
+        Self::bump_persistent(&env, &key);
+        comment
     }
 
     /// Get comment count for a proposal
     pub fn comment_count(env: Env, dao_id: u64, proposal_id: u64) -> u64 {
+        Self::bump_instance(&env);
         env.storage()
             .instance()
             .get(&DataKey::CommentCount(dao_id, proposal_id))
@@ -780,6 +805,7 @@ impl Comments {
         start_id: u64,
         limit: u64,
     ) -> Vec<CommentInfo> {
+        Self::bump_instance(&env);
         let total = Self::comment_count(env.clone(), dao_id, proposal_id);
         let mut comments = Vec::new(&env);
 
@@ -802,6 +828,7 @@ impl Comments {
 
     /// Get tree contract address
     pub fn tree_contract(env: Env) -> Address {
+        Self::bump_instance(&env);
         env.storage()
             .instance()
             .get(&TREE_CONTRACT)
@@ -810,6 +837,7 @@ impl Comments {
 
     /// Get voting contract address
     pub fn voting_contract(env: Env) -> Address {
+        Self::bump_instance(&env);
         env.storage()
             .instance()
             .get(&DataKey::VotingContract)
@@ -819,14 +847,18 @@ impl Comments {
     /// Get the next available comment nonce for a commitment on a proposal
     /// This is used by the relayer to tell users what nonce to use for their next anonymous comment
     pub fn get_comment_nonce(env: Env, dao_id: u64, proposal_id: u64, commitment: U256) -> u64 {
-        env.storage()
-            .persistent()
-            .get(&DataKey::CommitmentNonce(dao_id, proposal_id, commitment))
-            .unwrap_or(0)
+        Self::bump_instance(&env);
+        let key = DataKey::CommitmentNonce(dao_id, proposal_id, commitment);
+        let nonce: u64 = env.storage().persistent().get(&key).unwrap_or(0);
+        if nonce > 0 {
+            Self::bump_persistent(&env, &key);
+        }
+        nonce
     }
 
     /// Contract version
     pub fn version(env: Env) -> u32 {
+        Self::bump_instance(&env);
         env.storage()
             .instance()
             .get(&VERSION_KEY)
@@ -1207,6 +1239,7 @@ mod test {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn setup_dao_and_proposal(
         env: &Env,
         voting_id: &Address,
@@ -1345,7 +1378,7 @@ mod test {
         let comment = comments_client.get_comment(&dao_id, &proposal_id, &comment_id);
         assert_eq!(comment.author, Some(member));
         assert_eq!(comment.content_cid, content_cid);
-        assert_eq!(comment.deleted, false);
+        assert!(!comment.deleted);
         assert_eq!(comment.nullifier, None);
     }
 
@@ -1372,7 +1405,6 @@ mod test {
 
         let content_cid = String::from_str(&env, "QmAnonComment");
         let nullifier = U256::from_u32(&env, 99999);
-        let commitment = U256::from_u32(&env, 11111);
         let proof = create_dummy_proof(&env);
 
         // Add anonymous comment (verify_groth16 returns true in test mode)
@@ -1383,7 +1415,6 @@ mod test {
             &None,
             &nullifier,
             &root,
-            &commitment,
             &true,
             &proof,
         );
@@ -1463,7 +1494,7 @@ mod test {
         comments_client.delete_comment(&dao_id, &proposal_id, &comment_id, &member);
 
         let comment = comments_client.get_comment(&dao_id, &proposal_id, &comment_id);
-        assert_eq!(comment.deleted, true);
+        assert!(comment.deleted);
         assert_eq!(comment.deleted_by, DELETED_BY_USER);
     }
 
@@ -1498,7 +1529,7 @@ mod test {
         comments_client.admin_delete_comment(&dao_id, &proposal_id, &comment_id, &admin);
 
         let comment = comments_client.get_comment(&dao_id, &proposal_id, &comment_id);
-        assert_eq!(comment.deleted, true);
+        assert!(comment.deleted);
         assert_eq!(comment.deleted_by, DELETED_BY_ADMIN);
     }
 
@@ -1696,7 +1727,6 @@ mod test {
 
         let content_cid = String::from_str(&env, "QmTest");
         let nullifier_at_modulus = u256_from_be(&env, &BN254_FR_MODULUS_TEST);
-        let commitment = U256::from_u32(&env, 11111);
         let proof = create_dummy_proof(&env);
 
         comments_client.add_anonymous_comment(
@@ -1706,7 +1736,6 @@ mod test {
             &None,
             &nullifier_at_modulus,
             &root,
-            &commitment,
             &true,
             &proof,
         );
@@ -1736,7 +1765,6 @@ mod test {
 
         let content_cid = String::from_str(&env, "QmTest");
         let nullifier_above_modulus = modulus_plus(&env, 1);
-        let commitment = U256::from_u32(&env, 11111);
         let proof = create_dummy_proof(&env);
 
         comments_client.add_anonymous_comment(
@@ -1746,7 +1774,6 @@ mod test {
             &None,
             &nullifier_above_modulus,
             &root,
-            &commitment,
             &true,
             &proof,
         );
@@ -1777,7 +1804,6 @@ mod test {
         let content_cid = String::from_str(&env, "QmTest");
         let nullifier = U256::from_u32(&env, 99999);
         let root_at_modulus = u256_from_be(&env, &BN254_FR_MODULUS_TEST);
-        let commitment = U256::from_u32(&env, 11111);
         let proof = create_dummy_proof(&env);
 
         comments_client.add_anonymous_comment(
@@ -1787,7 +1813,6 @@ mod test {
             &None,
             &nullifier,
             &root_at_modulus,
-            &commitment,
             &true,
             &proof,
         );
@@ -1817,7 +1842,6 @@ mod test {
 
         let content_cid = String::from_str(&env, "QmTest");
         let zero_nullifier = U256::from_u32(&env, 0);
-        let commitment = U256::from_u32(&env, 11111);
         let proof = create_dummy_proof(&env);
 
         comments_client.add_anonymous_comment(
@@ -1827,7 +1851,6 @@ mod test {
             &None,
             &zero_nullifier,
             &root,
-            &commitment,
             &true,
             &proof,
         );
@@ -1863,7 +1886,6 @@ mod test {
         let content_cid = String::from_str(&env, "QmTest");
         let nullifier = U256::from_u32(&env, 99999);
         let wrong_root = U256::from_u32(&env, 54321); // Different from eligible_root
-        let commitment = U256::from_u32(&env, 11111);
         let proof = create_dummy_proof(&env);
 
         comments_client.add_anonymous_comment(
@@ -1873,7 +1895,6 @@ mod test {
             &None,
             &nullifier,
             &wrong_root,
-            &commitment,
             &true,
             &proof,
         );
@@ -1909,7 +1930,6 @@ mod test {
 
         let content_cid = String::from_str(&env, "QmTest");
         let nullifier = U256::from_u32(&env, 88888);
-        let commitment = U256::from_u32(&env, 11111);
         let proof = create_dummy_proof(&env);
 
         comments_client.add_anonymous_comment(
@@ -1919,7 +1939,6 @@ mod test {
             &None,
             &nullifier,
             &invalid_root,
-            &commitment,
             &true,
             &proof,
         );
@@ -1958,7 +1977,6 @@ mod test {
 
         let content_cid = String::from_str(&env, "QmTest");
         let nullifier = U256::from_u32(&env, 88888);
-        let commitment = U256::from_u32(&env, 11111);
         let proof = create_dummy_proof(&env);
 
         // This should fail because root index (5) < min_root (10)
@@ -1969,7 +1987,6 @@ mod test {
             &None,
             &nullifier,
             &old_root,
-            &commitment,
             &true,
             &proof,
         );

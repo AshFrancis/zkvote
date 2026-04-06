@@ -151,15 +151,9 @@ export default function CommentForm({
           pathIndices,
         };
 
-        console.log("=== Comment PROOF INPUT DEBUG ===");
-        console.log("Root (eligible_root):", root.toString());
-        console.log("Commitment:", commitment);
-        console.log("Secret:", secret);
-        console.log("Salt:", salt);
-        console.log("LeafIndex:", leafIndex);
-        console.log("Path elements:", pathElements);
-        console.log("Full proof input:", proofInput);
-        console.log("========================");
+        if (import.meta.env.DEV) {
+          console.log("Comment proof input ready, generating proof...");
+        }
 
         const { proof } = await generateVoteProof(proofInput, wasmPath, zkeyPath);
 
@@ -181,7 +175,6 @@ export default function CommentForm({
             voteChoice: false, // Arbitrary - contract ignores this for comments
             nullifier: toHexBE(nullifier),
             root: toHexBE(root),
-            commitment: toHexBE(commitment),
             proof: {
               a: proof_a,
               b: proof_b,

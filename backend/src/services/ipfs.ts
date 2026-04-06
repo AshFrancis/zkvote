@@ -47,14 +47,11 @@ export interface MetadataValidationResult {
 // LOGGER
 // ============================================
 
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+import { createLogger } from './logger.js';
 
-interface LogMeta {
-  [key: string]: unknown;
-}
-
-const log = (level: LogLevel, event: string, meta: LogMeta = {}): void => {
-  console.log(JSON.stringify({ level, event, ts: new Date().toISOString(), ...meta }));
+const ipfsLogger = createLogger('ipfs');
+const log = (level: 'debug' | 'info' | 'warn' | 'error', event: string, meta: Record<string, unknown> = {}): void => {
+  ipfsLogger[level](event, meta);
 };
 
 // ============================================
@@ -346,32 +343,38 @@ export async function fetchContent(cid: string): Promise<FetchResult> {
       url = signedUrl;
     } catch (err) {
       const error = err as Error;
-      throw new Error(`Failed to create signed URL: ${error.message}`);
+      throw new Error(`Failed to create signed URL: ${error.message}`, { cause: err });
     }
   } else {
     // Public gateway - direct URL
     url = `${gatewayUrl}/ipfs/${cid}`;
   }
 
-  const response = await fetch(url);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch from IPFS: ${response.status} ${response.statusText}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch from IPFS: ${response.status} ${response.statusText}`);
+    }
+
+    const contentType = response.headers.get("content-type") || "application/json";
+
+    let data: unknown;
+    if (contentType.includes("application/json")) {
+      data = await response.json();
+    } else {
+      data = await response.text();
+    }
+
+    return {
+      data,
+      contentType
+    };
+  } finally {
+    clearTimeout(timeout);
   }
-
-  const contentType = response.headers.get("content-type") || "application/json";
-
-  let data: unknown;
-  if (contentType.includes("application/json")) {
-    data = await response.json();
-  } else {
-    data = await response.text();
-  }
-
-  return {
-    data,
-    contentType
-  };
 }
 
 /**
@@ -400,27 +403,33 @@ export async function fetchRawContent(cid: string): Promise<RawFetchResult> {
       url = signedUrl;
     } catch (err) {
       const error = err as Error;
-      throw new Error(`Failed to create signed URL: ${error.message}`);
+      throw new Error(`Failed to create signed URL: ${error.message}`, { cause: err });
     }
   } else {
     // Public gateway - direct URL
     url = `${gatewayUrl}/ipfs/${cid}`;
   }
 
-  const response = await fetch(url);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch from IPFS: ${response.status} ${response.statusText}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch from IPFS: ${response.status} ${response.statusText}`);
+    }
+
+    const contentType = response.headers.get("content-type") || "application/octet-stream";
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    return {
+      buffer,
+      contentType
+    };
+  } finally {
+    clearTimeout(timeout);
   }
-
-  const contentType = response.headers.get("content-type") || "application/octet-stream";
-  const arrayBuffer = await response.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-
-  return {
-    buffer,
-    contentType
-  };
 }
 
 /**

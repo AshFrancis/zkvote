@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use super::*;
 use soroban_sdk::{testutils::Address as _, Env};
 
@@ -73,7 +71,7 @@ fn setup_env() -> (Env, Address, Address, Address, Address) {
 
     let registry_id = env.register(mock_registry::MockRegistry, ());
     let sbt_id = env.register(mock_sbt::MockSbt, ());
-    let tree_id = env.register(MembershipTree, (sbt_id.clone(),));
+    let tree_id = env.register(MembershipTree, (sbt_id.clone(), registry_id.clone()));
 
     // Wire up the SBT to point to the registry
     let sbt_client = mock_sbt::MockSbtClient::new(&env, &sbt_id);
@@ -89,8 +87,9 @@ fn test_constructor() {
     let env = Env::default();
     env.mock_all_auths();
 
+    let registry_id = env.register(mock_registry::MockRegistry, ());
     let sbt_id = env.register(mock_sbt::MockSbt, ());
-    let tree_id = env.register(MembershipTree, (sbt_id.clone(),));
+    let tree_id = env.register(MembershipTree, (sbt_id.clone(), registry_id.clone()));
     let client = MembershipTreeClient::new(&env, &tree_id);
 
     assert_eq!(client.sbt_contr(), sbt_id);
