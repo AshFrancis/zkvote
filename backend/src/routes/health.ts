@@ -4,24 +4,26 @@
  * Provides health, readiness, and configuration endpoints.
  */
 
-import { Router, Request, Response } from 'express';
-import type * as StellarSdk from '@stellar/stellar-sdk';
-import { config } from '../config.js';
-import { extractAuthToken } from '../middleware/auth.js';
-import { log } from '../services/logger.js';
+import { Router, Request, Response } from "express";
+import type * as StellarSdk from "@stellar/stellar-sdk";
+import { config } from "../config.js";
+import { extractAuthToken } from "../middleware/auth.js";
+import { log } from "../services/logger.js";
 
 const router = Router();
 
 // Dependencies injected during setup
 let server: StellarSdk.rpc.Server | null = null;
-let relayerPublicKey: string = '';
+let relayerPublicKey: string = "";
 
 /**
  * Initialize health routes with dependencies
  */
 export function initHealthRoutes(
-  rpcServer: StellarSdk.rpc.Server | { getHealth: () => Promise<{ status: string }> },
-  relayerPubKey: string
+  rpcServer:
+    | StellarSdk.rpc.Server
+    | { getHealth: () => Promise<{ status: string }> },
+  relayerPubKey: string,
 ): void {
   server = rpcServer as StellarSdk.rpc.Server;
   relayerPublicKey = relayerPubKey;
@@ -30,16 +32,20 @@ export function initHealthRoutes(
 /**
  * Check RPC health status
  */
-async function rpcHealth(): Promise<{ ok: boolean; info?: unknown; error?: string }> {
+async function rpcHealth(): Promise<{
+  ok: boolean;
+  info?: unknown;
+  error?: string;
+}> {
   if (!server) {
-    return { ok: false, error: 'RPC server not initialized' };
+    return { ok: false, error: "RPC server not initialized" };
   }
 
   try {
     const info = await server.getHealth();
     // Soroban SDK returns 'healthy', but we check for both to be safe
     const status = info?.status as string;
-    return { ok: status === 'healthy' || status === 'online', info };
+    return { ok: status === "healthy" || status === "online", info };
   } catch (err) {
     return { ok: false, error: (err as Error).message };
   }
@@ -49,10 +55,10 @@ async function rpcHealth(): Promise<{ ok: boolean; info?: unknown; error?: strin
  * GET /health
  * Basic health check
  */
-router.get('/health', async (req: Request, res: Response) => {
+router.get("/health", async (req: Request, res: Response) => {
   const rpc = config.healthcheckPing ? await rpcHealth() : { ok: true };
   const base: Record<string, unknown> = {
-    status: 'ok',
+    status: "ok",
     rpc,
   };
 
@@ -74,14 +80,14 @@ router.get('/health', async (req: Request, res: Response) => {
  * GET /ready
  * Readiness check (verifies RPC connectivity)
  */
-router.get('/ready', async (req: Request, res: Response) => {
+router.get("/ready", async (req: Request, res: Response) => {
   try {
     const rpcStatus = await rpcHealth();
     if (!rpcStatus.ok) {
-      return res.status(503).json({ status: 'degraded', rpc: rpcStatus });
+      return res.status(503).json({ status: "degraded", rpc: rpcStatus });
     }
 
-    const base: Record<string, unknown> = { status: 'ready' };
+    const base: Record<string, unknown> = { status: "ready" };
 
     // Only expose details if auth token provided
     if (config.healthExposeDetails) {
@@ -96,8 +102,10 @@ router.get('/ready', async (req: Request, res: Response) => {
 
     return res.json(base);
   } catch (err) {
-    log('error', 'ready_check_failed', { error: (err as Error).message });
-    return res.status(503).json({ status: 'error', message: (err as Error).message });
+    log("error", "ready_check_failed", { error: (err as Error).message });
+    return res
+      .status(503)
+      .json({ status: "error", message: (err as Error).message });
   }
 });
 
@@ -105,7 +113,7 @@ router.get('/ready', async (req: Request, res: Response) => {
  * GET /config
  * Returns public configuration (for frontend)
  */
-router.get('/config', (_req: Request, res: Response) => {
+router.get("/config", (_req: Request, res: Response) => {
   res.json({
     votingContract: config.votingContractId,
     treeContract: config.treeContractId,

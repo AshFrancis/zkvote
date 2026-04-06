@@ -47,10 +47,14 @@ export interface MetadataValidationResult {
 // LOGGER
 // ============================================
 
-import { createLogger } from './logger.js';
+import { createLogger } from "./logger.js";
 
-const ipfsLogger = createLogger('ipfs');
-const log = (level: 'debug' | 'info' | 'warn' | 'error', event: string, meta: Record<string, unknown> = {}): void => {
+const ipfsLogger = createLogger("ipfs");
+const log = (
+  level: "debug" | "info" | "warn" | "error",
+  event: string,
+  meta: Record<string, unknown> = {},
+): void => {
   ipfsLogger[level](event, meta);
 };
 
@@ -99,7 +103,10 @@ export function sanitizeString(str: string): string {
   if (typeof str !== "string") return str;
 
   // Remove script tags and their content
-  let sanitized = str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
+  let sanitized = str.replace(
+    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+    "",
+  );
 
   // Remove event handlers (onclick, onerror, etc.)
   sanitized = sanitized.replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, "");
@@ -117,7 +124,10 @@ export function sanitizeString(str: string): string {
 /**
  * Validate metadata against a schema
  */
-export function validateMetadataSchema(data: unknown, schema: MetadataSchema): MetadataValidationResult {
+export function validateMetadataSchema(
+  data: unknown,
+  schema: MetadataSchema,
+): MetadataValidationResult {
   if (!data || typeof data !== "object") {
     return { valid: false, error: "Metadata must be an object" };
   }
@@ -132,7 +142,10 @@ export function validateMetadataSchema(data: unknown, schema: MetadataSchema): M
   }
 
   // Validate version
-  if ("version" in obj && !schema.allowedVersions.includes(obj.version as number)) {
+  if (
+    "version" in obj &&
+    !schema.allowedVersions.includes(obj.version as number)
+  ) {
     return { valid: false, error: `Invalid version: ${obj.version}` };
   }
 
@@ -142,7 +155,10 @@ export function validateMetadataSchema(data: unknown, schema: MetadataSchema): M
       return { valid: false, error: "Body must be a string" };
     }
     if (obj.body.length > schema.maxBodyLength) {
-      return { valid: false, error: `Body exceeds maximum length of ${schema.maxBodyLength}` };
+      return {
+        valid: false,
+        error: `Body exceeds maximum length of ${schema.maxBodyLength}`,
+      };
     }
   }
 
@@ -200,10 +216,10 @@ export function initPinata(jwt: string, gateway?: string): void {
 
   pinata = new PinataSDK({
     pinataJwt: jwt,
-    pinataGateway: gatewayUrl
+    pinataGateway: gatewayUrl,
   });
 
-  log('info', 'pinata_initialized', { dedicatedGateway: isDedicatedGateway });
+  log("info", "pinata_initialized", { dedicatedGateway: isDedicatedGateway });
 }
 
 /**
@@ -226,7 +242,7 @@ async function propagateToPublicGateways(cid: string): Promise<void> {
       clearTimeout(timeout);
 
       if (response.ok) {
-        log('debug', 'ipfs_propagated', { gateway, cid });
+        log("debug", "ipfs_propagated", { gateway, cid });
       }
     } catch {
       // Ignore errors - this is best-effort propagation
@@ -236,26 +252,31 @@ async function propagateToPublicGateways(cid: string): Promise<void> {
 
   // Don't wait for all - just fire and forget
   Promise.allSettled(propagationPromises).then((results) => {
-    const successful = results.filter(r => r.status === "fulfilled").length;
-    log('info', 'ipfs_propagation_complete', { cid, successful, total: PUBLIC_GATEWAYS.length });
+    const successful = results.filter((r) => r.status === "fulfilled").length;
+    log("info", "ipfs_propagation_complete", {
+      cid,
+      successful,
+      total: PUBLIC_GATEWAYS.length,
+    });
   });
 }
 
 /**
  * Pin JSON data to public IPFS (SDK v2.x)
  */
-export async function pinJSON(data: Record<string, unknown>, name = "zkvote-metadata"): Promise<PinResult> {
+export async function pinJSON(
+  data: Record<string, unknown>,
+  name = "zkvote-metadata",
+): Promise<PinResult> {
   if (!pinata) {
     throw new Error("Pinata client not initialized");
   }
 
   // SDK v2.x: pinata.upload.public.json() with chainable methods
-  const result = await pinata.upload.public.json(data)
-    .name(name)
-    .keyvalues({
-      app: "zkvote",
-      type: "proposal-metadata"
-    });
+  const result = await pinata.upload.public.json(data).name(name).keyvalues({
+    app: "zkvote",
+    type: "proposal-metadata",
+  });
 
   // Propagate to public gateways in background
   propagateToPublicGateways(result.cid);
@@ -270,21 +291,28 @@ export async function pinJSON(data: Record<string, unknown>, name = "zkvote-meta
 /**
  * Pin a file (image) to public IPFS (SDK v2.x)
  */
-export async function pinFile(buffer: Buffer, filename: string, mimeType: string): Promise<PinResult> {
+export async function pinFile(
+  buffer: Buffer,
+  filename: string,
+  mimeType: string,
+): Promise<PinResult> {
   if (!pinata) {
     throw new Error("Pinata client not initialized");
   }
 
   // Create a File object from the buffer
   // Cast buffer to BlobPart to satisfy strict TypeScript checks
-  const file = new File([buffer as unknown as BlobPart], filename, { type: mimeType });
+  const file = new File([buffer as unknown as BlobPart], filename, {
+    type: mimeType,
+  });
 
   // SDK v2.x: pinata.upload.public.file() with chainable methods
-  const result = await pinata.upload.public.file(file)
+  const result = await pinata.upload.public
+    .file(file)
     .name(filename)
     .keyvalues({
       app: "zkvote",
-      type: "proposal-image"
+      type: "proposal-image",
     });
 
   // Propagate to public gateways in background
@@ -338,12 +366,14 @@ export async function fetchContent(cid: string): Promise<FetchResult> {
     try {
       const signedUrl = await pinata.gateways.private.createAccessLink({
         cid: cid,
-        expires: 300 // 5 minutes
+        expires: 300, // 5 minutes
       });
       url = signedUrl;
     } catch (err) {
       const error = err as Error;
-      throw new Error(`Failed to create signed URL: ${error.message}`, { cause: err });
+      throw new Error(`Failed to create signed URL: ${error.message}`, {
+        cause: err,
+      });
     }
   } else {
     // Public gateway - direct URL
@@ -356,10 +386,13 @@ export async function fetchContent(cid: string): Promise<FetchResult> {
     const response = await fetch(url, { signal: controller.signal });
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch from IPFS: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `Failed to fetch from IPFS: ${response.status} ${response.statusText}`,
+      );
     }
 
-    const contentType = response.headers.get("content-type") || "application/json";
+    const contentType =
+      response.headers.get("content-type") || "application/json";
 
     let data: unknown;
     if (contentType.includes("application/json")) {
@@ -370,7 +403,7 @@ export async function fetchContent(cid: string): Promise<FetchResult> {
 
     return {
       data,
-      contentType
+      contentType,
     };
   } finally {
     clearTimeout(timeout);
@@ -398,12 +431,14 @@ export async function fetchRawContent(cid: string): Promise<RawFetchResult> {
     try {
       const signedUrl = await pinata.gateways.private.createAccessLink({
         cid: cid,
-        expires: 300 // 5 minutes
+        expires: 300, // 5 minutes
       });
       url = signedUrl;
     } catch (err) {
       const error = err as Error;
-      throw new Error(`Failed to create signed URL: ${error.message}`, { cause: err });
+      throw new Error(`Failed to create signed URL: ${error.message}`, {
+        cause: err,
+      });
     }
   } else {
     // Public gateway - direct URL
@@ -416,16 +451,19 @@ export async function fetchRawContent(cid: string): Promise<RawFetchResult> {
     const response = await fetch(url, { signal: controller.signal });
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch from IPFS: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `Failed to fetch from IPFS: ${response.status} ${response.statusText}`,
+      );
     }
 
-    const contentType = response.headers.get("content-type") || "application/octet-stream";
+    const contentType =
+      response.headers.get("content-type") || "application/octet-stream";
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
     return {
       buffer,
-      contentType
+      contentType,
     };
   } finally {
     clearTimeout(timeout);
@@ -446,7 +484,7 @@ export async function isHealthy(): Promise<boolean> {
     return true;
   } catch (error) {
     const err = error as Error;
-    log('error', 'pinata_health_failed', { error: err.message });
+    log("error", "pinata_health_failed", { error: err.message });
     return false;
   }
 }
@@ -458,7 +496,7 @@ export async function isHealthy(): Promise<boolean> {
 export function getPublicUrls(cid: string): PublicUrls {
   return {
     primary: `https://ipfs.io/ipfs/${cid}`,
-    fallbacks: PUBLIC_GATEWAYS.map(gw => `${gw}/${cid}`),
+    fallbacks: PUBLIC_GATEWAYS.map((gw) => `${gw}/${cid}`),
   };
 }
 

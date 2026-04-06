@@ -5,8 +5,8 @@
  * Includes BN254 field validation for ZK proof inputs.
  */
 
-import { z } from 'zod';
-import { BN254_MODULUS } from '../config.js';
+import { z } from "zod";
+import { BN254_MODULUS } from "../config.js";
 
 // ============================================
 // PRIMITIVE VALIDATORS
@@ -18,11 +18,11 @@ import { BN254_MODULUS } from '../config.js';
 const hexString = (maxHexChars: number) =>
   z.string().refine(
     (val) => {
-      const hex = val.startsWith('0x') ? val.slice(2) : val;
+      const hex = val.startsWith("0x") ? val.slice(2) : val;
       if (hex.length > maxHexChars) return false;
       return /^[0-9a-fA-F]*$/.test(hex);
     },
-    { message: `Must be a valid hex string (max ${maxHexChars} chars)` }
+    { message: `Must be a valid hex string (max ${maxHexChars} chars)` },
   );
 
 /**
@@ -30,17 +30,17 @@ const hexString = (maxHexChars: number) =>
  */
 const bn254Field = z.string().refine(
   (val) => {
-    const hex = val.startsWith('0x') ? val.slice(2) : val;
+    const hex = val.startsWith("0x") ? val.slice(2) : val;
     if (hex.length === 0 || hex.length > 64) return false;
     if (!/^[0-9a-fA-F]*$/.test(hex)) return false;
     try {
-      const value = BigInt('0x' + hex);
+      const value = BigInt("0x" + hex);
       return value < BN254_MODULUS;
     } catch {
       return false;
     }
   },
-  { message: 'Must be a valid hex string < BN254 field modulus' }
+  { message: "Must be a valid hex string < BN254 field modulus" },
 );
 
 /**
@@ -56,30 +56,30 @@ const bn254Field = z.string().refine(
  */
 const proofA = hexString(128).refine(
   (val) => {
-    const hex = val.startsWith('0x') ? val.slice(2) : val;
+    const hex = val.startsWith("0x") ? val.slice(2) : val;
     // G1 point at infinity (all zeros) is invalid for proof.a
-    return !/^0*$/.test(hex.padStart(128, '0'));
+    return !/^0*$/.test(hex.padStart(128, "0"));
   },
-  { message: 'proof.a cannot be all zeros (point at infinity)' }
+  { message: "proof.a cannot be all zeros (point at infinity)" },
 );
 
 const proofB = hexString(256).refine(
   (val) => {
-    const hex = val.startsWith('0x') ? val.slice(2) : val;
+    const hex = val.startsWith("0x") ? val.slice(2) : val;
     // G2 point at infinity (all zeros) is invalid for proof.b
     // Note: G2 has 4 field elements (X_c1, X_c0, Y_c1, Y_c0), all must be non-zero collectively
-    return !/^0*$/.test(hex.padStart(256, '0'));
+    return !/^0*$/.test(hex.padStart(256, "0"));
   },
-  { message: 'proof.b cannot be all zeros (point at infinity)' }
+  { message: "proof.b cannot be all zeros (point at infinity)" },
 );
 
 const proofC = hexString(128).refine(
   (val) => {
-    const hex = val.startsWith('0x') ? val.slice(2) : val;
+    const hex = val.startsWith("0x") ? val.slice(2) : val;
     // G1 point at infinity (all zeros) is invalid for proof.c
-    return !/^0*$/.test(hex.padStart(128, '0'));
+    return !/^0*$/.test(hex.padStart(128, "0"));
   },
-  { message: 'proof.c cannot be all zeros (point at infinity)' }
+  { message: "proof.c cannot be all zeros (point at infinity)" },
 );
 
 /**
@@ -97,37 +97,50 @@ const groth16Proof = z.object({
 const ipfsCid = z.string().refine(
   (val) => {
     // CIDv0: Qm... (46 chars)
-    if (val.startsWith('Qm') && val.length >= 46) return true;
+    if (val.startsWith("Qm") && val.length >= 46) return true;
     // CIDv1: bafy... or bafk... (59+ chars)
-    if ((val.startsWith('bafy') || val.startsWith('bafk')) && val.length >= 59) return true;
+    if ((val.startsWith("bafy") || val.startsWith("bafk")) && val.length >= 59)
+      return true;
     return false;
   },
-  { message: 'Invalid IPFS CID format' }
+  { message: "Invalid IPFS CID format" },
 );
 
 /**
  * Stellar address validator
  */
-const stellarAddress = z.string().regex(/^G[A-Z2-7]{55}$/, 'Invalid Stellar address format');
+const stellarAddress = z
+  .string()
+  .regex(/^G[A-Z2-7]{55}$/, "Invalid Stellar address format");
 
 /**
  * Stellar contract ID validator
  */
-export const contractAddress = z.string().regex(/^C[A-Z2-7]{55}$/, 'Invalid Stellar contract ID format');
+export const contractAddress = z
+  .string()
+  .regex(/^C[A-Z2-7]{55}$/, "Invalid Stellar contract ID format");
 
 /**
  * Transaction hash validator (64 hex chars)
  */
-const txHash = z.string().regex(/^[0-9a-fA-F]{64}$/, 'Invalid transaction hash format');
+const txHash = z
+  .string()
+  .regex(/^[0-9a-fA-F]{64}$/, "Invalid transaction hash format");
 
 // ============================================
 // VOTE SCHEMA
 // ============================================
 
 export const voteSchema = z.object({
-  daoId: z.number().int().nonnegative('daoId must be a non-negative integer'),
-  proposalId: z.number().int().nonnegative('proposalId must be a non-negative integer'),
-  choice: z.boolean({ required_error: 'choice is required', invalid_type_error: 'choice must be a boolean' }),
+  daoId: z.number().int().nonnegative("daoId must be a non-negative integer"),
+  proposalId: z
+    .number()
+    .int()
+    .nonnegative("proposalId must be a non-negative integer"),
+  choice: z.boolean({
+    required_error: "choice is required",
+    invalid_type_error: "choice must be a boolean",
+  }),
   nullifier: bn254Field,
   root: bn254Field,
   proof: groth16Proof,
@@ -140,11 +153,17 @@ export type VoteRequest = z.infer<typeof voteSchema>;
 // ============================================
 
 export const anonymousCommentSchema = z.object({
-  daoId: z.number().int().nonnegative('daoId must be a non-negative integer'),
-  proposalId: z.number().int().nonnegative('proposalId must be a non-negative integer'),
+  daoId: z.number().int().nonnegative("daoId must be a non-negative integer"),
+  proposalId: z
+    .number()
+    .int()
+    .nonnegative("proposalId must be a non-negative integer"),
   contentCid: ipfsCid,
   parentId: z.number().int().nonnegative().nullable().optional(),
-  voteChoice: z.boolean({ required_error: 'voteChoice is required', invalid_type_error: 'voteChoice must be a boolean' }),
+  voteChoice: z.boolean({
+    required_error: "voteChoice is required",
+    invalid_type_error: "voteChoice must be a boolean",
+  }),
   nullifier: bn254Field,
   root: bn254Field,
   proof: groth16Proof,
@@ -181,7 +200,7 @@ export type DeleteCommentRequest = z.infer<typeof deleteCommentSchema>;
 
 export const manualEventSchema = z.object({
   daoId: z.number().int().nonnegative(),
-  type: z.string().min(1, 'type is required'),
+  type: z.string().min(1, "type is required"),
   data: z.record(z.unknown()).optional(),
 });
 
@@ -189,7 +208,7 @@ export type ManualEventRequest = z.infer<typeof manualEventSchema>;
 
 export const notifyEventSchema = z.object({
   daoId: z.number().int().nonnegative(),
-  type: z.string().min(1, 'type is required'),
+  type: z.string().min(1, "type is required"),
   data: z.record(z.unknown()).optional(),
   txHash: txHash,
 });
@@ -200,22 +219,31 @@ export type NotifyEventRequest = z.infer<typeof notifyEventSchema>;
 // IPFS METADATA SCHEMAS
 // ============================================
 
-export const proposalMetadataSchema = z.object({
-  version: z.literal(1, { errorMap: () => ({ message: 'version must be 1' }) }),
-  body: z.string().max(100000, 'body too large (max 100KB)'),
-  videoUrl: z.string().regex(
-    /^https?:\/\/(www\.)?(youtube\.com|youtu\.be|vimeo\.com)\/.+$/i,
-    'Invalid video URL. Only YouTube and Vimeo URLs are allowed.'
-  ).optional(),
-}).passthrough(); // Allow additional fields
+export const proposalMetadataSchema = z
+  .object({
+    version: z.literal(1, {
+      errorMap: () => ({ message: "version must be 1" }),
+    }),
+    body: z.string().max(100000, "body too large (max 100KB)"),
+    videoUrl: z
+      .string()
+      .regex(
+        /^https?:\/\/(www\.)?(youtube\.com|youtu\.be|vimeo\.com)\/.+$/i,
+        "Invalid video URL. Only YouTube and Vimeo URLs are allowed.",
+      )
+      .optional(),
+  })
+  .passthrough(); // Allow additional fields
 
 export type ProposalMetadata = z.infer<typeof proposalMetadataSchema>;
 
-export const commentMetadataSchema = z.object({
-  version: z.literal(1),
-  body: z.string().max(10000, 'body too large (max 10KB)'),
-  createdAt: z.string().datetime().optional(),
-}).passthrough();
+export const commentMetadataSchema = z
+  .object({
+    version: z.literal(1),
+    body: z.string().max(10000, "body too large (max 10KB)"),
+    createdAt: z.string().datetime().optional(),
+  })
+  .passthrough();
 
 export type CommentMetadata = z.infer<typeof commentMetadataSchema>;
 
@@ -229,7 +257,10 @@ export const paginationSchema = z.object({
 });
 
 export const eventsQuerySchema = paginationSchema.extend({
-  types: z.string().optional().transform((val) => val?.split(',').filter(Boolean) || null),
+  types: z
+    .string()
+    .optional()
+    .transform((val) => val?.split(",").filter(Boolean) || null),
 });
 
 export const commentNonceQuerySchema = z.object({

@@ -5,18 +5,18 @@
  * Uses constant-time comparison to prevent timing attacks.
  */
 
-import type { Request, Response, NextFunction } from 'express';
-import { timingSafeEqual } from 'crypto';
-import { config } from '../config.js';
-import { log } from '../services/logger.js';
+import type { Request, Response, NextFunction } from "express";
+import { timingSafeEqual } from "crypto";
+import { config } from "../config.js";
+import { log } from "../services/logger.js";
 
 /**
  * Extract auth token from request headers
  */
 export function extractAuthToken(req: Request): string | undefined {
-  const header = req.headers['x-relayer-auth'] || req.headers['authorization'];
-  if (typeof header === 'string' && header.startsWith('Bearer ')) {
-    return header.slice('Bearer '.length);
+  const header = req.headers["x-relayer-auth"] || req.headers["authorization"];
+  if (typeof header === "string" && header.startsWith("Bearer ")) {
+    return header.slice("Bearer ".length);
   }
   return header as string | undefined;
 }
@@ -48,13 +48,17 @@ function safeCompare(a: string, b: string): boolean {
  * Requires RELAYER_AUTH_TOKEN to be set and match
  * Uses constant-time comparison to prevent timing attacks
  */
-export function authGuard(req: Request, res: Response, next: NextFunction): void | Response {
+export function authGuard(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void | Response {
   const token = extractAuthToken(req);
   const expectedToken = config.relayerAuthToken;
 
   if (!token || !expectedToken || !safeCompare(token, expectedToken)) {
-    log('warn', 'auth_failed', { path: req.path });
-    return res.status(401).json({ error: 'Unauthorized' });
+    log("warn", "auth_failed", { path: req.path });
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   next();

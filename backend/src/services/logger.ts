@@ -4,20 +4,28 @@
  * Provides structured JSON logging with sensitive field redaction.
  */
 
-import crypto from 'crypto';
-import type { LogLevel, LogMeta } from '../types/index.js';
+import crypto from "crypto";
+import type { LogLevel, LogMeta } from "../types/index.js";
 
 // ============================================
 // REDACTION
 // ============================================
 
-const REDACTED_FIELDS = ['proof', 'nullifier', 'commitment', 'secret', 'token', 'password', 'jwt'];
+const REDACTED_FIELDS = [
+  "proof",
+  "nullifier",
+  "commitment",
+  "secret",
+  "token",
+  "password",
+  "jwt",
+];
 
 function redact(obj: LogMeta): LogMeta {
   const safe = { ...obj };
   for (const key of REDACTED_FIELDS) {
     if (key in safe) {
-      safe[key] = '[REDACTED]';
+      safe[key] = "[REDACTED]";
     }
   }
   return safe;
@@ -52,10 +60,10 @@ export function createLogger(service: string): Logger {
 
   return {
     log,
-    debug: (event: string, meta?: LogMeta) => log('debug', event, meta),
-    info: (event: string, meta?: LogMeta) => log('info', event, meta),
-    warn: (event: string, meta?: LogMeta) => log('warn', event, meta),
-    error: (event: string, meta?: LogMeta) => log('error', event, meta),
+    debug: (event: string, meta?: LogMeta) => log("debug", event, meta),
+    info: (event: string, meta?: LogMeta) => log("info", event, meta),
+    warn: (event: string, meta?: LogMeta) => log("warn", event, meta),
+    error: (event: string, meta?: LogMeta) => log("error", event, meta),
   };
 }
 
@@ -63,14 +71,18 @@ export function createLogger(service: string): Logger {
  * Generate a unique request ID
  */
 export function generateRequestId(): string {
-  return crypto.randomBytes(6).toString('hex');
+  return crypto.randomBytes(6).toString("hex");
 }
 
 /**
  * Hash an IP address for privacy
  */
 export function hashIp(ip: string | undefined): string {
-  return crypto.createHash('sha256').update(ip || '').digest('hex').slice(0, 12);
+  return crypto
+    .createHash("sha256")
+    .update(ip || "")
+    .digest("hex")
+    .slice(0, 12);
 }
 
 // ============================================
@@ -82,8 +94,10 @@ export function hashIp(ip: string | undefined): string {
  */
 export function log(level: LogLevel, event: string, meta: LogMeta = {}): void {
   const safe = redact(meta);
-  console.log(JSON.stringify({ level, event, ts: new Date().toISOString(), ...safe }));
+  console.log(
+    JSON.stringify({ level, event, ts: new Date().toISOString(), ...safe }),
+  );
 }
 
 // Default logger instance
-export const logger = createLogger('relayer');
+export const logger = createLogger("relayer");

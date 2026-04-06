@@ -5,28 +5,33 @@
  * Disabled in test mode (RELAYER_TEST_MODE=true) to allow test suite to run without rate limit interference.
  */
 
-import rateLimit from 'express-rate-limit';
-import crypto from 'crypto';
-import type { Request, Response, NextFunction } from 'express';
+import rateLimit from "express-rate-limit";
+import crypto from "crypto";
+import type { Request, Response, NextFunction } from "express";
 
-const isTestMode = process.env.RELAYER_TEST_MODE === 'true';
+const isTestMode = process.env.RELAYER_TEST_MODE === "true";
 
 /**
  * No-op middleware for test mode - skips rate limiting
  */
-const noopMiddleware = (_req: Request, _res: Response, next: NextFunction) => next();
+const noopMiddleware = (_req: Request, _res: Response, next: NextFunction) =>
+  next();
 
 /**
  * Hash an IP address to avoid storing raw IPs
  */
 function hashIp(ip: string | undefined): string {
-  return crypto.createHash('sha256').update(ip || '').digest('hex');
+  return crypto
+    .createHash("sha256")
+    .update(ip || "")
+    .digest("hex");
 }
 
 /**
  * Key generator for rate limiters - uses hashed IP
  */
-const keyGenerator = (req: Express.Request): string => hashIp((req as any).ip || '');
+const keyGenerator = (req: Express.Request): string =>
+  hashIp((req as any).ip || "");
 
 /**
  * Rate limiter for vote submissions
@@ -37,7 +42,7 @@ export const voteLimiter = isTestMode
   : rateLimit({
       windowMs: 60 * 1000, // 1 minute
       max: 10,
-      message: { error: 'Too many vote requests, please try again later' },
+      message: { error: "Too many vote requests, please try again later" },
       standardHeaders: true,
       legacyHeaders: false,
       keyGenerator,
@@ -52,7 +57,7 @@ export const queryLimiter = isTestMode
   : rateLimit({
       windowMs: 60 * 1000, // 1 minute
       max: 60,
-      message: { error: 'Too many requests, please try again later' },
+      message: { error: "Too many requests, please try again later" },
       standardHeaders: true,
       legacyHeaders: false,
       keyGenerator,
@@ -67,7 +72,7 @@ export const ipfsUploadLimiter = isTestMode
   : rateLimit({
       windowMs: 60 * 1000, // 1 minute
       max: 10,
-      message: { error: 'Too many upload requests, please try again later' },
+      message: { error: "Too many upload requests, please try again later" },
       standardHeaders: true,
       legacyHeaders: false,
       keyGenerator,
@@ -82,7 +87,7 @@ export const ipfsReadLimiter = isTestMode
   : rateLimit({
       windowMs: 60 * 1000, // 1 minute
       max: 200,
-      message: { error: 'Too many requests, please try again later' },
+      message: { error: "Too many requests, please try again later" },
       standardHeaders: true,
       legacyHeaders: false,
       keyGenerator,
@@ -97,7 +102,7 @@ export const commentLimiter = isTestMode
   : rateLimit({
       windowMs: 60 * 1000, // 1 minute
       max: 20,
-      message: { error: 'Too many comment requests, please try again later' },
+      message: { error: "Too many comment requests, please try again later" },
       standardHeaders: true,
       legacyHeaders: false,
       keyGenerator,

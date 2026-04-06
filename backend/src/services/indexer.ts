@@ -5,11 +5,11 @@
  * Supports frontend notifications with on-chain verification.
  */
 
-import * as StellarSdk from '@stellar/stellar-sdk';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import * as db from './db.js';
-import type { Event, EventInput, EventQueryOptions, DbStatus } from './db.js';
+import * as StellarSdk from "@stellar/stellar-sdk";
+import path from "path";
+import { fileURLToPath } from "url";
+import * as db from "./db.js";
+import type { Event, EventInput, EventQueryOptions, DbStatus } from "./db.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,23 +21,23 @@ const __dirname = path.dirname(__filename);
 /** Event types we index from contracts */
 const EVENT_TYPES: Record<string, string> = {
   // DAO Registry
-  DaoCreateEvent: 'dao_create',
-  AdminXferEvent: 'admin_transfer',
+  DaoCreateEvent: "dao_create",
+  AdminXferEvent: "admin_transfer",
   // Membership SBT
-  SbtMintEvent: 'member_added',
-  SbtRevokeEvent: 'member_revoked',
-  SbtLeaveEvent: 'member_left',
+  SbtMintEvent: "member_added",
+  SbtRevokeEvent: "member_revoked",
+  SbtLeaveEvent: "member_left",
   // Membership Tree
-  TreeInitEvent: 'tree_init',
-  CommitEvent: 'voter_registered',
-  RemovalEvent: 'voter_removed',
-  ReinstatementEvent: 'voter_reinstated',
+  TreeInitEvent: "tree_init",
+  CommitEvent: "voter_registered",
+  RemovalEvent: "voter_removed",
+  ReinstatementEvent: "voter_reinstated",
   // Voting
-  VKSetEvent: 'vk_updated',
-  ProposalEvent: 'proposal_created',
-  ProposalClosedEvent: 'proposal_closed',
-  ProposalArchivedEvent: 'proposal_archived',
-  VoteEvent: 'vote_cast',
+  VKSetEvent: "vk_updated",
+  ProposalEvent: "proposal_created",
+  ProposalClosedEvent: "proposal_closed",
+  ProposalArchivedEvent: "proposal_archived",
+  VoteEvent: "vote_cast",
 };
 
 /** Parsed event from the chain */
@@ -86,14 +86,16 @@ let rpcServer: StellarSdk.rpc.Server | null = null;
 // LOGGER
 // ============================================
 
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+type LogLevel = "debug" | "info" | "warn" | "error";
 
 interface LogMeta {
   [key: string]: unknown;
 }
 
 const log = (level: LogLevel, event: string, meta: LogMeta = {}): void => {
-  console.log(JSON.stringify({ level, event, ts: new Date().toISOString(), ...meta }));
+  console.log(
+    JSON.stringify({ level, event, ts: new Date().toISOString(), ...meta }),
+  );
 };
 
 // ============================================
@@ -113,7 +115,7 @@ function parseEventData(event: {
     const topics = event.topic ?? [];
     const data = event.value;
 
-    let eventType = 'unknown';
+    let eventType = "unknown";
     let daoId: number | null = null;
     let parsed: Record<string, unknown> = {};
 
@@ -147,7 +149,7 @@ function parseEventData(event: {
       timestamp: new Date().toISOString(),
     };
   } catch (err) {
-    log('warn', 'event_parse_failed', { error: (err as Error).message });
+    log("warn", "event_parse_failed", { error: (err as Error).message });
     return null;
   }
 }
@@ -162,7 +164,7 @@ function parseEventData(event: {
 async function pollEvents(
   server: StellarSdk.rpc.Server,
   contracts: string[],
-  startLedger: number
+  startLedger: number,
 ): Promise<number> {
   try {
     const latestLedger = await server.getLatestLedger();
@@ -178,10 +180,12 @@ async function pollEvents(
         const events = await server.getEvents({
           startLedger: startLedger + 1,
           endLedger: currentLedger,
-          filters: [{
-            type: 'contract',
-            contractIds: [contractId],
-          }],
+          filters: [
+            {
+              type: "contract",
+              contractIds: [contractId],
+            },
+          ],
           limit: 100,
         });
 
@@ -204,19 +208,19 @@ async function pollEvents(
             }
           }
           if (addedCount > 0) {
-            log('info', 'events_indexed', {
-              contract: contractId.slice(0, 8) + '...',
+            log("info", "events_indexed", {
+              contract: contractId.slice(0, 8) + "...",
               count: addedCount,
-              latestLedger: currentLedger
+              latestLedger: currentLedger,
             });
           }
         }
       } catch (err) {
         const error = err as Error;
-        if (!error.message.includes('not found')) {
-          log('warn', 'poll_contract_failed', {
-            contract: contractId.slice(0, 8) + '...',
-            error: error.message
+        if (!error.message.includes("not found")) {
+          log("warn", "poll_contract_failed", {
+            contract: contractId.slice(0, 8) + "...",
+            error: error.message,
           });
         }
       }
@@ -224,7 +228,7 @@ async function pollEvents(
 
     return currentLedger;
   } catch (err) {
-    log('error', 'poll_events_failed', { error: (err as Error).message });
+    log("error", "poll_events_failed", { error: (err as Error).message });
     return startLedger;
   }
 }
@@ -247,18 +251,29 @@ async function verifyEventOnChain(event: Event): Promise<boolean> {
     if (txResult.status === StellarSdk.rpc.Api.GetTransactionStatus.SUCCESS) {
       // Transaction confirmed - mark as verified
       db.verifyEvent(event.tx_hash, txResult.ledger);
-      log('info', 'event_verified', { txHash: event.tx_hash, ledger: txResult.ledger });
+      log("info", "event_verified", {
+        txHash: event.tx_hash,
+        ledger: txResult.ledger,
+      });
       return true;
-    } else if (txResult.status === StellarSdk.rpc.Api.GetTransactionStatus.FAILED) {
+    } else if (
+      txResult.status === StellarSdk.rpc.Api.GetTransactionStatus.FAILED
+    ) {
       // Transaction failed - delete the event
       db.deleteUnverifiedEvent(event.tx_hash);
-      log('warn', 'event_verification_failed', { txHash: event.tx_hash, status: txResult.status });
+      log("warn", "event_verification_failed", {
+        txHash: event.tx_hash,
+        status: txResult.status,
+      });
       return false;
     }
     // NOT_FOUND - keep pending for now
     return false;
   } catch (err) {
-    log('warn', 'event_verify_error', { txHash: event.tx_hash, error: (err as Error).message });
+    log("warn", "event_verify_error", {
+      txHash: event.tx_hash,
+      error: (err as Error).message,
+    });
     return false;
   }
 }
@@ -281,12 +296,14 @@ async function verifyPendingEvents(): Promise<void> {
  * Start the event indexer
  */
 export async function startIndexer(
-  server: StellarSdk.rpc.Server | { getLatestLedger: () => Promise<{ sequence: number }> },
+  server:
+    | StellarSdk.rpc.Server
+    | { getLatestLedger: () => Promise<{ sequence: number }> },
   contracts: string[],
-  pollIntervalMs = 5000
+  pollIntervalMs = 5000,
 ): Promise<void> {
   if (isPolling) {
-    log('warn', 'indexer_already_running');
+    log("warn", "indexer_already_running");
     return;
   }
 
@@ -295,20 +312,20 @@ export async function startIndexer(
 
   // Initialize database and migrate from JSON if exists
   db.initDb();
-  const jsonPath = path.join(__dirname, '..', '..', 'data', 'events.json');
+  const jsonPath = path.join(__dirname, "..", "..", "data", "events.json");
   db.migrateFromJson(jsonPath);
 
-  let lastLedger = db.getMetadata<number>('lastLedger') ?? 0;
+  let lastLedger = db.getMetadata<number>("lastLedger") ?? 0;
 
-  log('info', 'indexer_started', {
+  log("info", "indexer_started", {
     contracts: contracts.length,
     pollInterval: pollIntervalMs,
-    startLedger: lastLedger
+    startLedger: lastLedger,
   });
 
   // Initial poll
   lastLedger = await pollEvents(rpcServer, contracts, lastLedger);
-  db.setMetadata('lastLedger', lastLedger);
+  db.setMetadata("lastLedger", lastLedger);
 
   // Periodic polling
   const poll = async (): Promise<void> => {
@@ -318,13 +335,13 @@ export async function startIndexer(
       const newLedger = await pollEvents(rpcServer!, contracts, lastLedger);
       if (newLedger > lastLedger) {
         lastLedger = newLedger;
-        db.setMetadata('lastLedger', lastLedger);
+        db.setMetadata("lastLedger", lastLedger);
       }
 
       // Also verify any pending events
       await verifyPendingEvents();
     } catch (err) {
-      log('error', 'poll_failed', { error: (err as Error).message });
+      log("error", "poll_failed", { error: (err as Error).message });
     }
 
     setTimeout(poll, pollIntervalMs);
@@ -339,13 +356,16 @@ export async function startIndexer(
 export function stopIndexer(): void {
   isPolling = false;
   db.closeDb();
-  log('info', 'indexer_stopped');
+  log("info", "indexer_stopped");
 }
 
 /**
  * Get events for a specific DAO
  */
-export function getEventsForDao(daoId: number, options: EventQueryOptions = {}): EventsResult {
+export function getEventsForDao(
+  daoId: number,
+  options: EventQueryOptions = {},
+): EventsResult {
   db.initDb(); // Ensure DB is initialized
   const result = db.getEventsForDao(daoId, options);
   return {
@@ -360,7 +380,7 @@ export function getEventsForDao(daoId: number, options: EventQueryOptions = {}):
 export function getIndexedDaos(): number[] {
   db.initDb();
   const daos = db.getIndexedDaos();
-  return daos.map(d => d.daoId);
+  return daos.map((d) => d.daoId);
 }
 
 /**
@@ -382,7 +402,7 @@ export function addManualEvent(
   daoId: number,
   type: string,
   data: Record<string, unknown>,
-  ledger = 0
+  ledger = 0,
 ): void {
   db.initDb();
   db.addEvent({
@@ -390,7 +410,7 @@ export function addManualEvent(
     type,
     data,
     ledger,
-    txHash: 'manual-' + Date.now(),
+    txHash: "manual-" + Date.now(),
     timestamp: new Date().toISOString(),
     verified: true,
   });
@@ -404,11 +424,11 @@ export function notifyEvent(
   daoId: number,
   type: string,
   data: Record<string, unknown>,
-  txHash: string
+  txHash: string,
 ): void {
   db.initDb();
   db.addPendingEvent(daoId, type, data, txHash);
-  log('info', 'event_notified', { daoId, type, txHash });
+  log("info", "event_notified", { daoId, type, txHash });
 }
 
 /**
@@ -428,7 +448,7 @@ export function ensureDaoCreateEvent(daoId: number, daoData: DaoData): boolean {
 
   // Check if dao_create event already exists for this DAO
   const existingEvents = db.getEventsForDao(daoId, {
-    types: ['dao_create', 'dao_create_event'],
+    types: ["dao_create", "dao_create_event"],
     limit: 1,
   });
 
@@ -440,7 +460,7 @@ export function ensureDaoCreateEvent(daoId: number, daoData: DaoData): boolean {
   // Create a synthetic dao_create event
   const added = db.addEvent({
     daoId: Number(daoId),
-    type: 'dao_create',
+    type: "dao_create",
     data: {
       admin: daoData.creator,
       name: daoData.name,
@@ -453,7 +473,7 @@ export function ensureDaoCreateEvent(daoId: number, daoData: DaoData): boolean {
   });
 
   if (added) {
-    log('info', 'dao_create_event_synthesized', { daoId, name: daoData.name });
+    log("info", "dao_create_event_synthesized", { daoId, name: daoData.name });
   }
 
   return added;

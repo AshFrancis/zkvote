@@ -2,7 +2,7 @@
  * Shared Type Definitions for ZKVote Backend
  */
 
-import type { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from "express";
 
 // ============================================
 // EXPRESS EXTENSIONS
@@ -20,7 +20,7 @@ declare global {
 // LOGGING
 // ============================================
 
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type LogLevel = "debug" | "info" | "warn" | "error";
 
 export interface LogMeta {
   [key: string]: unknown;
@@ -35,14 +35,14 @@ export interface LogMeta {
  * r = 21888242871839275222246405745257275088548364400416034343698204186575808495617
  */
 export const BN254_FR_MODULUS = BigInt(
-  '21888242871839275222246405745257275088548364400416034343698204186575808495617'
+  "21888242871839275222246405745257275088548364400416034343698204186575808495617",
 );
 
 /**
  * BN254 scalar field modulus as hex string (big-endian, 64 chars)
  */
 export const BN254_FR_MODULUS_HEX =
-  '30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001';
+  "30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001";
 
 // ============================================
 // PROOF TYPES
@@ -66,9 +66,9 @@ export type G1Hex = string;
 export type G2Hex = string;
 
 export interface Groth16Proof {
-  a: G1Hex;  // 64 bytes hex (G1 point)
-  b: G2Hex;  // 128 bytes hex (G2 point)
-  c: G1Hex;  // 64 bytes hex (G1 point)
+  a: G1Hex; // 64 bytes hex (G1 point)
+  b: G2Hex; // 128 bytes hex (G2 point)
+  c: G1Hex; // 64 bytes hex (G1 point)
 }
 
 // ============================================
@@ -131,7 +131,7 @@ export interface Dao {
 }
 
 export interface DaoWithRole extends Dao {
-  role: 'admin' | 'member' | null;
+  role: "admin" | "member" | null;
 }
 
 // ============================================
@@ -164,7 +164,7 @@ export interface CommentMetadata {
 export type AsyncHandler = (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => Promise<void | Response>;
 
 // ============================================
@@ -178,7 +178,7 @@ export interface RpcHealthResult {
 }
 
 export interface TransactionResult {
-  status: 'SUCCESS' | 'FAILED' | 'NOT_FOUND' | 'ERROR';
+  status: "SUCCESS" | "FAILED" | "NOT_FOUND" | "ERROR";
   ledger?: number;
   errorResult?: unknown;
   hash?: string;
