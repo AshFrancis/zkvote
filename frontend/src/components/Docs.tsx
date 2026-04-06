@@ -120,7 +120,7 @@ function GettingStarted() {
           </li>
           <li className="flex items-start gap-3">
             <span className="w-1.5 h-1.5 rounded-full bg-foreground/50 mt-2 shrink-0"></span>
-            <span>Some XLM for transaction fees (futurenet XLM for testing)</span>
+            <span>Some XLM for transaction fees (testnet XLM for testing)</span>
           </li>
           <li className="flex items-start gap-3">
             <span className="w-1.5 h-1.5 rounded-full bg-foreground/50 mt-2 shrink-0"></span>
