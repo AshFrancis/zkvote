@@ -1,7 +1,7 @@
 # Poseidon Hash Parameter Verification - PASSED ✅
 
 **Date**: 2025-11-18  
-**Network**: Stellar Futurenet (Protocol 25)  
+**Network**: Stellar Testnet (Protocol 25)  
 **Contract**: `CBBLU23BEC2ZWHSXWWYDX4TZB3QTGVGBVXKYTE3GDDYCATY5BS6YFKKM`
 
 ## Executive Summary
@@ -77,7 +77,7 @@ cd circuits
 node utils/poseidon_kat.js
 ```
 
-### On-Chain Verification (Futurenet)
+### On-Chain Verification (Testnet)
 ```bash
 # Deploy contract
 stellar contract deploy \

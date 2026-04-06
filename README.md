@@ -122,10 +122,10 @@ cd frontend && npm test
 cd circuits && npm test
 ```
 
-### 3. Deploy Contracts (Futurenet)
+### 3. Deploy Contracts (Testnet)
 
 ```bash
-# Deploy to hosted futurenet
+# Deploy to testnet
 ./scripts/deploy/deploy-hosted-futurenet.sh
 ```
 

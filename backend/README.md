@@ -47,7 +47,7 @@ stellar keys generate relayer
 stellar keys show relayer
 
 # Fund it
-stellar keys fund relayer --network futurenet
+stellar keys fund relayer --network testnet
 ```
 
 ### 4. Start Relayer

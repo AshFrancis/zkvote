@@ -44,7 +44,7 @@ Now that you have your library up-to-date and added to your project, you can imp
 import { Contract, networks } from "voting"
 
 const contract = new Contract({
-  ...networks.futurenet, // for example; check which networks this library exports
+  ...networks.testnet, // for example; check which networks this library exports
   rpcUrl: '...', // use your own, or find one for testing at https://soroban.stellar.org/docs/reference/rpc#public-rpc-providers
 })
 
