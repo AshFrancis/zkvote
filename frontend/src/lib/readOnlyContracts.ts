@@ -97,9 +97,7 @@ export async function getAllDaos(): Promise<
 }
 
 // Helper function to get user's DAOs with their role
-export async function getUserDaos(
-  userAddress: string,
-): Promise<
+export async function getUserDaos(userAddress: string): Promise<
   Array<{
     id: number;
     name: string;
