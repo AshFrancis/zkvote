@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 // A component that throws an error when rendered
-function ThrowingComponent({ message }: { message: string }) {
+function ThrowingComponent({ message }: { message: string }): never {
   throw new Error(message);
 }
 
