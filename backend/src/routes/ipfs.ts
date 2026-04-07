@@ -192,10 +192,6 @@ router.post("/ipfs/metadata", ipfsUploadLimiter, (async (
   req: Request,
   res: Response,
 ) => {
-  if (!config.ipfsEnabled) {
-    return res.status(503).json({ error: "IPFS service not configured" });
-  }
-
   const metadata = req.body;
 
   const metadataSize = JSON.stringify(metadata).length;
@@ -219,6 +215,10 @@ router.post("/ipfs/metadata", ipfsUploadLimiter, (async (
         error: "Invalid video URL. Only YouTube and Vimeo URLs are allowed.",
       });
     }
+  }
+
+  if (!config.ipfsEnabled) {
+    return res.status(503).json({ error: "IPFS service not configured" });
   }
 
   try {
