@@ -49,7 +49,7 @@ export default function CreateProposalForm({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [voteMode, setVoteMode] = useState<"fixed" | "trailing">("trailing");
   const [deadlineSeconds, setDeadlineSeconds] = useState<string>(
-    String(7 * 24 * 60 * 60)
+    String(7 * 24 * 60 * 60),
   );
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -59,9 +59,11 @@ export default function CreateProposalForm({
   // Remove toolbar buttons from tab order
   useEffect(() => {
     if (editorContainerRef.current) {
-      const toolbarButtons = editorContainerRef.current.querySelectorAll('.w-md-editor-toolbar button');
-      toolbarButtons.forEach(button => {
-        button.setAttribute('tabindex', '-1');
+      const toolbarButtons = editorContainerRef.current.querySelectorAll(
+        ".w-md-editor-toolbar button",
+      );
+      toolbarButtons.forEach((button) => {
+        button.setAttribute("tabindex", "-1");
       });
     }
   }, []);
@@ -93,7 +95,7 @@ export default function CreateProposalForm({
       };
       reader.readAsDataURL(file);
     },
-    []
+    [],
   );
 
   const removeImage = useCallback(() => {
@@ -101,7 +103,9 @@ export default function CreateProposalForm({
     setImagePreview(null);
   }, []);
 
-  const uploadImage = async (file: File): Promise<{ cid: string; filename: string; mimeType: string } | null> => {
+  const uploadImage = async (
+    file: File,
+  ): Promise<{ cid: string; filename: string; mimeType: string } | null> => {
     const formData = new FormData();
     formData.append("image", file);
 
@@ -123,7 +127,9 @@ export default function CreateProposalForm({
     };
   };
 
-  const uploadMetadata = async (metadata: ProposalMetadata): Promise<string> => {
+  const uploadMetadata = async (
+    metadata: ProposalMetadata,
+  ): Promise<string> => {
     const response = await relayerFetch("/ipfs/metadata", {
       method: "POST",
       headers: {
@@ -148,7 +154,9 @@ export default function CreateProposalForm({
     setUploadError(null);
 
     try {
-      let imageMeta: { cid: string; filename: string; mimeType: string } | undefined;
+      let imageMeta:
+        | { cid: string; filename: string; mimeType: string }
+        | undefined;
 
       // Upload image if present
       if (imageFile) {
@@ -210,7 +218,11 @@ export default function CreateProposalForm({
       </div>
 
       {/* Markdown Body */}
-      <div className="space-y-2" data-color-mode={theme} ref={editorContainerRef}>
+      <div
+        className="space-y-2"
+        data-color-mode={theme}
+        ref={editorContainerRef}
+      >
         <Label>Description</Label>
         <MDEditor
           value={body}
@@ -234,9 +246,7 @@ export default function CreateProposalForm({
           placeholder="https://youtube.com/watch?v=... or https://vimeo.com/..."
           disabled={isProcessing}
         />
-        <p className="text-xs text-muted-foreground">
-          YouTube or Vimeo links
-        </p>
+        <p className="text-xs text-muted-foreground">YouTube or Vimeo links</p>
       </div>
 
       {/* Image Upload */}
@@ -289,9 +299,7 @@ export default function CreateProposalForm({
         </div>
       )}
 
-      {uploadError && (
-        <p className="text-sm text-destructive">{uploadError}</p>
-      )}
+      {uploadError && <p className="text-sm text-destructive">{uploadError}</p>}
 
       <VoteModeSelector
         value={voteMode}
@@ -316,8 +324,8 @@ export default function CreateProposalForm({
           {uploadingImage
             ? "Uploading..."
             : isSubmitting
-            ? submittingLabel
-            : submitLabel}
+              ? submittingLabel
+              : submitLabel}
         </Button>
         <Button
           type="button"

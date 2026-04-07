@@ -35,7 +35,7 @@ function credentialKey(daoId: number, publicKey: string) {
 //    XSS or malicious extensions can read them. Consider encrypting at rest.
 export async function generateDeterministicZKCredentials(
   kit: StellarWalletsKit,
-  daoId: number
+  daoId: number,
 ): Promise<ZKCredentials> {
   const poseidon = await buildPoseidon();
 
@@ -57,23 +57,29 @@ By signing, you acknowledge that anyone who obtains this signature can vote on y
 
   // Hash the signature to get deterministic bytes
   const signatureBytes = new TextEncoder().encode(signedMessage);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', signatureBytes);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", signatureBytes);
   const hashArray = new Uint8Array(hashBuffer);
 
   // Derive secret from first 32 bytes
-  const secret = BigInt("0x" + Array.from(hashArray)
-    .map(b => b.toString(16).padStart(2, "0"))
-    .join(""));
+  const secret = BigInt(
+    "0x" +
+      Array.from(hashArray)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join(""),
+  );
 
   // Derive salt by hashing the signature again with a different domain separator
   // This gives us a second independent value from the same signature
   const saltInput = new TextEncoder().encode(`salt:${signedMessage}`);
-  const saltHashBuffer = await crypto.subtle.digest('SHA-256', saltInput);
+  const saltHashBuffer = await crypto.subtle.digest("SHA-256", saltInput);
   const saltHashArray = new Uint8Array(saltHashBuffer);
 
-  const salt = BigInt("0x" + Array.from(saltHashArray)
-    .map(b => b.toString(16).padStart(2, "0"))
-    .join(""));
+  const salt = BigInt(
+    "0x" +
+      Array.from(saltHashArray)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join(""),
+  );
 
   // Compute commitment: Poseidon(secret, salt)
   const commitment = poseidon.F.toString(poseidon([secret, salt]));
@@ -90,13 +96,19 @@ export async function generateRandomZKCredentials(): Promise<ZKCredentials> {
   const poseidon = await buildPoseidon();
 
   // Generate random secret and salt (32 bytes each -> 256 bits)
-  const secret = BigInt("0x" + Array.from(crypto.getRandomValues(new Uint8Array(32)))
-    .map(b => b.toString(16).padStart(2, "0"))
-    .join(""));
+  const secret = BigInt(
+    "0x" +
+      Array.from(crypto.getRandomValues(new Uint8Array(32)))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join(""),
+  );
 
-  const salt = BigInt("0x" + Array.from(crypto.getRandomValues(new Uint8Array(32)))
-    .map(b => b.toString(16).padStart(2, "0"))
-    .join(""));
+  const salt = BigInt(
+    "0x" +
+      Array.from(crypto.getRandomValues(new Uint8Array(32)))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join(""),
+  );
 
   // Compute commitment: Poseidon(secret, salt)
   const commitment = poseidon.F.toString(poseidon([secret, salt]));
@@ -110,29 +122,53 @@ export async function generateRandomZKCredentials(): Promise<ZKCredentials> {
 
 // Store ZK credentials in localStorage (indexed by DAO ID and public key)
 // Uses the same format as manual registration in DAODashboard
-export function storeZKCredentials(daoId: number, publicKey: string, credentials: ZKCredentials, leafIndex: number = 0) {
+export function storeZKCredentials(
+  daoId: number,
+  publicKey: string,
+  credentials: ZKCredentials,
+  leafIndex: number = 0,
+) {
   const key = credentialKey(daoId, publicKey);
-  localStorage.setItem(key, JSON.stringify({
-    secret: credentials.secret,
-    salt: credentials.salt,
-    commitment: credentials.commitment,
-    leafIndex,
-    registeredAt: Date.now(),
-  }));
-  if (import.meta.env.DEV) console.log(`Stored ZK credentials for DAO ${daoId}, user ${publicKey.substring(0, 8)}...`);
+  localStorage.setItem(
+    key,
+    JSON.stringify({
+      secret: credentials.secret,
+      salt: credentials.salt,
+      commitment: credentials.commitment,
+      leafIndex,
+      registeredAt: Date.now(),
+    }),
+  );
+  if (import.meta.env.DEV)
+    console.log(
+      `Stored ZK credentials for DAO ${daoId}, user ${publicKey.substring(0, 8)}...`,
+    );
 }
 
 // Retrieve ZK credentials from localStorage
-export function getZKCredentials(daoId: number, publicKey: string): { secret: string; salt: string; commitment: string; leafIndex: number } | null {
+export function getZKCredentials(
+  daoId: number,
+  publicKey: string,
+): {
+  secret: string;
+  salt: string;
+  commitment: string;
+  leafIndex: number;
+} | null {
   const key = credentialKey(daoId, publicKey);
   const stored = localStorage.getItem(key);
   if (!stored) return null;
 
   try {
     const parsed = JSON.parse(stored);
-    if (parsed.registeredAt && Date.now() - parsed.registeredAt > CREDENTIAL_CACHE_TTL_MS) {
+    if (
+      parsed.registeredAt &&
+      Date.now() - parsed.registeredAt > CREDENTIAL_CACHE_TTL_MS
+    ) {
       localStorage.removeItem(key);
-      console.warn(`[ZK] Cached credentials expired for DAO ${daoId}, key cleared`);
+      console.warn(
+        `[ZK] Cached credentials expired for DAO ${daoId}, key cleared`,
+      );
       return null;
     }
     return parsed;
@@ -147,23 +183,33 @@ export function getZKCredentials(daoId: number, publicKey: string): { secret: st
 export async function getOrRegenerateZKCredentials(
   kit: StellarWalletsKit | null,
   daoId: number,
-  publicKey: string
-): Promise<{ secret: string; salt: string; commitment: string; leafIndex: number } | null> {
+  publicKey: string,
+): Promise<{
+  secret: string;
+  salt: string;
+  commitment: string;
+  leafIndex: number;
+} | null> {
   // Try to load from cache first
   const cached = getZKCredentials(daoId, publicKey);
   if (cached) {
-    if (import.meta.env.DEV) console.log(`[ZK] Using cached credentials for DAO ${daoId}`);
+    if (import.meta.env.DEV)
+      console.log(`[ZK] Using cached credentials for DAO ${daoId}`);
     return cached;
   }
 
   // No cache and no wallet = can't regenerate
   if (!kit) {
-    if (import.meta.env.DEV) console.log(`[ZK] No credentials in cache and no wallet connected`);
+    if (import.meta.env.DEV)
+      console.log(`[ZK] No credentials in cache and no wallet connected`);
     return null;
   }
 
   // Regenerate from wallet signature
-  if (import.meta.env.DEV) console.log(`[ZK] Regenerating credentials from wallet signature for DAO ${daoId}...`);
+  if (import.meta.env.DEV)
+    console.log(
+      `[ZK] Regenerating credentials from wallet signature for DAO ${daoId}...`,
+    );
   try {
     // Credentials generated but not used - leaf index lookup not yet implemented
     await generateDeterministicZKCredentials(kit, daoId);
@@ -171,7 +217,10 @@ export async function getOrRegenerateZKCredentials(
     // Get leaf index from contract (this requires on-chain lookup)
     // For now, return null and require explicit registration
     // In the future, we could query the tree contract to find the leaf index
-    if (import.meta.env.DEV) console.log(`[ZK] Credentials regenerated, but leaf index unknown. User must re-register.`);
+    if (import.meta.env.DEV)
+      console.log(
+        `[ZK] Credentials regenerated, but leaf index unknown. User must re-register.`,
+      );
     return null;
 
     // Future enhancement: Query contract for leaf index
@@ -185,8 +234,13 @@ export async function getOrRegenerateZKCredentials(
 }
 
 // Compute commitment from secret and salt
-export async function computeCommitment(secret: string, salt: string): Promise<string> {
+export async function computeCommitment(
+  secret: string,
+  salt: string,
+): Promise<string> {
   const poseidon = await buildPoseidon();
-  const commitment = poseidon.F.toString(poseidon([BigInt(secret), BigInt(salt)]));
+  const commitment = poseidon.F.toString(
+    poseidon([BigInt(secret), BigInt(salt)]),
+  );
   return commitment;
 }

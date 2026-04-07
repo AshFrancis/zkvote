@@ -47,7 +47,7 @@ export interface GeneratedProof {
 export async function generateVoteProof(
   input: VoteProofInput,
   wasmPath: string,
-  zkeyPath: string
+  zkeyPath: string,
 ): Promise<GeneratedProof> {
   try {
     // Format input for circuit - matches vote.circom signal names
@@ -73,13 +73,15 @@ export async function generateVoteProof(
     const { proof, publicSignals } = await groth16.fullProve(
       circuitInput,
       wasmPath,
-      zkeyPath
+      zkeyPath,
     );
 
     return { proof, publicSignals };
   } catch (error) {
     console.error("Failed to generate vote proof:", error);
-    throw new Error(`Vote proof generation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    throw new Error(
+      `Vote proof generation failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+    );
   }
 }
 
@@ -93,7 +95,7 @@ export async function generateVoteProof(
 export async function generateCommentProof(
   input: CommentProofInput,
   wasmPath: string = "/circuits/comment/comment.wasm",
-  zkeyPath: string = "/circuits/comment/comment_final.zkey"
+  zkeyPath: string = "/circuits/comment/comment_final.zkey",
 ): Promise<GeneratedProof> {
   try {
     // Format input for circuit - matches comment.circom signal names
@@ -116,13 +118,15 @@ export async function generateCommentProof(
     const { proof, publicSignals } = await groth16.fullProve(
       circuitInput,
       wasmPath,
-      zkeyPath
+      zkeyPath,
     );
 
     return { proof, publicSignals };
   } catch (error) {
     console.error("Failed to generate comment proof:", error);
-    throw new Error(`Comment proof generation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    throw new Error(
+      `Comment proof generation failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+    );
   }
 }
 
@@ -155,10 +159,10 @@ export function formatProofForSoroban(proof: Groth16Proof): {
   // snarkjs outputs: [[c0, c1], [c0, c1]] where c0=real, c1=imaginary
   // We swap within each coordinate pair: [c1, c0, c1, c0]
   const proof_b =
-    toHexBE(proof.pi_b[0][1]) +  // X.c1 (imaginary)
-    toHexBE(proof.pi_b[0][0]) +  // X.c0 (real)
-    toHexBE(proof.pi_b[1][1]) +  // Y.c1 (imaginary)
-    toHexBE(proof.pi_b[1][0]);   // Y.c0 (real)
+    toHexBE(proof.pi_b[0][1]) + // X.c1 (imaginary)
+    toHexBE(proof.pi_b[0][0]) + // X.c0 (real)
+    toHexBE(proof.pi_b[1][1]) + // Y.c1 (imaginary)
+    toHexBE(proof.pi_b[1][0]); // Y.c0 (real)
 
   // Format pi_c (G1 point): be_bytes(X) || be_bytes(Y)
   const proof_c = toHexBE(proof.pi_c[0]) + toHexBE(proof.pi_c[1]);
@@ -186,13 +190,13 @@ export function generateSecret(): string {
 export async function calculateNullifier(
   secret: string,
   daoId: string,
-  proposalId: string
+  proposalId: string,
 ): Promise<string> {
   const { buildPoseidon } = await import("circomlibjs");
   const poseidon = await buildPoseidon();
 
   const hash = poseidon.F.toString(
-    poseidon([BigInt(secret), BigInt(daoId), BigInt(proposalId)])
+    poseidon([BigInt(secret), BigInt(daoId), BigInt(proposalId)]),
   );
 
   return hash;
@@ -207,13 +211,18 @@ export async function calculateCommentNullifier(
   secret: string,
   daoId: string,
   proposalId: string,
-  commentNonce: string
+  commentNonce: string,
 ): Promise<string> {
   const { buildPoseidon } = await import("circomlibjs");
   const poseidon = await buildPoseidon();
 
   const hash = poseidon.F.toString(
-    poseidon([BigInt(secret), BigInt(daoId), BigInt(proposalId), BigInt(commentNonce)])
+    poseidon([
+      BigInt(secret),
+      BigInt(daoId),
+      BigInt(proposalId),
+      BigInt(commentNonce),
+    ]),
   );
 
   return hash;
@@ -225,14 +234,12 @@ export async function calculateCommentNullifier(
  */
 export async function calculateCommitment(
   secret: string,
-  salt: string
+  salt: string,
 ): Promise<string> {
   const { buildPoseidon } = await import("circomlibjs");
   const poseidon = await buildPoseidon();
 
-  const hash = poseidon.F.toString(
-    poseidon([BigInt(secret), BigInt(salt)])
-  );
+  const hash = poseidon.F.toString(poseidon([BigInt(secret), BigInt(salt)]));
 
   return hash;
 }
@@ -246,7 +253,7 @@ export async function calculateCommitment(
 export async function verifyProofLocally(
   proof: Groth16Proof,
   publicSignals: string[],
-  vkeyPath: string
+  vkeyPath: string,
 ): Promise<boolean> {
   try {
     const vkey = await fetch(vkeyPath).then((r) => r.json());

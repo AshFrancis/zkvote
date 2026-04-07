@@ -38,8 +38,15 @@ interface ProposalPageProps {
   isInitializing: boolean;
 }
 
-export default function ProposalPage({ publicKey, kit, isInitializing }: ProposalPageProps) {
-  const { daoSlug, proposalSlug } = useParams<{ daoSlug: string; proposalSlug: string }>();
+export default function ProposalPage({
+  publicKey,
+  kit,
+  isInitializing,
+}: ProposalPageProps) {
+  const { daoSlug, proposalSlug } = useParams<{
+    daoSlug: string;
+    proposalSlug: string;
+  }>();
   const navigate = useNavigate();
 
   const numericDaoId = daoSlug ? parseIdFromSlug(daoSlug) : null;
@@ -71,12 +78,16 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
   } = useProposalActions({ publicKey, kit, numericDaoId });
 
   // Generate slug for navigation
-  const daoSlugForNav = numericDaoId && daoInfo?.name ? toIdSlug(numericDaoId, daoInfo.name) : daoSlug || '';
+  const daoSlugForNav =
+    numericDaoId && daoInfo?.name
+      ? toIdSlug(numericDaoId, daoInfo.name)
+      : daoSlug || "";
   const daoDisplayName = daoInfo?.name || `DAO #${numericDaoId}`;
 
   const now = Math.floor(Date.now() / 1000);
   const hasDeadline = proposal ? proposal.endTime > 0 : false;
-  const isPastDeadline = hasDeadline && proposal ? now > proposal.endTime : false;
+  const isPastDeadline =
+    hasDeadline && proposal ? now > proposal.endTime : false;
 
   useEffect(() => {
     if (numericDaoId !== null && numericProposalId !== null) {
@@ -115,7 +126,7 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
             const nullifier = await calculateNullifier(
               secret,
               numericDaoId.toString(),
-              numericProposalId.toString()
+              numericProposalId.toString(),
             );
 
             const nullifierUsedResult = await votingClient.is_nullifier_used({
@@ -141,29 +152,36 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
         eligibleRoot: proposalData.eligible_root,
         voteMode: proposalData.vote_mode.tag as "Fixed" | "Trailing",
         endTime: Number(proposalData.end_time),
-        vkVersion: 'vk_version' in proposalData && proposalData.vk_version !== undefined
-          ? Number(proposalData.vk_version)
-          : null,
+        vkVersion:
+          "vk_version" in proposalData && proposalData.vk_version !== undefined
+            ? Number(proposalData.vk_version)
+            : null,
       });
     } catch (err) {
       console.error("Failed to load proposal:", err);
-      const errorMsg = err instanceof Error ? err.message : "Failed to load proposal";
+      const errorMsg =
+        err instanceof Error ? err.message : "Failed to load proposal";
 
-      const isNotFound = errorMsg.includes("UnreachableCodeReached") ||
-                        errorMsg.includes("simulation failed") ||
-                        errorMsg.includes("InvalidAction");
+      const isNotFound =
+        errorMsg.includes("UnreachableCodeReached") ||
+        errorMsg.includes("simulation failed") ||
+        errorMsg.includes("InvalidAction");
 
       if (isNotFound) {
         setIsProposalNotFound(true);
         if (retryCount < 3) {
-          setRetryCount(prev => prev + 1);
+          setRetryCount((prev) => prev + 1);
           const delay = Math.pow(2, retryCount) * 1000;
           setTimeout(() => loadProposal(), delay);
           return;
         }
       }
 
-      setError(isNotFound ? "Proposal not found - it may still be confirming on the network" : errorMsg);
+      setError(
+        isNotFound
+          ? "Proposal not found - it may still be confirming on the network"
+          : errorMsg,
+      );
     } finally {
       setLoading(false);
     }
@@ -246,9 +264,12 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
                   <Clock className="w-6 h-6 text-amber-600 dark:text-amber-400" />
                 </div>
                 <div className="text-center">
-                  <h3 className="font-medium text-foreground mb-1">Proposal not found</h3>
+                  <h3 className="font-medium text-foreground mb-1">
+                    Proposal not found
+                  </h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    This proposal may still be confirming on the network. Please wait a moment and try again.
+                    This proposal may still be confirming on the network. Please
+                    wait a moment and try again.
                   </p>
                 </div>
                 <div className="flex gap-3">
@@ -276,7 +297,9 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
                 </div>
               </div>
             ) : (
-              <p className="text-destructive">{error || "Proposal not found"}</p>
+              <p className="text-destructive">
+                {error || "Proposal not found"}
+              </p>
             )}
           </CardContent>
         </Card>
@@ -327,19 +350,46 @@ export default function ProposalPage({ publicKey, kit, isInitializing }: Proposa
                       <span className="text-sm font-medium text-muted-foreground">
                         #{proposal.id}
                       </span>
-                      {proposal.vkVersion !== undefined && proposal.vkVersion !== null && (
-                        <Badge variant="purple" className="text-[10px] px-1.5 py-0 h-5">v{proposal.vkVersion}</Badge>
-                      )}
-                      <Badge variant={proposal.voteMode === "Fixed" ? "warning" : "success"} className="text-[10px] px-1.5 py-0 h-5">
+                      {proposal.vkVersion !== undefined &&
+                        proposal.vkVersion !== null && (
+                          <Badge
+                            variant="purple"
+                            className="text-[10px] px-1.5 py-0 h-5"
+                          >
+                            v{proposal.vkVersion}
+                          </Badge>
+                        )}
+                      <Badge
+                        variant={
+                          proposal.voteMode === "Fixed" ? "warning" : "success"
+                        }
+                        className="text-[10px] px-1.5 py-0 h-5"
+                      >
                         {proposal.voteMode}
                       </Badge>
-                      {proposal.hasVoted && <Badge variant="blue" className="text-[10px] px-1.5 py-0 h-5">Voted</Badge>}
-                      {isPastDeadline && <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-5">Closed</Badge>}
+                      {proposal.hasVoted && (
+                        <Badge
+                          variant="blue"
+                          className="text-[10px] px-1.5 py-0 h-5"
+                        >
+                          Voted
+                        </Badge>
+                      )}
+                      {isPastDeadline && (
+                        <Badge
+                          variant="destructive"
+                          className="text-[10px] px-1.5 py-0 h-5"
+                        >
+                          Closed
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex items-center justify-between gap-4">
                       <h1 className="text-2xl font-bold">{proposal.title}</h1>
                       {hasDeadline && (
-                        <div className={`flex items-center gap-1.5 text-sm font-medium whitespace-nowrap ${getDeadlineColor()}`}>
+                        <div
+                          className={`flex items-center gap-1.5 text-sm font-medium whitespace-nowrap ${getDeadlineColor()}`}
+                        >
                           <Clock className="w-4 h-4" />
                           {formatDeadline(proposal.endTime)}
                         </div>

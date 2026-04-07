@@ -11,14 +11,14 @@
  * r = 21888242871839275222246405745257275088548364400416034343698204186575808495617
  */
 export const BN254_FR_MODULUS = BigInt(
-  '21888242871839275222246405745257275088548364400416034343698204186575808495617'
+  "21888242871839275222246405745257275088548364400416034343698204186575808495617",
 );
 
 /**
  * BN254 scalar field modulus as hex string (big-endian, 64 chars)
  */
 export const BN254_FR_MODULUS_HEX =
-  '30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001';
+  "30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001";
 
 /**
  * Circuit constants
@@ -49,9 +49,9 @@ export type G1Hex = string;
 export type G2Hex = string;
 
 export interface Groth16Proof {
-  a: G1Hex;  // 64 bytes hex (G1 point)
-  b: G2Hex;  // 128 bytes hex (G2 point)
-  c: G1Hex;  // 64 bytes hex (G1 point)
+  a: G1Hex; // 64 bytes hex (G1 point)
+  b: G2Hex; // 128 bytes hex (G2 point)
+  c: G1Hex; // 64 bytes hex (G1 point)
 }
 
 // ============================================
@@ -64,9 +64,10 @@ export interface Groth16Proof {
  * @returns true if value is valid field element
  */
 export function isValidFieldElement(value: bigint | string): boolean {
-  const bigValue = typeof value === 'string'
-    ? BigInt(value.startsWith('0x') ? value : `0x${value}`)
-    : value;
+  const bigValue =
+    typeof value === "string"
+      ? BigInt(value.startsWith("0x") ? value : `0x${value}`)
+      : value;
   return bigValue >= 0n && bigValue < BN254_FR_MODULUS;
 }
 
@@ -74,10 +75,14 @@ export function isValidFieldElement(value: bigint | string): boolean {
  * Validate that a value is a non-zero valid field element
  * @throws Error if value is invalid
  */
-export function assertValidFieldElement(value: bigint | string, name = 'value'): void {
-  const bigValue = typeof value === 'string'
-    ? BigInt(value.startsWith('0x') ? value : `0x${value}`)
-    : value;
+export function assertValidFieldElement(
+  value: bigint | string,
+  name = "value",
+): void {
+  const bigValue =
+    typeof value === "string"
+      ? BigInt(value.startsWith("0x") ? value : `0x${value}`)
+      : value;
 
   if (bigValue < 0n) {
     throw new Error(`${name} must be non-negative`);
@@ -92,14 +97,15 @@ export function assertValidFieldElement(value: bigint | string, name = 'value'):
  * @throws Error if nullifier is invalid
  */
 export function assertValidNullifier(nullifier: bigint | string): void {
-  const bigValue = typeof nullifier === 'string'
-    ? BigInt(nullifier.startsWith('0x') ? nullifier : `0x${nullifier}`)
-    : nullifier;
+  const bigValue =
+    typeof nullifier === "string"
+      ? BigInt(nullifier.startsWith("0x") ? nullifier : `0x${nullifier}`)
+      : nullifier;
 
   if (bigValue === 0n) {
-    throw new Error('Nullifier cannot be zero');
+    throw new Error("Nullifier cannot be zero");
   }
-  assertValidFieldElement(bigValue, 'nullifier');
+  assertValidFieldElement(bigValue, "nullifier");
 }
 
 // ============================================
@@ -225,83 +231,87 @@ export type Groth16Error = (typeof Groth16Error)[keyof typeof Groth16Error];
  */
 export const ERROR_MESSAGES: Record<string, Record<number, string>> = {
   Registry: {
-    [RegistryError.NameTooLong]: 'DAO name exceeds 24 character limit',
-    [RegistryError.DaoNotFound]: 'DAO not found',
-    [RegistryError.NotAdmin]: 'Only DAO admin can perform this action',
-    [RegistryError.MetadataCidTooLong]: 'Metadata CID exceeds 64 character limit',
+    [RegistryError.NameTooLong]: "DAO name exceeds 24 character limit",
+    [RegistryError.DaoNotFound]: "DAO not found",
+    [RegistryError.NotAdmin]: "Only DAO admin can perform this action",
+    [RegistryError.MetadataCidTooLong]:
+      "Metadata CID exceeds 64 character limit",
   },
   Sbt: {
-    [SbtError.NotDaoAdmin]: 'Only DAO admin can perform this action',
-    [SbtError.AlreadyMinted]: 'Member already has an SBT for this DAO',
-    [SbtError.NotMember]: 'Address is not a member of this DAO',
-    [SbtError.NotOpenMembership]: 'DAO membership is not open for self-join',
-    [SbtError.AlreadyInitialized]: 'Contract already initialized',
+    [SbtError.NotDaoAdmin]: "Only DAO admin can perform this action",
+    [SbtError.AlreadyMinted]: "Member already has an SBT for this DAO",
+    [SbtError.NotMember]: "Address is not a member of this DAO",
+    [SbtError.NotOpenMembership]: "DAO membership is not open for self-join",
+    [SbtError.AlreadyInitialized]: "Contract already initialized",
   },
   Tree: {
-    [TreeError.NotAdmin]: 'Only DAO admin can perform this action',
-    [TreeError.InvalidDepth]: 'Invalid tree depth (must be 1-18)',
-    [TreeError.TreeInitialized]: 'Tree already initialized for this DAO',
-    [TreeError.TreeNotInitialized]: 'Tree not initialized for this DAO',
-    [TreeError.CommitmentExists]: 'Identity commitment already registered',
-    [TreeError.MemberExists]: 'Member already registered',
-    [TreeError.TreeFull]: 'Merkle tree is full (max capacity reached)',
-    [TreeError.NoSbt]: 'Member does not have an SBT',
-    [TreeError.NotOpenMembership]: 'DAO membership is not open',
-    [TreeError.LeafOutOfBounds]: 'Leaf index out of bounds',
-    [TreeError.MemberRemoved]: 'Member has been removed',
-    [TreeError.MemberNotInTree]: 'Member not found in tree',
-    [TreeError.RootNotFound]: 'Merkle root not found in history',
-    [TreeError.AlreadyInitialized]: 'Tree already initialized',
-    [TreeError.MemberNotRevoked]: 'Member has not been revoked',
+    [TreeError.NotAdmin]: "Only DAO admin can perform this action",
+    [TreeError.InvalidDepth]: "Invalid tree depth (must be 1-18)",
+    [TreeError.TreeInitialized]: "Tree already initialized for this DAO",
+    [TreeError.TreeNotInitialized]: "Tree not initialized for this DAO",
+    [TreeError.CommitmentExists]: "Identity commitment already registered",
+    [TreeError.MemberExists]: "Member already registered",
+    [TreeError.TreeFull]: "Merkle tree is full (max capacity reached)",
+    [TreeError.NoSbt]: "Member does not have an SBT",
+    [TreeError.NotOpenMembership]: "DAO membership is not open",
+    [TreeError.LeafOutOfBounds]: "Leaf index out of bounds",
+    [TreeError.MemberRemoved]: "Member has been removed",
+    [TreeError.MemberNotInTree]: "Member not found in tree",
+    [TreeError.RootNotFound]: "Merkle root not found in history",
+    [TreeError.AlreadyInitialized]: "Tree already initialized",
+    [TreeError.MemberNotRevoked]: "Member has not been revoked",
   },
   Voting: {
-    [VotingError.NotAdmin]: 'Only DAO admin can perform this action',
-    [VotingError.VkIcLengthMismatch]: 'Verification key IC length mismatch',
-    [VotingError.VkIcTooLarge]: 'Verification key IC vector too large',
-    [VotingError.TitleTooLong]: 'Proposal title too long',
-    [VotingError.NotDaoMember]: 'Not a member of this DAO',
-    [VotingError.EndTimeInvalid]: 'Invalid proposal end time',
-    [VotingError.NullifierUsed]: 'Vote already cast (nullifier used)',
-    [VotingError.VotingClosed]: 'Voting period has ended',
-    [VotingError.CommitmentRevokedAtCreation]: 'Commitment was revoked when proposal was created',
-    [VotingError.CommitmentRevokedDuringVoting]: 'Commitment revoked during voting period',
-    [VotingError.RootMismatch]: 'Merkle root does not match proposal snapshot',
-    [VotingError.RootNotInHistory]: 'Merkle root not in tree history',
-    [VotingError.RootPredatesProposal]: 'Root predates proposal creation',
-    [VotingError.VkChanged]: 'Verification key changed after proposal creation',
-    [VotingError.InvalidProof]: 'Invalid ZK proof',
-    [VotingError.VkNotSet]: 'Verification key not set for this DAO',
-    [VotingError.VkVersionMismatch]: 'VK version mismatch',
-    [VotingError.AlreadyInitialized]: 'Contract already initialized',
-    [VotingError.Unauthorized]: 'Unauthorized',
-    [VotingError.InvalidState]: 'Invalid contract state',
-    [VotingError.InvalidContentCid]: 'Invalid content CID',
-    [VotingError.OnlyAdminCanPropose]: 'Only admin can create proposals in this DAO',
-    [VotingError.InvalidG1Point]: 'Invalid G1 point (not on BN254 curve)',
-    [VotingError.RootPredatesRemoval]: 'Root predates member removal',
-    [VotingError.SignalNotInField]: 'Public signal exceeds field modulus',
-    [VotingError.InvalidNullifier]: 'Invalid nullifier (cannot be zero)',
+    [VotingError.NotAdmin]: "Only DAO admin can perform this action",
+    [VotingError.VkIcLengthMismatch]: "Verification key IC length mismatch",
+    [VotingError.VkIcTooLarge]: "Verification key IC vector too large",
+    [VotingError.TitleTooLong]: "Proposal title too long",
+    [VotingError.NotDaoMember]: "Not a member of this DAO",
+    [VotingError.EndTimeInvalid]: "Invalid proposal end time",
+    [VotingError.NullifierUsed]: "Vote already cast (nullifier used)",
+    [VotingError.VotingClosed]: "Voting period has ended",
+    [VotingError.CommitmentRevokedAtCreation]:
+      "Commitment was revoked when proposal was created",
+    [VotingError.CommitmentRevokedDuringVoting]:
+      "Commitment revoked during voting period",
+    [VotingError.RootMismatch]: "Merkle root does not match proposal snapshot",
+    [VotingError.RootNotInHistory]: "Merkle root not in tree history",
+    [VotingError.RootPredatesProposal]: "Root predates proposal creation",
+    [VotingError.VkChanged]: "Verification key changed after proposal creation",
+    [VotingError.InvalidProof]: "Invalid ZK proof",
+    [VotingError.VkNotSet]: "Verification key not set for this DAO",
+    [VotingError.VkVersionMismatch]: "VK version mismatch",
+    [VotingError.AlreadyInitialized]: "Contract already initialized",
+    [VotingError.Unauthorized]: "Unauthorized",
+    [VotingError.InvalidState]: "Invalid contract state",
+    [VotingError.InvalidContentCid]: "Invalid content CID",
+    [VotingError.OnlyAdminCanPropose]:
+      "Only admin can create proposals in this DAO",
+    [VotingError.InvalidG1Point]: "Invalid G1 point (not on BN254 curve)",
+    [VotingError.RootPredatesRemoval]: "Root predates member removal",
+    [VotingError.SignalNotInField]: "Public signal exceeds field modulus",
+    [VotingError.InvalidNullifier]: "Invalid nullifier (cannot be zero)",
   },
   Comments: {
-    [CommentsError.NotAdmin]: 'Only DAO admin can perform this action',
-    [CommentsError.NotDaoMember]: 'Not a member of this DAO',
-    [CommentsError.CommitmentRevoked]: 'Commitment has been revoked',
-    [CommentsError.RootNotInHistory]: 'Root not found in tree history',
-    [CommentsError.InvalidProof]: 'Invalid ZK proof',
-    [CommentsError.ContractNotSet]: 'Contract reference not set',
-    [CommentsError.AlreadyInitialized]: 'Contract already initialized',
-    [CommentsError.Unauthorized]: 'Unauthorized',
-    [CommentsError.CommentNotFound]: 'Comment not found',
-    [CommentsError.CommentDeleted]: 'Comment has been deleted',
-    [CommentsError.NotCommentOwner]: 'Not the comment owner',
-    [CommentsError.InvalidParentComment]: 'Invalid parent comment',
-    [CommentsError.CommentContentTooLong]: 'Comment content too long',
-    [CommentsError.ProposalNotFound]: 'Proposal not found',
-    [CommentsError.RootMismatch]: 'Root does not match proposal snapshot',
-    [CommentsError.RootPredatesProposal]: 'Root predates proposal',
-    [CommentsError.SignalNotInField]: 'Public signal exceeds field modulus',
-    [CommentsError.InvalidNullifier]: 'Invalid nullifier (cannot be zero)',
-    [CommentsError.RootPredatesRemoval]: 'Root predates member removal',
+    [CommentsError.NotAdmin]: "Only DAO admin can perform this action",
+    [CommentsError.NotDaoMember]: "Not a member of this DAO",
+    [CommentsError.CommitmentRevoked]: "Commitment has been revoked",
+    [CommentsError.RootNotInHistory]: "Root not found in tree history",
+    [CommentsError.InvalidProof]: "Invalid ZK proof",
+    [CommentsError.ContractNotSet]: "Contract reference not set",
+    [CommentsError.AlreadyInitialized]: "Contract already initialized",
+    [CommentsError.Unauthorized]: "Unauthorized",
+    [CommentsError.CommentNotFound]: "Comment not found",
+    [CommentsError.CommentDeleted]: "Comment has been deleted",
+    [CommentsError.NotCommentOwner]: "Not the comment owner",
+    [CommentsError.InvalidParentComment]: "Invalid parent comment",
+    [CommentsError.CommentContentTooLong]: "Comment content too long",
+    [CommentsError.ProposalNotFound]: "Proposal not found",
+    [CommentsError.RootMismatch]: "Root does not match proposal snapshot",
+    [CommentsError.RootPredatesProposal]: "Root predates proposal",
+    [CommentsError.SignalNotInField]: "Public signal exceeds field modulus",
+    [CommentsError.InvalidNullifier]: "Invalid nullifier (cannot be zero)",
+    [CommentsError.RootPredatesRemoval]: "Root predates member removal",
   },
 };
 

@@ -152,7 +152,9 @@ describe("ProposalCard", () => {
       // Note: The "Closed" text may still appear in button when hasMembership is true
       // but the destructive badge should not appear
       const badges = document.querySelectorAll('[class*="destructive"]');
-      const closedBadge = Array.from(badges).find(b => b.textContent === "Closed");
+      const closedBadge = Array.from(badges).find(
+        (b) => b.textContent === "Closed",
+      );
       expect(closedBadge).toBeUndefined();
     });
   });
@@ -162,7 +164,9 @@ describe("ProposalCard", () => {
       renderWithRouter(<ProposalCard {...defaultProps} />);
 
       // Progress bar should exist
-      const progressBars = document.querySelectorAll(".bg-green-500, .bg-red-500");
+      const progressBars = document.querySelectorAll(
+        ".bg-green-500, .bg-red-500",
+      );
       expect(progressBars.length).toBe(2);
     });
 
@@ -182,12 +186,16 @@ describe("ProposalCard", () => {
       renderWithRouter(<ProposalCard {...defaultProps} />);
 
       // Click the card
-      const card = screen.getByText("Test Proposal").closest("[class*='group/card']");
+      const card = screen
+        .getByText("Test Proposal")
+        .closest("[class*='group/card']");
       if (card) {
         fireEvent.click(card);
       }
 
-      expect(mockNavigate).toHaveBeenCalledWith(expect.stringContaining("/daos/"));
+      expect(mockNavigate).toHaveBeenCalledWith(
+        expect.stringContaining("/daos/"),
+      );
     });
 
     it("navigates on View button click", () => {
@@ -239,7 +247,9 @@ describe("ProposalCard", () => {
       };
       renderWithRouter(<ProposalCard {...props} />);
 
-      expect(screen.queryByRole("button", { name: /vote/i })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /vote/i }),
+      ).not.toBeInTheDocument();
     });
 
     it("disables Vote button when proposal is closed", () => {
@@ -291,7 +301,7 @@ describe("ProposalCard", () => {
 
       await waitFor(() => {
         expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining("/ipfs/QmTestCid123")
+          expect.stringContaining("/ipfs/QmTestCid123"),
         );
       });
     });
@@ -354,7 +364,7 @@ describe("ProposalCard", () => {
         () => {
           expect(callCount).toBeGreaterThanOrEqual(1);
         },
-        { timeout: 5000 }
+        { timeout: 5000 },
       );
     });
   });
@@ -363,7 +373,9 @@ describe("ProposalCard", () => {
     it("has clickable card for keyboard navigation", () => {
       renderWithRouter(<ProposalCard {...defaultProps} />);
 
-      const card = screen.getByText("Test Proposal").closest("[class*='cursor-pointer']");
+      const card = screen
+        .getByText("Test Proposal")
+        .closest("[class*='cursor-pointer']");
       expect(card).toBeTruthy();
     });
 

@@ -16,7 +16,11 @@ vi.mock("../lib/zkproof", () => ({
   generateVoteProof: vi.fn().mockResolvedValue({
     proof: {
       pi_a: ["1", "2", "1"],
-      pi_b: [["1", "2"], ["3", "4"], ["1", "0"]],
+      pi_b: [
+        ["1", "2"],
+        ["3", "4"],
+        ["1", "0"],
+      ],
       pi_c: ["5", "6", "1"],
     },
     publicSignals: ["1", "2", "3"],
@@ -88,7 +92,9 @@ describe("VoteModal", () => {
     render(<VoteModal {...defaultProps} voteMode="Fixed" />);
 
     expect(
-      screen.getByText(/Only members present when this proposal was created can vote/)
+      screen.getByText(
+        /Only members present when this proposal was created can vote/,
+      ),
     ).toBeInTheDocument();
   });
 
@@ -96,7 +102,9 @@ describe("VoteModal", () => {
     render(<VoteModal {...defaultProps} voteMode="Trailing" />);
 
     expect(
-      screen.queryByText(/Only members present when this proposal was created can vote/)
+      screen.queryByText(
+        /Only members present when this proposal was created can vote/,
+      ),
     ).not.toBeInTheDocument();
   });
 
@@ -128,7 +136,7 @@ describe("VoteModal", () => {
 
     // Get the X button specifically (sr-only "Close" span)
     const closeButtons = screen.getAllByRole("button");
-    const xButton = closeButtons.find(btn => btn.querySelector(".sr-only"));
+    const xButton = closeButtons.find((btn) => btn.querySelector(".sr-only"));
     if (xButton) {
       fireEvent.click(xButton);
     }
@@ -144,7 +152,9 @@ describe("VoteModal", () => {
     // Mocks resolve immediately, so we check for any progress/success state
     // indicating the vote process started
     await vi.waitFor(() => {
-      const progressOrSuccess = screen.queryByText(/Generating|Submitting|Vote Submitted/);
+      const progressOrSuccess = screen.queryByText(
+        /Generating|Submitting|Vote Submitted/,
+      );
       expect(progressOrSuccess).toBeInTheDocument();
     });
   });
@@ -157,7 +167,9 @@ describe("VoteModal", () => {
     // Mocks resolve immediately, so we check for any progress/success state
     // indicating the vote process started
     await vi.waitFor(() => {
-      const progressOrSuccess = screen.queryByText(/Generating|Submitting|Vote Submitted/);
+      const progressOrSuccess = screen.queryByText(
+        /Generating|Submitting|Vote Submitted/,
+      );
       expect(progressOrSuccess).toBeInTheDocument();
     });
   });
@@ -173,7 +185,9 @@ describe("VoteModal", () => {
     // - Success state (if it completed)
     // - Generating/Submitting state
     await vi.waitFor(() => {
-      const hasProgress = screen.queryByText(/Loading|Generating|Submitting|Vote Submitted/);
+      const hasProgress = screen.queryByText(
+        /Loading|Generating|Submitting|Vote Submitted/,
+      );
       expect(hasProgress).toBeInTheDocument();
     });
   });
@@ -191,7 +205,8 @@ describe("VoteModal", () => {
     });
 
     // Check the vote choice is "1" for Yes
-    const callArgs = (generateVoteProof as ReturnType<typeof vi.fn>).mock.calls[0];
+    const callArgs = (generateVoteProof as ReturnType<typeof vi.fn>).mock
+      .calls[0];
     expect(callArgs[0].voteChoice).toBe("1");
   });
 
@@ -206,7 +221,8 @@ describe("VoteModal", () => {
       expect(generateVoteProof).toHaveBeenCalled();
     });
 
-    const callArgs = (generateVoteProof as ReturnType<typeof vi.fn>).mock.calls[0];
+    const callArgs = (generateVoteProof as ReturnType<typeof vi.fn>).mock
+      .calls[0];
     expect(callArgs[0].root).toBe("12345");
   });
 });
@@ -245,7 +261,8 @@ describe("VoteModal error handling", () => {
   it("shows double-vote error message", async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: false,
-      json: () => Promise.resolve({ error: "You have already voted on this proposal" }),
+      json: () =>
+        Promise.resolve({ error: "You have already voted on this proposal" }),
     });
 
     render(<VoteModal {...defaultProps} />);
@@ -254,7 +271,7 @@ describe("VoteModal error handling", () => {
 
     // Should show specific double-vote error
     expect(
-      await screen.findByText(/already voted on this proposal/)
+      await screen.findByText(/already voted on this proposal/),
     ).toBeInTheDocument();
   });
 
@@ -277,7 +294,7 @@ describe("VoteModal error handling", () => {
     expect(closeButtons.length).toBeGreaterThanOrEqual(1);
     // Find the visible one (not the X icon with sr-only text)
     const visibleCloseButton = closeButtons.find(
-      btn => btn.textContent === "Close"
+      (btn) => btn.textContent === "Close",
     );
     expect(visibleCloseButton).toBeInTheDocument();
   });
@@ -323,7 +340,7 @@ describe("VoteModal success state", () => {
     fireEvent.click(screen.getByText("Vote Yes"));
 
     expect(
-      await screen.findByText(/Your anonymous vote has been recorded/)
+      await screen.findByText(/Your anonymous vote has been recorded/),
     ).toBeInTheDocument();
   });
 });

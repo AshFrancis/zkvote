@@ -10,8 +10,18 @@ import { Badge, LoadingSpinner } from "./ui";
 import { Button } from "./ui/Button";
 import { Card, CardContent } from "./ui/Card";
 import {
-  Shield, Users, Lock, Unlock, FileText, CheckCircle,
-  PlusCircle, Home, Settings, Globe, ChevronDown, ChevronUp,
+  Shield,
+  Users,
+  Lock,
+  Unlock,
+  FileText,
+  CheckCircle,
+  PlusCircle,
+  Home,
+  Settings,
+  Globe,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 // Custom social icons
@@ -33,7 +43,12 @@ const GitHubIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export type DAOTab = 'info' | 'proposals' | 'members' | 'create-proposal' | 'settings';
+export type DAOTab =
+  | "info"
+  | "proposals"
+  | "members"
+  | "create-proposal"
+  | "settings";
 
 export interface DAOInfo {
   id: number;
@@ -49,14 +64,14 @@ export interface DAOInfo {
 }
 
 interface SocialLinksProps {
-  links: DAOMetadata['links'];
-  variant: 'cover' | 'standalone';
+  links: DAOMetadata["links"];
+  variant: "cover" | "standalone";
 }
 
 function SocialLinks({ links, variant }: SocialLinksProps) {
   if (!links || !Object.values(links).some(Boolean)) return null;
 
-  const isCover = variant === 'cover';
+  const isCover = variant === "cover";
   const containerClass = isCover
     ? "absolute top-3 right-3 flex items-center gap-1"
     : "flex items-center gap-2 mb-4";
@@ -68,22 +83,46 @@ function SocialLinks({ links, variant }: SocialLinksProps) {
   return (
     <div className={containerClass}>
       {links.website && (
-        <a href={links.website} target="_blank" rel="noopener noreferrer" className={linkClass} title="Website">
+        <a
+          href={links.website}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={linkClass}
+          title="Website"
+        >
           <Globe className={iconSize} />
         </a>
       )}
       {links.twitter && (
-        <a href={getTwitterUrl(links.twitter)} target="_blank" rel="noopener noreferrer" className={linkClass} title="X (Twitter)">
+        <a
+          href={getTwitterUrl(links.twitter)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={linkClass}
+          title="X (Twitter)"
+        >
           <TwitterIcon className={iconSize} />
         </a>
       )}
       {links.linkedin && (
-        <a href={links.linkedin} target="_blank" rel="noopener noreferrer" className={linkClass} title="LinkedIn">
+        <a
+          href={links.linkedin}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={linkClass}
+          title="LinkedIn"
+        >
           <LinkedInIcon className={iconSize} />
         </a>
       )}
       {links.github && (
-        <a href={links.github} target="_blank" rel="noopener noreferrer" className={linkClass} title="GitHub">
+        <a
+          href={links.github}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={linkClass}
+          title="GitHub"
+        >
           <GitHubIcon className={iconSize} />
         </a>
       )}
@@ -99,19 +138,27 @@ interface RegistrationButtonProps {
   registrationStatus: string | null;
   publicKey: string | null;
   onRegister: () => void;
-  variant: 'button' | 'menu-item';
+  variant: "button" | "menu-item";
 }
 
 function RegistrationButton({
-  isRegistered, hasMembership, hasUnregisteredCredentials,
-  isRegistering, registrationStatus, publicKey, onRegister, variant,
+  isRegistered,
+  hasMembership,
+  hasUnregisteredCredentials,
+  isRegistering,
+  registrationStatus,
+  publicKey,
+  onRegister,
+  variant,
 }: RegistrationButtonProps) {
   const shouldShow = hasMembership && !isRegistered && publicKey;
   if (!shouldShow) return null;
 
-  const buttonText = hasUnregisteredCredentials ? "Complete Registration" : "Register to Vote";
+  const buttonText = hasUnregisteredCredentials
+    ? "Complete Registration"
+    : "Register to Vote";
 
-  if (variant === 'menu-item') {
+  if (variant === "menu-item") {
     return (
       <>
         <div className="border-t my-2" />
@@ -165,14 +212,21 @@ interface JoinButtonProps {
   publicKey: string | null;
   joining: boolean;
   onJoin: () => void;
-  variant: 'button' | 'menu-item';
+  variant: "button" | "menu-item";
 }
 
-function JoinButton({ hasMembership, membershipOpen, publicKey, joining, onJoin, variant }: JoinButtonProps) {
+function JoinButton({
+  hasMembership,
+  membershipOpen,
+  publicKey,
+  joining,
+  onJoin,
+  variant,
+}: JoinButtonProps) {
   const shouldShow = !hasMembership && membershipOpen && publicKey;
   if (!shouldShow) return null;
 
-  if (variant === 'menu-item') {
+  if (variant === "menu-item") {
     return (
       <>
         <div className="border-t my-2" />
@@ -181,7 +235,11 @@ function JoinButton({ hasMembership, membershipOpen, publicKey, joining, onJoin,
           disabled={joining}
           className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-muted transition-colors"
         >
-          {joining ? <LoadingSpinner size="sm" color="white" /> : <Users className="w-4 h-4" />}
+          {joining ? (
+            <LoadingSpinner size="sm" color="white" />
+          ) : (
+            <Users className="w-4 h-4" />
+          )}
           {joining ? "Joining..." : "Join DAO"}
         </button>
       </>
@@ -189,7 +247,13 @@ function JoinButton({ hasMembership, membershipOpen, publicKey, joining, onJoin,
   }
 
   return (
-    <Button variant="outline" onClick={onJoin} disabled={joining} size="sm" className="gap-2">
+    <Button
+      variant="outline"
+      onClick={onJoin}
+      disabled={joining}
+      size="sm"
+      className="gap-2"
+    >
       {joining && <LoadingSpinner size="sm" color="white" />}
       {joining ? "Joining..." : "Join DAO"}
     </Button>
@@ -204,30 +268,36 @@ interface NavButtonsProps {
   navigateToTab: (tab: DAOTab) => void;
 }
 
-function NavButtons({ dao, activeTab, publicKey, hasKit, navigateToTab }: NavButtonsProps) {
+function NavButtons({
+  dao,
+  activeTab,
+  publicKey,
+  hasKit,
+  navigateToTab,
+}: NavButtonsProps) {
   return (
     <>
       <Button
-        variant={activeTab === 'proposals' ? 'secondary' : 'outline'}
+        variant={activeTab === "proposals" ? "secondary" : "outline"}
         size="sm"
-        onClick={() => navigateToTab('proposals')}
+        onClick={() => navigateToTab("proposals")}
         className="gap-2"
       >
         <Home className="w-4 h-4" />
         Overview
       </Button>
       <Button
-        variant={activeTab === 'info' ? 'secondary' : 'outline'}
+        variant={activeTab === "info" ? "secondary" : "outline"}
         size="sm"
-        onClick={() => navigateToTab('info')}
+        onClick={() => navigateToTab("info")}
         className="gap-2"
       >
         <FileText className="w-4 h-4" /> Info
       </Button>
       <Button
-        variant={activeTab === 'members' ? 'secondary' : 'outline'}
+        variant={activeTab === "members" ? "secondary" : "outline"}
         size="sm"
-        onClick={() => navigateToTab('members')}
+        onClick={() => navigateToTab("members")}
         className="gap-2"
       >
         <Users className="w-4 h-4" />
@@ -235,26 +305,27 @@ function NavButtons({ dao, activeTab, publicKey, hasKit, navigateToTab }: NavBut
       </Button>
       {dao.isAdmin && publicKey && hasKit && (
         <Button
-          variant={activeTab === 'settings' ? 'secondary' : 'outline'}
+          variant={activeTab === "settings" ? "secondary" : "outline"}
           size="sm"
-          onClick={() => navigateToTab('settings')}
+          onClick={() => navigateToTab("settings")}
           className="gap-2"
         >
           <Settings className="w-4 h-4" />
           Settings
         </Button>
       )}
-      {(dao.isAdmin || (dao.hasMembership && dao.membersCanPropose)) && dao.vkSet && (
-        <Button
-          variant={activeTab === 'create-proposal' ? 'secondary' : 'outline'}
-          onClick={() => navigateToTab('create-proposal')}
-          size="sm"
-          className="gap-2"
-        >
-          <PlusCircle className="w-4 h-4" />
-          Add Proposal
-        </Button>
-      )}
+      {(dao.isAdmin || (dao.hasMembership && dao.membersCanPropose)) &&
+        dao.vkSet && (
+          <Button
+            variant={activeTab === "create-proposal" ? "secondary" : "outline"}
+            onClick={() => navigateToTab("create-proposal")}
+            size="sm"
+            className="gap-2"
+          >
+            <PlusCircle className="w-4 h-4" />
+            Add Proposal
+          </Button>
+        )}
     </>
   );
 }
@@ -279,9 +350,18 @@ export interface DAOHeaderProps {
 }
 
 export default function DAOHeader({
-  dao, metadata, activeTab, publicKey, hasKit,
-  joining, onJoin,
-  isRegistered, hasUnregisteredCredentials, isRegistering, registrationStatus, onRegister,
+  dao,
+  metadata,
+  activeTab,
+  publicKey,
+  hasKit,
+  joining,
+  onJoin,
+  isRegistered,
+  hasUnregisteredCredentials,
+  isRegistering,
+  registrationStatus,
+  onRegister,
   navigateToTab,
 }: DAOHeaderProps) {
   const [showDescription, setShowDescription] = useState(false);
@@ -332,7 +412,9 @@ export default function DAOHeader({
         )}
 
         {/* Header Info with Navigation - flex row layout on 2xl+ */}
-        <div className={`flex flex-col 2xl:flex-row 2xl:items-start 2xl:justify-between gap-4 mb-4 ${metadata?.coverImageCid && metadata?.profileImageCid ? 'mt-14' : ''}`}>
+        <div
+          className={`flex flex-col 2xl:flex-row 2xl:items-start 2xl:justify-between gap-4 mb-4 ${metadata?.coverImageCid && metadata?.profileImageCid ? "mt-14" : ""}`}
+        >
           {/* Left: DAO name, badges, and ID */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 flex-wrap mb-2">
@@ -340,45 +422,76 @@ export default function DAOHeader({
                 {dao.name}
               </h2>
               {dao.isAdmin ? (
-                <Badge variant="blue" className="gap-1"><Shield className="w-3 h-3" /> Admin</Badge>
+                <Badge variant="blue" className="gap-1">
+                  <Shield className="w-3 h-3" /> Admin
+                </Badge>
               ) : dao.hasMembership ? (
-                <Badge variant="success" className="gap-1"><Users className="w-3 h-3" /> Member</Badge>
+                <Badge variant="success" className="gap-1">
+                  <Users className="w-3 h-3" /> Member
+                </Badge>
               ) : (
-                <Badge variant="gray" className="gap-1"><Users className="w-3 h-3" /> Non-member</Badge>
+                <Badge variant="gray" className="gap-1">
+                  <Users className="w-3 h-3" /> Non-member
+                </Badge>
               )}
               {dao.membershipOpen ? (
-                <Badge variant="success" className="gap-1"><Unlock className="w-3 h-3" /> Open</Badge>
+                <Badge variant="success" className="gap-1">
+                  <Unlock className="w-3 h-3" /> Open
+                </Badge>
               ) : (
-                <Badge variant="secondary" className="gap-1"><Lock className="w-3 h-3" /> Closed</Badge>
+                <Badge variant="secondary" className="gap-1">
+                  <Lock className="w-3 h-3" /> Closed
+                </Badge>
               )}
             </div>
             <p className="text-sm text-muted-foreground flex items-center gap-2">
-              <span className="font-mono text-xs bg-muted/50 px-1.5 py-0.5 rounded">ID: {dao.id}</span>
+              <span className="font-mono text-xs bg-muted/50 px-1.5 py-0.5 rounded">
+                ID: {dao.id}
+              </span>
               <span>•</span>
-              <span>Created by {dao.creator?.slice(0, 4) ?? '...'}...{dao.creator?.slice(-4) ?? '...'}</span>
+              <span>
+                Created by {dao.creator?.slice(0, 4) ?? "..."}...
+                {dao.creator?.slice(-4) ?? "..."}
+              </span>
             </p>
           </div>
 
           {/* Right: Navigation Menu (2xl+ only - floated right of header) */}
           <div className="shrink-0 hidden 2xl:block">
             <div className="flex flex-wrap items-center gap-2">
-              <NavButtons dao={dao} activeTab={activeTab} publicKey={publicKey} hasKit={hasKit} navigateToTab={navigateToTab} />
+              <NavButtons
+                dao={dao}
+                activeTab={activeTab}
+                publicKey={publicKey}
+                hasKit={hasKit}
+                navigateToTab={navigateToTab}
+              />
               <JoinButton
-                hasMembership={dao.hasMembership} membershipOpen={dao.membershipOpen}
-                publicKey={publicKey} joining={joining} onJoin={onJoin} variant="button"
+                hasMembership={dao.hasMembership}
+                membershipOpen={dao.membershipOpen}
+                publicKey={publicKey}
+                joining={joining}
+                onJoin={onJoin}
+                variant="button"
               />
               <RegistrationButton
-                isRegistered={isRegistered} hasMembership={dao.hasMembership}
+                isRegistered={isRegistered}
+                hasMembership={dao.hasMembership}
                 hasUnregisteredCredentials={hasUnregisteredCredentials}
-                isRegistering={isRegistering} registrationStatus={registrationStatus}
-                publicKey={publicKey} onRegister={onRegister} variant="button"
+                isRegistering={isRegistering}
+                registrationStatus={registrationStatus}
+                publicKey={publicKey}
+                onRegister={onRegister}
+                variant="button"
               />
             </div>
           </div>
         </div>
 
         {/* Social Links - shown below header when no cover image */}
-        {!metadata?.coverImageCid && <SocialLinks links={metadata?.links} variant="standalone" />}
+        {!metadata?.coverImageCid && (
+          <SocialLinks links={metadata?.links} variant="standalone" />
+        )}
 
         {/* Mobile Navigation Menu - dropdown for < 1024px */}
         <div className="lg:hidden mb-4">
@@ -389,63 +502,112 @@ export default function DAOHeader({
             className="w-full justify-between"
           >
             <span className="flex items-center gap-2">
-              {activeTab === 'proposals' && <><Home className="w-4 h-4" /> Overview</>}
-              {activeTab === 'info' && <><FileText className="w-4 h-4" /> Info</>}
-              {activeTab === 'members' && <><Users className="w-4 h-4" /> Members</>}
-              {activeTab === 'settings' && <><Settings className="w-4 h-4" /> Settings</>}
-              {activeTab === 'create-proposal' && <><PlusCircle className="w-4 h-4" /> Add Proposal</>}
+              {activeTab === "proposals" && (
+                <>
+                  <Home className="w-4 h-4" /> Overview
+                </>
+              )}
+              {activeTab === "info" && (
+                <>
+                  <FileText className="w-4 h-4" /> Info
+                </>
+              )}
+              {activeTab === "members" && (
+                <>
+                  <Users className="w-4 h-4" /> Members
+                </>
+              )}
+              {activeTab === "settings" && (
+                <>
+                  <Settings className="w-4 h-4" /> Settings
+                </>
+              )}
+              {activeTab === "create-proposal" && (
+                <>
+                  <PlusCircle className="w-4 h-4" /> Add Proposal
+                </>
+              )}
             </span>
-            <ChevronDown className={`w-4 h-4 transition-transform ${mobileMenuOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown
+              className={`w-4 h-4 transition-transform ${mobileMenuOpen ? "rotate-180" : ""}`}
+            />
           </Button>
           {mobileMenuOpen && (
             <div className="mt-2 w-full rounded-lg border bg-background shadow-lg">
               <div className="p-2 space-y-1">
                 <button
-                  onClick={() => { navigateToTab('proposals'); setMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${activeTab === 'proposals' ? 'bg-secondary text-secondary-foreground' : 'hover:bg-muted'}`}
+                  onClick={() => {
+                    navigateToTab("proposals");
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${activeTab === "proposals" ? "bg-secondary text-secondary-foreground" : "hover:bg-muted"}`}
                 >
                   <Home className="w-4 h-4" /> Overview
                 </button>
                 <button
-                  onClick={() => { navigateToTab('info'); setMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${activeTab === 'info' ? 'bg-secondary text-secondary-foreground' : 'hover:bg-muted'}`}
+                  onClick={() => {
+                    navigateToTab("info");
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${activeTab === "info" ? "bg-secondary text-secondary-foreground" : "hover:bg-muted"}`}
                 >
                   <FileText className="w-4 h-4" /> Info
                 </button>
                 <button
-                  onClick={() => { navigateToTab('members'); setMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${activeTab === 'members' ? 'bg-secondary text-secondary-foreground' : 'hover:bg-muted'}`}
+                  onClick={() => {
+                    navigateToTab("members");
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${activeTab === "members" ? "bg-secondary text-secondary-foreground" : "hover:bg-muted"}`}
                 >
                   <Users className="w-4 h-4" /> Members
                 </button>
                 {dao.isAdmin && publicKey && hasKit && (
                   <button
-                    onClick={() => { navigateToTab('settings'); setMobileMenuOpen(false); }}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${activeTab === 'settings' ? 'bg-secondary text-secondary-foreground' : 'hover:bg-muted'}`}
+                    onClick={() => {
+                      navigateToTab("settings");
+                      setMobileMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${activeTab === "settings" ? "bg-secondary text-secondary-foreground" : "hover:bg-muted"}`}
                   >
                     <Settings className="w-4 h-4" /> Settings
                   </button>
                 )}
-                {(dao.isAdmin || (dao.hasMembership && dao.membersCanPropose)) && dao.vkSet && (
-                  <button
-                    onClick={() => { navigateToTab('create-proposal'); setMobileMenuOpen(false); }}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${activeTab === 'create-proposal' ? 'bg-secondary text-secondary-foreground' : 'hover:bg-muted'}`}
-                  >
-                    <PlusCircle className="w-4 h-4" /> Add Proposal
-                  </button>
-                )}
+                {(dao.isAdmin ||
+                  (dao.hasMembership && dao.membersCanPropose)) &&
+                  dao.vkSet && (
+                    <button
+                      onClick={() => {
+                        navigateToTab("create-proposal");
+                        setMobileMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${activeTab === "create-proposal" ? "bg-secondary text-secondary-foreground" : "hover:bg-muted"}`}
+                    >
+                      <PlusCircle className="w-4 h-4" /> Add Proposal
+                    </button>
+                  )}
                 <JoinButton
-                  hasMembership={dao.hasMembership} membershipOpen={dao.membershipOpen}
-                  publicKey={publicKey} joining={joining}
-                  onJoin={() => { onJoin(); setMobileMenuOpen(false); }}
+                  hasMembership={dao.hasMembership}
+                  membershipOpen={dao.membershipOpen}
+                  publicKey={publicKey}
+                  joining={joining}
+                  onJoin={() => {
+                    onJoin();
+                    setMobileMenuOpen(false);
+                  }}
                   variant="menu-item"
                 />
                 <RegistrationButton
-                  isRegistered={isRegistered} hasMembership={dao.hasMembership}
+                  isRegistered={isRegistered}
+                  hasMembership={dao.hasMembership}
                   hasUnregisteredCredentials={hasUnregisteredCredentials}
-                  isRegistering={isRegistering} registrationStatus={registrationStatus}
+                  isRegistering={isRegistering}
+                  registrationStatus={registrationStatus}
                   publicKey={publicKey}
-                  onRegister={() => { onRegister(); setMobileMenuOpen(false); }}
+                  onRegister={() => {
+                    onRegister();
+                    setMobileMenuOpen(false);
+                  }}
                   variant="menu-item"
                 />
               </div>
@@ -456,16 +618,30 @@ export default function DAOHeader({
         {/* Inline Navigation Menu - shown for lg to 2xl (1024px - 1536px), above description */}
         <div className="hidden lg:block 2xl:hidden mb-4">
           <div className="flex flex-wrap items-center gap-2">
-            <NavButtons dao={dao} activeTab={activeTab} publicKey={publicKey} hasKit={hasKit} navigateToTab={navigateToTab} />
+            <NavButtons
+              dao={dao}
+              activeTab={activeTab}
+              publicKey={publicKey}
+              hasKit={hasKit}
+              navigateToTab={navigateToTab}
+            />
             <JoinButton
-              hasMembership={dao.hasMembership} membershipOpen={dao.membershipOpen}
-              publicKey={publicKey} joining={joining} onJoin={onJoin} variant="button"
+              hasMembership={dao.hasMembership}
+              membershipOpen={dao.membershipOpen}
+              publicKey={publicKey}
+              joining={joining}
+              onJoin={onJoin}
+              variant="button"
             />
             <RegistrationButton
-              isRegistered={isRegistered} hasMembership={dao.hasMembership}
+              isRegistered={isRegistered}
+              hasMembership={dao.hasMembership}
               hasUnregisteredCredentials={hasUnregisteredCredentials}
-              isRegistering={isRegistering} registrationStatus={registrationStatus}
-              publicKey={publicKey} onRegister={onRegister} variant="button"
+              isRegistering={isRegistering}
+              registrationStatus={registrationStatus}
+              publicKey={publicKey}
+              onRegister={onRegister}
+              variant="button"
             />
           </div>
         </div>
@@ -495,7 +671,6 @@ export default function DAOHeader({
             )}
           </div>
         )}
-
       </CardContent>
     </Card>
   );

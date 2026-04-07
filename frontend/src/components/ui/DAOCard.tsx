@@ -1,4 +1,4 @@
-import { Lock, Unlock } from 'lucide-react';
+import { Lock, Unlock } from "lucide-react";
 
 interface DAOCardProps {
   id: number;
@@ -9,12 +9,12 @@ interface DAOCardProps {
   profileUrl: string | null;
   hasCover: boolean;
   onClick: () => void;
-  role?: 'admin' | 'member';
+  role?: "admin" | "member";
 }
 
 // Default backgrounds for DAOs without cover images (light/dark mode)
-const DEFAULT_BG_DARK = '/empty-bg-dark.png';
-const DEFAULT_BG_LIGHT = '/empty-bg-light.png';
+const DEFAULT_BG_DARK = "/empty-bg-dark.png";
+const DEFAULT_BG_LIGHT = "/empty-bg-light.png";
 
 export default function DAOCard({
   id,
@@ -32,8 +32,8 @@ export default function DAOCard({
       onClick={onClick}
       className={`group text-left rounded-xl overflow-hidden border transition-all duration-200 ease-out hover:shadow-lg ${
         isSelected
-          ? 'border-primary ring-2 ring-primary'
-          : 'border-border hover:border-primary/50'
+          ? "border-primary ring-2 ring-primary"
+          : "border-border hover:border-primary/50"
       }`}
     >
       {/* Cover image area */}
@@ -80,9 +80,9 @@ export default function DAOCard({
             {role && (
               <span
                 className={`inline-flex items-center h-5 px-1.5 text-[10px] font-medium rounded-full ${
-                  role === 'admin'
-                    ? 'bg-blue-500/90 dark:bg-blue-500/80 text-white'
-                    : 'bg-purple-500/90 dark:bg-purple-500/80 text-white'
+                  role === "admin"
+                    ? "bg-blue-500/90 dark:bg-blue-500/80 text-white"
+                    : "bg-purple-500/90 dark:bg-purple-500/80 text-white"
                 }`}
               >
                 {role.charAt(0).toUpperCase() + role.slice(1)}
@@ -102,14 +102,16 @@ export default function DAOCard({
               src={profileUrl}
               alt={`${name} profile`}
               className={`w-16 h-16 rounded-full border-2 object-cover mb-3 ${
-                hasCover ? 'border-white/50' : 'border-black/30 dark:border-white/50'
+                hasCover
+                  ? "border-white/50"
+                  : "border-black/30 dark:border-white/50"
               }`}
             />
           )}
           {/* Name - centered, wrapped */}
           <h3
             className={`w-full text-base font-bold text-center leading-tight break-words ${
-              hasCover ? 'text-white' : 'text-gray-900 dark:text-white'
+              hasCover ? "text-white" : "text-gray-900 dark:text-white"
             }`}
           >
             {name}

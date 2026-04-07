@@ -1,17 +1,17 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from "react";
 
-type Theme = 'light' | 'dark';
+type Theme = "light" | "dark";
 
 // Get theme from DOM
 function getThemeFromDOM(): Theme {
-  return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+  return document.documentElement.classList.contains("dark") ? "dark" : "light";
 }
 
 // Subscribe to DOM class changes
 function subscribeToTheme(callback: () => void) {
   const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
-      if (mutation.attributeName === 'class') {
+      if (mutation.attributeName === "class") {
         callback();
       }
     }
@@ -27,32 +27,35 @@ export function useTheme() {
   const theme = useSyncExternalStore(
     subscribeToTheme,
     getThemeFromDOM,
-    () => 'light' as Theme // Server fallback
+    () => "light" as Theme, // Server fallback
   );
 
   // Initialize theme on first load
   useEffect(() => {
-    const stored = localStorage.getItem('theme') as Theme | null;
+    const stored = localStorage.getItem("theme") as Theme | null;
     const root = document.documentElement;
 
-    if (stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      root.classList.add('dark');
+    if (
+      stored === "dark" ||
+      (!stored && window.matchMedia("(prefers-color-scheme: dark)").matches)
+    ) {
+      root.classList.add("dark");
     } else {
-      root.classList.remove('dark');
+      root.classList.remove("dark");
     }
   }, []);
 
   const toggleTheme = () => {
     const root = document.documentElement;
-    const newTheme = theme === 'light' ? 'dark' : 'light';
+    const newTheme = theme === "light" ? "dark" : "light";
 
-    if (newTheme === 'dark') {
-      root.classList.add('dark');
+    if (newTheme === "dark") {
+      root.classList.add("dark");
     } else {
-      root.classList.remove('dark');
+      root.classList.remove("dark");
     }
 
-    localStorage.setItem('theme', newTheme);
+    localStorage.setItem("theme", newTheme);
   };
 
   return { theme, toggleTheme };

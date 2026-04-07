@@ -25,9 +25,7 @@ export default function VoteResults({ yesVotes, noVotes }: VoteResultsProps) {
             {noVotes} No
           </span>
         </div>
-        <span className="text-muted-foreground">
-          {totalVotes} votes total
-        </span>
+        <span className="text-muted-foreground">{totalVotes} votes total</span>
       </div>
 
       <div className="h-3 w-full rounded-full bg-secondary overflow-hidden flex">

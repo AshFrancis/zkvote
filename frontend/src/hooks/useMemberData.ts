@@ -80,40 +80,43 @@ export function useMemberData({
   const [adminAddress, setAdminAddress] = useState<string>("");
   const [encryptionKey, setEncryptionKey] = useState<Uint8Array | null>(null);
   const [memberAliases, setMemberAliases] = useState<Map<string, string>>(
-    new Map()
+    new Map(),
   );
-  const [encryptedAliases, setEncryptedAliases] = useState<
-    Map<string, string>
-  >(new Map());
+  const [encryptedAliases, setEncryptedAliases] = useState<Map<string, string>>(
+    new Map(),
+  );
 
   // Load encrypted aliases from contract
-  const loadEncryptedAliases = useCallback(async (memberList: Member[]) => {
-    if (memberList.length === 0) return;
+  const loadEncryptedAliases = useCallback(
+    async (memberList: Member[]) => {
+      if (memberList.length === 0) return;
 
-    try {
-      const membershipSbt = getReadOnlyMembershipSbt();
-      const encrypted = new Map<string, string>();
+      try {
+        const membershipSbt = getReadOnlyMembershipSbt();
+        const encrypted = new Map<string, string>();
 
-      for (const member of memberList) {
-        try {
-          const encryptedAlias = await membershipSbt.get_alias({
-            dao_id: BigInt(daoId),
-            member: member.address,
-          });
+        for (const member of memberList) {
+          try {
+            const encryptedAlias = await membershipSbt.get_alias({
+              dao_id: BigInt(daoId),
+              member: member.address,
+            });
 
-          if (encryptedAlias.result) {
-            encrypted.set(member.address, encryptedAlias.result);
+            if (encryptedAlias.result) {
+              encrypted.set(member.address, encryptedAlias.result);
+            }
+          } catch {
+            // Alias may not exist for this member
           }
-        } catch {
-          // Alias may not exist for this member
         }
-      }
 
-      setEncryptedAliases(encrypted);
-    } catch (err) {
-      console.error("Failed to load encrypted aliases:", err);
-    }
-  }, [daoId]);
+        setEncryptedAliases(encrypted);
+      } catch (err) {
+        console.error("Failed to load encrypted aliases:", err);
+      }
+    },
+    [daoId],
+  );
 
   // Decrypt aliases using encryption key
   const decryptAliases = useCallback(
@@ -131,7 +134,7 @@ export function useMemberData({
 
       setMemberAliases(decrypted);
     },
-    []
+    [],
   );
 
   // Load members from contract
@@ -187,7 +190,7 @@ export function useMemberData({
         setError("Failed to load members from contract");
       }
     },
-    [daoId, membersCacheKey, loadEncryptedAliases]
+    [daoId, membersCacheKey, loadEncryptedAliases],
   );
 
   // Load tree info and DAO data
@@ -293,7 +296,7 @@ export function useMemberData({
         JSON.stringify({
           treeInfo: freshTreeInfo,
           adminAddress: adminAddr,
-        })
+        }),
       );
 
       await loadMembers(adminAddr);
@@ -303,7 +306,14 @@ export function useMemberData({
     } finally {
       setLoading(false);
     }
-  }, [daoId, publicKey, treeCacheKey, membersCacheKey, loadMembers, loadEncryptedAliases]);
+  }, [
+    daoId,
+    publicKey,
+    treeCacheKey,
+    membersCacheKey,
+    loadMembers,
+    loadEncryptedAliases,
+  ]);
 
   // Unlock encryption by deriving key from signature
   const unlockEncryption = useCallback(async (): Promise<Uint8Array | null> => {
@@ -328,7 +338,7 @@ export function useMemberData({
       if (!encryptionKey) return null;
       return encryptAlias(alias, encryptionKey);
     },
-    [encryptionKey]
+    [encryptionKey],
   );
 
   // Initial load

@@ -22,14 +22,19 @@ const state: RelayerState = {
 type ConnectionListener = (connected: boolean) => void;
 const listeners: Set<ConnectionListener> = new Set();
 
-export function subscribeToRelayerStatus(listener: ConnectionListener): () => void {
+export function subscribeToRelayerStatus(
+  listener: ConnectionListener,
+): () => void {
   listeners.add(listener);
   // Immediately notify of current state
   listener(state.connected);
   return () => listeners.delete(listener);
 }
 
-export function getRelayerStatus(): { connected: boolean; backoffRemaining: number } {
+export function getRelayerStatus(): {
+  connected: boolean;
+  backoffRemaining: number;
+} {
   const now = Date.now();
   return {
     connected: state.connected,
@@ -57,7 +62,10 @@ function markFailure() {
   state.lastChecked = Date.now();
 
   // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
-  const backoffMs = Math.min(1000 * Math.pow(2, state.consecutiveFailures - 1), 30000);
+  const backoffMs = Math.min(
+    1000 * Math.pow(2, state.consecutiveFailures - 1),
+    30000,
+  );
   state.backoffUntil = Date.now() + backoffMs;
 
   // After 3 consecutive failures, mark as disconnected
@@ -82,16 +90,22 @@ export interface FetchOptions extends RequestInit {
  */
 export async function relayerFetch(
   endpoint: string,
-  options: FetchOptions = {}
+  options: FetchOptions = {},
 ): Promise<Response> {
   const { maxRetries = 3, skipBackoff = false, ...fetchOptions } = options;
-  const url = endpoint.startsWith("http") ? endpoint : `${RELAYER_URL}${endpoint}`;
+  const url = endpoint.startsWith("http")
+    ? endpoint
+    : `${RELAYER_URL}${endpoint}`;
 
   // Check if we're in backoff period
   if (!skipBackoff && isInBackoff()) {
     const error = new Error("Relayer temporarily unavailable (backing off)");
-    (error as Error & { isBackoff: boolean; isRateLimited: boolean }).isBackoff = true;
-    (error as Error & { isBackoff: boolean; isRateLimited: boolean }).isRateLimited = false;
+    (
+      error as Error & { isBackoff: boolean; isRateLimited: boolean }
+    ).isBackoff = true;
+    (
+      error as Error & { isBackoff: boolean; isRateLimited: boolean }
+    ).isRateLimited = false;
     throw error;
   }
 
@@ -214,7 +228,7 @@ export async function notifyEvent(
   daoId: number,
   type: EventType,
   txHash: string,
-  data?: Record<string, unknown>
+  data?: Record<string, unknown>,
 ): Promise<void> {
   try {
     await relayerFetch("/events/notify", {

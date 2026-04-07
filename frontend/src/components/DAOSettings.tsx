@@ -4,7 +4,13 @@ import { initializeContractClients } from "../lib/contracts";
 import { extractTxHash } from "../lib/utils";
 import { notifyEvent } from "../lib/api";
 import { Button } from "./ui/Button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/Card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "./ui/Card";
 // LoadingSpinner is imported but currently unused (may be used for future loading states)
 import { ConfirmModal } from "./ui/ConfirmModal";
 import DAOProfileEditor from "./DAOProfileEditor";
@@ -61,7 +67,9 @@ export default function DAOSettings({
       // Notify relayer of membership mode change
       const txHash = extractTxHash(result);
       if (txHash) {
-        notifyEvent(daoId, "membership_mode_changed", txHash, { membershipOpen: newValue });
+        notifyEvent(daoId, "membership_mode_changed", txHash, {
+          membershipOpen: newValue,
+        });
       }
 
       onSettingsChanged();
@@ -95,7 +103,9 @@ export default function DAOSettings({
       // Notify relayer of proposal mode change
       const txHash = extractTxHash(result);
       if (txHash) {
-        notifyEvent(daoId, "proposal_mode_changed", txHash, { membersCanPropose: newValue });
+        notifyEvent(daoId, "proposal_mode_changed", txHash, {
+          membersCanPropose: newValue,
+        });
       }
 
       onSettingsChanged();
@@ -139,7 +149,12 @@ export default function DAOSettings({
             <Button
               variant={membershipOpen ? "destructive" : "default"}
               size="sm"
-              onClick={() => setConfirmModal({ type: "membership", newValue: !membershipOpen })}
+              onClick={() =>
+                setConfirmModal({
+                  type: "membership",
+                  newValue: !membershipOpen,
+                })
+              }
               disabled={isTogglingMembership}
             >
               {isTogglingMembership ? (
@@ -170,7 +185,12 @@ export default function DAOSettings({
             <Button
               variant={membersCanPropose ? "destructive" : "default"}
               size="sm"
-              onClick={() => setConfirmModal({ type: "proposals", newValue: !membersCanPropose })}
+              onClick={() =>
+                setConfirmModal({
+                  type: "proposals",
+                  newValue: !membersCanPropose,
+                })
+              }
               disabled={isTogglingProposals}
             >
               {isTogglingProposals ? (
@@ -200,8 +220,16 @@ export default function DAOSettings({
         <ConfirmModal
           isOpen={true}
           onClose={() => setConfirmModal(null)}
-          onConfirm={confirmModal.type === "membership" ? handleToggleMembership : handleToggleProposals}
-          title={confirmModal.type === "membership" ? "Change Membership Mode" : "Change Proposal Mode"}
+          onConfirm={
+            confirmModal.type === "membership"
+              ? handleToggleMembership
+              : handleToggleProposals
+          }
+          title={
+            confirmModal.type === "membership"
+              ? "Change Membership Mode"
+              : "Change Proposal Mode"
+          }
           message={
             confirmModal.type === "membership"
               ? confirmModal.newValue

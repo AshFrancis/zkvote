@@ -1,4 +1,4 @@
-declare module 'circomlibjs' {
+declare module "circomlibjs" {
   /**
    * Field element type used by Poseidon
    * Can be the internal type or primitive inputs

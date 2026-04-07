@@ -32,9 +32,7 @@ export function LoadingPage({ message }: { message?: string }) {
   return (
     <div className="flex flex-col items-center justify-center p-8">
       <LoadingSpinner size="lg" />
-      {message && (
-        <p className="mt-4 text-muted-foreground">{message}</p>
-      )}
+      {message && <p className="mt-4 text-muted-foreground">{message}</p>}
     </div>
   );
 }

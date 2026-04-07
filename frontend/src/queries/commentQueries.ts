@@ -20,7 +20,7 @@ interface UseCommentsQueryOptions {
  */
 async function fetchCommentsWithContent(
   daoId: number,
-  proposalId: number
+  proposalId: number,
 ): Promise<CommentWithContent[]> {
   // Fetch comments from relayer
   const rawComments: CommentInfo[] = await fetchComments(daoId, proposalId);
@@ -32,7 +32,7 @@ async function fetchCommentsWithContent(
     rawComments.map(async (c) => {
       const content = await fetchCommentContent(c.contentCid);
       contentMap.set(c.contentCid, content);
-    })
+    }),
   );
 
   // Build and return comment tree

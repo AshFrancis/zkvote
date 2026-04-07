@@ -32,9 +32,12 @@ export function useRegistration({
   kit,
 }: UseRegistrationOptions): UseRegistrationReturn {
   const [isRegistering, setIsRegistering] = useState(false);
-  const [registrationStatus, setRegistrationStatus] = useState<string | null>(null);
+  const [registrationStatus, setRegistrationStatus] = useState<string | null>(
+    null,
+  );
   const [isRegistered, setIsRegistered] = useState(false);
-  const [hasUnregisteredCredentials, setHasUnregisteredCredentials] = useState(false);
+  const [hasUnregisteredCredentials, setHasUnregisteredCredentials] =
+    useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Check local credential cache on mount / when publicKey changes
@@ -88,7 +91,10 @@ export function useRegistration({
 
   const register = useCallback(async () => {
     if (isRegistering) {
-      if (import.meta.env.DEV) console.log("[Registration] Already in progress, ignoring duplicate call");
+      if (import.meta.env.DEV)
+        console.log(
+          "[Registration] Already in progress, ignoring duplicate call",
+        );
       return;
     }
 
@@ -106,14 +112,20 @@ export function useRegistration({
       const cached = publicKey ? getZKCredentials(daoId, publicKey) : null;
 
       if (hasUnregisteredCredentials && cached) {
-        if (import.meta.env.DEV) console.log("[Registration] Using existing credentials, skipping signature step");
+        if (import.meta.env.DEV)
+          console.log(
+            "[Registration] Using existing credentials, skipping signature step",
+          );
         secret = cached.secret;
         salt = cached.salt;
         commitment = cached.commitment;
         setRegistrationStatus("Using existing credentials...");
       } else {
         setRegistrationStatus("Step 1/2: Generating Secret");
-        if (import.meta.env.DEV) console.log("[Registration] Step 1: Generating deterministic credentials from wallet signature...");
+        if (import.meta.env.DEV)
+          console.log(
+            "[Registration] Step 1: Generating deterministic credentials from wallet signature...",
+          );
         let credentials;
         try {
           credentials = await generateDeterministicZKCredentials(kit, daoId);
@@ -126,12 +138,18 @@ export function useRegistration({
         salt = credentials.salt;
         commitment = credentials.commitment;
 
-        if (import.meta.env.DEV) console.log("[Registration] Step 1 complete - Generated voting credentials");
-        await new Promise(resolve => setTimeout(resolve, 500));
+        if (import.meta.env.DEV)
+          console.log(
+            "[Registration] Step 1 complete - Generated voting credentials",
+          );
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
 
       setRegistrationStatus("Step 2/2: Registering Commitment");
-      if (import.meta.env.DEV) console.log("[Registration] Step 2: Registering commitment in Merkle tree...");
+      if (import.meta.env.DEV)
+        console.log(
+          "[Registration] Step 2: Registering commitment in Merkle tree...",
+        );
       const clients = initializeContractClients(publicKey || "");
 
       const tx = await clients.membershipTree.register_with_caller({
@@ -143,26 +161,40 @@ export function useRegistration({
       // Helper to check if error is CommitmentExists (error #5 from tree contract)
       const isCommitmentExistsError = (err: unknown): boolean => {
         const errStr = (err as { message?: string })?.message || String(err);
-        return errStr.includes('#5') || errStr.includes('Error(Contract, #5)');
+        return errStr.includes("#5") || errStr.includes("Error(Contract, #5)");
       };
 
       let alreadyRegistered = false;
       let txHash: string | null = null;
       try {
-        if (import.meta.env.DEV) console.log("[Registration] Calling signAndSend...");
-        const result = await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
-        if (import.meta.env.DEV) console.log("[Registration] Step 2 complete - Transaction signed and sent:", result);
+        if (import.meta.env.DEV)
+          console.log("[Registration] Calling signAndSend...");
+        const result = await tx.signAndSend({
+          signTransaction: kit.signTransaction.bind(kit),
+        });
+        if (import.meta.env.DEV)
+          console.log(
+            "[Registration] Step 2 complete - Transaction signed and sent:",
+            result,
+          );
         txHash = extractTxHash(result);
       } catch (err) {
         // Check if this is a CommitmentExists error - means we're already registered
         if (isCommitmentExistsError(err)) {
-          if (import.meta.env.DEV) console.log("[Registration] Commitment already exists on-chain - recovering credentials");
+          if (import.meta.env.DEV)
+            console.log(
+              "[Registration] Commitment already exists on-chain - recovering credentials",
+            );
           alreadyRegistered = true;
         } else {
           console.error("[Registration] Step 2 (signAndSend) failed:", err);
-          const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-          const enhancedError = new Error(`Transaction signing failed: ${errorMessage}`);
-          (enhancedError as Error & { originalError: unknown }).originalError = err;
+          const errorMessage =
+            err instanceof Error ? err.message : "Unknown error";
+          const enhancedError = new Error(
+            `Transaction signing failed: ${errorMessage}`,
+          );
+          (enhancedError as Error & { originalError: unknown }).originalError =
+            err;
           throw enhancedError;
         }
       }
@@ -177,17 +209,33 @@ export function useRegistration({
       });
 
       const leafIndex = Number(leafIndexResult.result);
-      storeZKCredentials(daoId, publicKey || "", { secret, salt, commitment }, leafIndex);
+      storeZKCredentials(
+        daoId,
+        publicKey || "",
+        { secret, salt, commitment },
+        leafIndex,
+      );
 
       // Notify relayer of registration event (only if we actually registered, not recovered)
       if (txHash && !alreadyRegistered) {
-        notifyEvent(daoId, "voter_registered", txHash, { commitment, leafIndex });
+        notifyEvent(daoId, "voter_registered", txHash, {
+          commitment,
+          leafIndex,
+        });
       }
 
       setIsRegistered(true);
       setHasUnregisteredCredentials(false);
-      setRegistrationStatus(alreadyRegistered ? "Credentials recovered!" : "Registration complete!");
-      if (import.meta.env.DEV) console.log(alreadyRegistered ? "Credentials recovered! Leaf index:" : "Registration successful! Leaf index:", leafIndex);
+      setRegistrationStatus(
+        alreadyRegistered ? "Credentials recovered!" : "Registration complete!",
+      );
+      if (import.meta.env.DEV)
+        console.log(
+          alreadyRegistered
+            ? "Credentials recovered! Leaf index:"
+            : "Registration successful! Leaf index:",
+          leafIndex,
+        );
 
       // Clear status after a short delay
       setTimeout(() => setRegistrationStatus(null), 2000);
@@ -196,7 +244,9 @@ export function useRegistration({
         if (import.meta.env.DEV) console.log("User cancelled registration");
         setRegistrationStatus(null);
       } else {
-        setError(err instanceof Error ? err.message : "Failed to register for voting");
+        setError(
+          err instanceof Error ? err.message : "Failed to register for voting",
+        );
         console.error("Registration failed:", err);
         setRegistrationStatus(null);
       }

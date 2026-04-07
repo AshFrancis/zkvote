@@ -3,8 +3,8 @@
  * Uses signature-derived keys for symmetric encryption
  */
 
-import nacl from 'tweetnacl';
-import { encodeBase64, decodeBase64 } from 'tweetnacl-util';
+import nacl from "tweetnacl";
+import { encodeBase64, decodeBase64 } from "tweetnacl-util";
 
 // Note: deriveKeyFromSignature was removed - use deriveKeyFromSignatureAsync instead
 
@@ -26,7 +26,7 @@ type SignatureInput =
  */
 async function deriveKeyFromSignatureAsync(
   signature: SignatureInput,
-  daoId: number
+  daoId: number,
 ): Promise<Uint8Array> {
   // Convert signature to Uint8Array if it's not already
   let sigBytes: Uint8Array;
@@ -36,11 +36,11 @@ async function deriveKeyFromSignatureAsync(
   } else if (Array.isArray(signature)) {
     // Handle regular array of numbers
     sigBytes = new Uint8Array(signature);
-  } else if (typeof signature === 'string') {
+  } else if (typeof signature === "string") {
     // Try hex first
     if (signature.match(/^[0-9a-fA-F]+$/)) {
       sigBytes = new Uint8Array(
-        signature.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) || []
+        signature.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) || [],
       );
     } else {
       // Assume base64
@@ -54,23 +54,31 @@ async function deriveKeyFromSignatureAsync(
         throw new Error(`Failed to decode base64 signature: ${err}`);
       }
     }
-  } else if (typeof signature === 'object' && signature !== null) {
+  } else if (typeof signature === "object" && signature !== null) {
     // Handle object that might have signature property or be array-like
-    if ('signedMessage' in signature && typeof signature.signedMessage !== 'number') {
+    if (
+      "signedMessage" in signature &&
+      typeof signature.signedMessage !== "number"
+    ) {
       // Stellar wallet format (Freighter, etc.)
       return deriveKeyFromSignatureAsync(signature.signedMessage, daoId);
-    } else if ('signature' in signature && typeof signature.signature !== 'number') {
+    } else if (
+      "signature" in signature &&
+      typeof signature.signature !== "number"
+    ) {
       return deriveKeyFromSignatureAsync(signature.signature, daoId);
-    } else if ('data' in signature && typeof signature.data !== 'number') {
+    } else if ("data" in signature && typeof signature.data !== "number") {
       return deriveKeyFromSignatureAsync(signature.data, daoId);
-    } else if (typeof Buffer !== 'undefined' && Buffer.isBuffer(signature)) {
+    } else if (typeof Buffer !== "undefined" && Buffer.isBuffer(signature)) {
       sigBytes = new Uint8Array(signature);
     } else {
       // Try to convert object to array
       try {
         sigBytes = new Uint8Array(Object.values(signature));
       } catch {
-        throw new Error(`Invalid signature object format: ${JSON.stringify(signature).substring(0, 100)}`);
+        throw new Error(
+          `Invalid signature object format: ${JSON.stringify(signature).substring(0, 100)}`,
+        );
       }
     }
   } else {
@@ -82,7 +90,7 @@ async function deriveKeyFromSignatureAsync(
   combined.set(sigBytes);
   combined.set(context, sigBytes.length);
 
-  const hash = await crypto.subtle.digest('SHA-256', combined);
+  const hash = await crypto.subtle.digest("SHA-256", combined);
   return new Uint8Array(hash);
 }
 
@@ -124,7 +132,7 @@ function decryptWithKey(ciphertext: string, key: Uint8Array): string | null {
 
     return new TextDecoder().decode(decrypted);
   } catch (error) {
-    console.error('Decryption failed:', error);
+    console.error("Decryption failed:", error);
     return null;
   }
 }
@@ -154,7 +162,10 @@ export function getEncryptionKeyFromSession(daoId: number): Uint8Array | null {
 /**
  * Stores the encryption key in session storage
  */
-export function storeEncryptionKeyInSession(daoId: number, key: Uint8Array): void {
+export function storeEncryptionKeyInSession(
+  daoId: number,
+  key: Uint8Array,
+): void {
   sessionStorage.setItem(getSessionKeyStorageKey(daoId), encodeBase64(key));
 }
 
@@ -175,7 +186,7 @@ export function clearEncryptionKeyFromSession(daoId: number): void {
  */
 export async function getOrDeriveEncryptionKey(
   daoId: number,
-  signMessage: (message: string) => Promise<string | Uint8Array>
+  signMessage: (message: string) => Promise<string | Uint8Array>,
 ): Promise<Uint8Array | null> {
   // Check session storage first
   const sessionKey = getEncryptionKeyFromSession(daoId);
@@ -202,7 +213,7 @@ By signing, you acknowledge that this reveals member aliases you've set for DAO 
 
     return key;
   } catch (error) {
-    console.error('Failed to derive encryption key:', error);
+    console.error("Failed to derive encryption key:", error);
     return null;
   }
 }
@@ -225,6 +236,9 @@ export function encryptAlias(alias: string, encryptionKey: Uint8Array): string {
  * @param encryptionKey - 32-byte symmetric key
  * @returns Decrypted alias, or null if decryption fails
  */
-export function decryptAlias(encryptedAlias: string, encryptionKey: Uint8Array): string | null {
+export function decryptAlias(
+  encryptedAlias: string,
+  encryptionKey: Uint8Array,
+): string | null {
   return decryptWithKey(encryptedAlias, encryptionKey);
 }

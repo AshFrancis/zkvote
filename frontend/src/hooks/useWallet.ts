@@ -52,9 +52,12 @@ const safeLocalStorageRemove = (key: string): void => {
 };
 
 const inferWalletNetwork = (passphrase: string): WalletNetwork | null => {
-  if (passphrase === "Public Global Stellar Network ; September 2015") return WalletNetwork.PUBLIC;
-  if (passphrase === "Test SDF Network ; September 2015") return WalletNetwork.TESTNET;
-  if (passphrase === "Test SDF Future Network ; October 2022") return WalletNetwork.FUTURENET;
+  if (passphrase === "Public Global Stellar Network ; September 2015")
+    return WalletNetwork.PUBLIC;
+  if (passphrase === "Test SDF Network ; September 2015")
+    return WalletNetwork.TESTNET;
+  if (passphrase === "Test SDF Future Network ; October 2022")
+    return WalletNetwork.FUTURENET;
   // Unknown/custom network (e.g., local sandbox)
   return null;
 };
@@ -70,27 +73,25 @@ export function useWallet() {
   useEffect(() => {
     // Initialize kit only once
     if (!globalKit) {
-      const inferredNetwork = inferWalletNetwork(NETWORK_CONFIG.networkPassphrase);
+      const inferredNetwork = inferWalletNetwork(
+        NETWORK_CONFIG.networkPassphrase,
+      );
       if (!inferredNetwork) {
         console.warn(
           "[wallet] Using FUTURENET as fallback; update WalletNetwork mapping if using a custom passphrase",
-          NETWORK_CONFIG.networkPassphrase
+          NETWORK_CONFIG.networkPassphrase,
         );
       }
 
       globalKit = new StellarWalletsKit({
         network: inferredNetwork ?? WalletNetwork.FUTURENET,
         selectedWalletId: FREIGHTER_ID,
-        modules: [
-          new FreighterModule(),
-          new xBullModule(),
-          new AlbedoModule(),
-        ],
+        modules: [new FreighterModule(), new xBullModule(), new AlbedoModule()],
       });
     }
 
     // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: one-time kit initialization
-    setWallet(prev => ({ ...prev, kit: globalKit }));
+    setWallet((prev) => ({ ...prev, kit: globalKit }));
 
     // Only attempt auto-reconnect if user previously connected
     const checkConnection = async () => {
@@ -98,8 +99,11 @@ export function useWallet() {
 
       if (!storedWalletId) {
         // No previous connection, skip auto-reconnect
-        if (import.meta.env.DEV) console.log('[useWallet] No stored wallet, skipping auto-reconnect. isInitializing -> false');
-        setWallet(prev => ({ ...prev, isInitializing: false }));
+        if (import.meta.env.DEV)
+          console.log(
+            "[useWallet] No stored wallet, skipping auto-reconnect. isInitializing -> false",
+          );
+        setWallet((prev) => ({ ...prev, isInitializing: false }));
         return;
       }
 
@@ -108,7 +112,12 @@ export function useWallet() {
         globalKit!.setWallet(storedWalletId);
         const { address } = await globalKit!.getAddress();
         if (address) {
-          if (import.meta.env.DEV) console.log("[useWallet] Auto-reconnected to wallet:", address, "isInitializing -> false");
+          if (import.meta.env.DEV)
+            console.log(
+              "[useWallet] Auto-reconnected to wallet:",
+              address,
+              "isInitializing -> false",
+            );
           setWallet({
             publicKey: address,
             isConnected: true,
@@ -118,9 +127,12 @@ export function useWallet() {
         }
       } catch {
         // Auto-reconnect failed, clear stored wallet
-        if (import.meta.env.DEV) console.log("[useWallet] Auto-reconnect failed, user needs to reconnect manually. isInitializing -> false");
+        if (import.meta.env.DEV)
+          console.log(
+            "[useWallet] Auto-reconnect failed, user needs to reconnect manually. isInitializing -> false",
+          );
         safeLocalStorageRemove("selectedWalletId");
-        setWallet(prev => ({ ...prev, isInitializing: false }));
+        setWallet((prev) => ({ ...prev, isInitializing: false }));
       }
     };
 
@@ -163,13 +175,15 @@ export function useWallet() {
     // The library stores data with keys prefixed with "SWK" or containing "stellar"
     try {
       if (typeof window !== "undefined" && window.localStorage) {
-        Object.keys(localStorage).forEach(key => {
-          if (key.startsWith('SWK') ||
-              key.toLowerCase().includes('stellar') ||
-              key.toLowerCase().includes('wallet') ||
-              key.toLowerCase().includes('freighter') ||
-              key.toLowerCase().includes('albedo') ||
-              key.toLowerCase().includes('xbull')) {
+        Object.keys(localStorage).forEach((key) => {
+          if (
+            key.startsWith("SWK") ||
+            key.toLowerCase().includes("stellar") ||
+            key.toLowerCase().includes("wallet") ||
+            key.toLowerCase().includes("freighter") ||
+            key.toLowerCase().includes("albedo") ||
+            key.toLowerCase().includes("xbull")
+          ) {
             localStorage.removeItem(key);
           }
         });
@@ -178,7 +192,12 @@ export function useWallet() {
       console.warn("[useWallet] Failed to clear wallet localStorage entries");
     }
 
-    setWallet({ publicKey: null, isConnected: false, isInitializing: false, kit: globalKit });
+    setWallet({
+      publicKey: null,
+      isConnected: false,
+      isInitializing: false,
+      kit: globalKit,
+    });
   }, []);
 
   return {

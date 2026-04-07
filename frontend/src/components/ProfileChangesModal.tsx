@@ -33,7 +33,10 @@ interface ProfileChangesModalProps {
 }
 
 // Field display configuration
-const FIELD_CONFIG: Record<string, { label: string; icon: React.ElementType; isImage?: boolean; isUrl?: boolean }> = {
+const FIELD_CONFIG: Record<
+  string,
+  { label: string; icon: React.ElementType; isImage?: boolean; isUrl?: boolean }
+> = {
   name: { label: "DAO Name", icon: FileText },
   description: { label: "Description", icon: FileText },
   coverImageCid: { label: "Cover Image", icon: Image, isImage: true },
@@ -62,7 +65,13 @@ function ImagePreview({ cid, label }: { cid: string | null; label: string }) {
   );
 }
 
-function TextValue({ value, isUrl }: { value: string | null; isUrl?: boolean }) {
+function TextValue({
+  value,
+  isUrl,
+}: {
+  value: string | null;
+  isUrl?: boolean;
+}) {
   if (!value) {
     return <span className="text-muted-foreground italic">Not set</span>;
   }
@@ -152,24 +161,38 @@ export default function ProfileChangesModal({
                     {config.isImage ? (
                       <div className="flex items-center gap-4">
                         <div className="text-center">
-                          <p className="text-xs text-muted-foreground mb-1">Before</p>
-                          <ImagePreview cid={change.old} label={`Old ${config.label}`} />
+                          <p className="text-xs text-muted-foreground mb-1">
+                            Before
+                          </p>
+                          <ImagePreview
+                            cid={change.old}
+                            label={`Old ${config.label}`}
+                          />
                         </div>
                         <ArrowRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                         <div className="text-center">
-                          <p className="text-xs text-muted-foreground mb-1">After</p>
-                          <ImagePreview cid={change.new} label={`New ${config.label}`} />
+                          <p className="text-xs text-muted-foreground mb-1">
+                            After
+                          </p>
+                          <ImagePreview
+                            cid={change.new}
+                            label={`New ${config.label}`}
+                          />
                         </div>
                       </div>
                     ) : (
                       <div className="grid grid-cols-[1fr,auto,1fr] gap-2 items-start text-sm">
                         <div className="bg-red-500/10 rounded p-2 min-h-[2.5rem]">
-                          <p className="text-xs text-red-500 dark:text-red-400 mb-1">Before</p>
+                          <p className="text-xs text-red-500 dark:text-red-400 mb-1">
+                            Before
+                          </p>
                           <TextValue value={change.old} isUrl={config.isUrl} />
                         </div>
                         <ArrowRight className="w-4 h-4 text-muted-foreground mt-3 flex-shrink-0" />
                         <div className="bg-green-500/10 rounded p-2 min-h-[2.5rem]">
-                          <p className="text-xs text-green-500 dark:text-green-400 mb-1">After</p>
+                          <p className="text-xs text-green-500 dark:text-green-400 mb-1">
+                            After
+                          </p>
                           <TextValue value={change.new} isUrl={config.isUrl} />
                         </div>
                       </div>
@@ -184,7 +207,8 @@ export default function ProfileChangesModal({
         {/* Footer */}
         <div className="p-4 border-t border-border bg-muted/30">
           <p className="text-xs text-muted-foreground">
-            {changeEntries.length} field{changeEntries.length !== 1 ? "s" : ""} changed
+            {changeEntries.length} field{changeEntries.length !== 1 ? "s" : ""}{" "}
+            changed
           </p>
         </div>
       </div>

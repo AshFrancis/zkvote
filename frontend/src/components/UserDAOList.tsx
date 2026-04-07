@@ -1,16 +1,16 @@
-import { useEffect, useState } from 'react';
-import { relayerFetch } from '../lib/api';
-import { CONTRACTS } from '../config/contracts';
-import { Alert, LoadingSpinner } from './ui';
-import DAOCard from './ui/DAOCard';
-import { fetchDAOMetadata, getImageUrl } from '../lib/daoMetadata';
-import type { DAOMetadata } from '../lib/daoMetadata';
+import { useEffect, useState } from "react";
+import { relayerFetch } from "../lib/api";
+import { CONTRACTS } from "../config/contracts";
+import { Alert, LoadingSpinner } from "./ui";
+import DAOCard from "./ui/DAOCard";
+import { fetchDAOMetadata, getImageUrl } from "../lib/daoMetadata";
+import type { DAOMetadata } from "../lib/daoMetadata";
 
 interface UserDAO {
   id: number;
   name: string;
   creator: string;
-  role: 'admin' | 'member';
+  role: "admin" | "member";
   membership_open: boolean;
   metadata_cid?: string;
 }
@@ -24,14 +24,23 @@ interface UserDAOListProps {
 }
 
 // Cache key for metadata (still needed for IPFS images)
-const getMetadataCacheKey = () => `dao_metadata_${CONTRACTS.REGISTRY_ID.slice(0, 8)}`;
+const getMetadataCacheKey = () =>
+  `dao_metadata_${CONTRACTS.REGISTRY_ID.slice(0, 8)}`;
 
-export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, onDaosLoaded, isInitializing = false }: UserDAOListProps) {
+export default function UserDAOList({
+  userAddress,
+  onSelectDao,
+  selectedDaoId,
+  onDaosLoaded,
+  isInitializing = false,
+}: UserDAOListProps) {
   const [daos, setDaos] = useState<UserDAO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Metadata cache is still useful for IPFS images (fetched separately)
-  const [metadataCache, setMetadataCache] = useState<Record<string, DAOMetadata | null>>(() => {
+  const [metadataCache, setMetadataCache] = useState<
+    Record<string, DAOMetadata | null>
+  >(() => {
     const cached = localStorage.getItem(getMetadataCacheKey());
     return cached ? JSON.parse(cached) : {};
   });
@@ -39,31 +48,37 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
   useEffect(() => {
     // Wait for wallet to finish initializing before loading
     if (isInitializing) {
-      if (import.meta.env.DEV) console.log('[UserDAOList] Waiting for wallet initialization...');
+      if (import.meta.env.DEV)
+        console.log("[UserDAOList] Waiting for wallet initialization...");
       return;
     }
-    if (import.meta.env.DEV) console.log('[UserDAOList] Loading user DAOs for:', userAddress);
+    if (import.meta.env.DEV)
+      console.log("[UserDAOList] Loading user DAOs for:", userAddress);
     loadUserDaos();
   }, [userAddress, isInitializing]);
 
   // Load metadata for DAOs that have metadata_cid
   useEffect(() => {
     const loadMetadata = async () => {
-      const daosWithCid = daos.filter(dao => dao.metadata_cid && !metadataCache[dao.metadata_cid]);
+      const daosWithCid = daos.filter(
+        (dao) => dao.metadata_cid && !metadataCache[dao.metadata_cid],
+      );
       if (daosWithCid.length === 0) return;
 
       const newCache = { ...metadataCache };
 
-      await Promise.all(daosWithCid.map(async (dao) => {
-        if (!dao.metadata_cid) return;
-        try {
-          const metadata = await fetchDAOMetadata(dao.metadata_cid);
-          newCache[dao.metadata_cid] = metadata;
-        } catch (err) {
-          console.warn(`Failed to fetch metadata for DAO ${dao.id}:`, err);
-          newCache[dao.metadata_cid!] = null;
-        }
-      }));
+      await Promise.all(
+        daosWithCid.map(async (dao) => {
+          if (!dao.metadata_cid) return;
+          try {
+            const metadata = await fetchDAOMetadata(dao.metadata_cid);
+            newCache[dao.metadata_cid] = metadata;
+          } catch (err) {
+            console.warn(`Failed to fetch metadata for DAO ${dao.id}:`, err);
+            newCache[dao.metadata_cid!] = null;
+          }
+        }),
+      );
 
       setMetadataCache(newCache);
       localStorage.setItem(getMetadataCacheKey(), JSON.stringify(newCache));
@@ -84,31 +99,33 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
       }
 
       const data = await response.json();
-      const fetchedDaos: UserDAO[] = data.daos.map((dao: {
-        id: number;
-        name: string;
-        creator: string;
-        membership_open: boolean;
-        metadata_cid?: string;
-        role: 'admin' | 'member';
-      }) => ({
-        id: dao.id,
-        name: dao.name,
-        creator: dao.creator,
-        role: dao.role,
-        membership_open: dao.membership_open,
-        metadata_cid: dao.metadata_cid,
-      }));
+      const fetchedDaos: UserDAO[] = data.daos.map(
+        (dao: {
+          id: number;
+          name: string;
+          creator: string;
+          membership_open: boolean;
+          metadata_cid?: string;
+          role: "admin" | "member";
+        }) => ({
+          id: dao.id,
+          name: dao.name,
+          creator: dao.creator,
+          role: dao.role,
+          membership_open: dao.membership_open,
+          metadata_cid: dao.metadata_cid,
+        }),
+      );
 
       setDaos(fetchedDaos);
 
       // Notify parent component of loaded DAO IDs
       if (onDaosLoaded) {
-        onDaosLoaded(fetchedDaos.map(dao => dao.id));
+        onDaosLoaded(fetchedDaos.map((dao) => dao.id));
       }
     } catch (err) {
-      console.error('Failed to load user DAOs:', err);
-      setError('Failed to load your DAOs. Please try again.');
+      console.error("Failed to load user DAOs:", err);
+      setError("Failed to load your DAOs. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -152,7 +169,9 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
         </h2>
         <div className="flex items-center justify-center py-8">
           <LoadingSpinner size="md" />
-          <span className="ml-3 text-muted-foreground">Loading your DAOs...</span>
+          <span className="ml-3 text-muted-foreground">
+            Loading your DAOs...
+          </span>
         </div>
       </div>
     );
@@ -176,7 +195,7 @@ export default function UserDAOList({ userAddress, onSelectDao, selectedDaoId, o
   }
 
   // Filter out Public DAO (DAO #1) from user's DAOs
-  const filteredDaos = daos.filter(dao => dao.id !== 1);
+  const filteredDaos = daos.filter((dao) => dao.id !== 1);
 
   if (filteredDaos.length === 0) {
     return (

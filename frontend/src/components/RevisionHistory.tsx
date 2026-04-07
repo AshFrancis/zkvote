@@ -127,12 +127,14 @@ export default function RevisionHistory({
                   ) : (
                     <Clock className="w-3.5 h-3.5 text-muted-foreground" />
                   )}
-                  <span className={`text-sm font-medium ${revision.isDeleted ? "text-destructive" : ""}`}>
+                  <span
+                    className={`text-sm font-medium ${revision.isDeleted ? "text-destructive" : ""}`}
+                  >
                     {revision.isDeleted
                       ? "Deleted"
                       : revision.isCurrent
-                      ? "Current"
-                      : `v${index + 1}`}
+                        ? "Current"
+                        : `v${index + 1}`}
                   </span>
                 </div>
                 {revision.isDeleted && revision.deletedAt ? (
@@ -159,14 +161,16 @@ export default function RevisionHistory({
                 <div className="flex items-center gap-2 text-sm text-destructive">
                   <Trash2 className="w-4 h-4" />
                   <span>
-                    Deleted by {selectedRevision.deletedBy === "admin" ? "admin" : "user"}
+                    Deleted by{" "}
+                    {selectedRevision.deletedBy === "admin" ? "admin" : "user"}
                     {selectedRevision.deletedAt && (
                       <> {formatRelativeTime(selectedRevision.deletedAt)}</>
                     )}
                   </span>
                 </div>
                 <p className="text-muted-foreground italic">
-                  This comment has been deleted. Select a previous version to view the original content.
+                  This comment has been deleted. Select a previous version to
+                  view the original content.
                 </p>
               </div>
             ) : selectedRevision?.content ? (
@@ -180,8 +184,10 @@ export default function RevisionHistory({
                       Edited{" "}
                       {formatRelativeTime(
                         Math.floor(
-                          new Date(selectedRevision.content.createdAt).getTime() / 1000
-                        )
+                          new Date(
+                            selectedRevision.content.createdAt,
+                          ).getTime() / 1000,
+                        ),
                       )}
                     </span>
                   )}

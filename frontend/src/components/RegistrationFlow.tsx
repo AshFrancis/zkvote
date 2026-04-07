@@ -26,7 +26,10 @@ function getStepInfo(status: string | null) {
   return { step: 1, total: 2, icon: Key, label: status };
 }
 
-export default function RegistrationFlow({ registrationStatus, isRegistering }: RegistrationFlowProps) {
+export default function RegistrationFlow({
+  registrationStatus,
+  isRegistering,
+}: RegistrationFlowProps) {
   if (!isRegistering && !registrationStatus) return null;
 
   const stepInfo = getStepInfo(registrationStatus);
@@ -64,8 +67,10 @@ export default function RegistrationFlow({ registrationStatus, isRegistering }: 
                   key={i}
                   className={`h-1.5 w-6 rounded-full transition-colors ${
                     i < stepInfo.step
-                      ? stepInfo.done ? 'bg-green-500' : 'bg-blue-500'
-                      : 'bg-muted'
+                      ? stepInfo.done
+                        ? "bg-green-500"
+                        : "bg-blue-500"
+                      : "bg-muted"
                   }`}
                 />
               ))}

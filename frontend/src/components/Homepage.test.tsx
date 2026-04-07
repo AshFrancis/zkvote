@@ -27,14 +27,16 @@ describe("Homepage", () => {
       renderWithRouter(<Homepage />);
 
       expect(screen.getByText("Private voting for")).toBeInTheDocument();
-      expect(screen.getByText("decentralized organizations")).toBeInTheDocument();
+      expect(
+        screen.getByText("decentralized organizations"),
+      ).toBeInTheDocument();
     });
 
     it("renders the hero description", () => {
       renderWithRouter(<Homepage />);
 
       expect(
-        screen.getByText(/Zero-knowledge proof voting on Stellar/)
+        screen.getByText(/Zero-knowledge proof voting on Stellar/),
       ).toBeInTheDocument();
     });
 
@@ -49,8 +51,10 @@ describe("Homepage", () => {
 
       expect(
         screen.getByText((content, element) => {
-          return element?.tagName === "BUTTON" && content.includes("Documentation");
-        })
+          return (
+            element?.tagName === "BUTTON" && content.includes("Documentation")
+          );
+        }),
       ).toBeInTheDocument();
     });
   });
@@ -68,7 +72,9 @@ describe("Homepage", () => {
       renderWithRouter(<Homepage />);
 
       const docButton = screen.getByText((content, element) => {
-        return element?.tagName === "BUTTON" && content.includes("Documentation");
+        return (
+          element?.tagName === "BUTTON" && content.includes("Documentation")
+        );
       });
       fireEvent.click(docButton);
 
@@ -133,7 +139,7 @@ describe("Homepage", () => {
       renderWithRouter(<Homepage />);
 
       expect(
-        screen.getByText("Multi-contract design for modularity")
+        screen.getByText("Multi-contract design for modularity"),
       ).toBeInTheDocument();
     });
 
@@ -165,11 +171,9 @@ describe("Homepage", () => {
       renderWithRouter(<Homepage />);
 
       expect(
-        screen.getByText("Your vote choice (yes/no/abstain)")
+        screen.getByText("Your vote choice (yes/no/abstain)"),
       ).toBeInTheDocument();
-      expect(
-        screen.getByText("Your identity as a voter")
-      ).toBeInTheDocument();
+      expect(screen.getByText("Your identity as a voter")).toBeInTheDocument();
     });
 
     it("lists public items", () => {
@@ -177,7 +181,7 @@ describe("Homepage", () => {
 
       expect(screen.getByText("Aggregate vote tallies")).toBeInTheDocument();
       expect(
-        screen.getByText("Nullifier hash (prevents double voting)")
+        screen.getByText("Nullifier hash (prevents double voting)"),
       ).toBeInTheDocument();
     });
   });
@@ -205,7 +209,7 @@ describe("Homepage", () => {
 
       expect(mockOpen).toHaveBeenCalledWith(
         "https://github.com/ashfrancis/zkvote",
-        "_blank"
+        "_blank",
       );
 
       vi.unstubAllGlobals();

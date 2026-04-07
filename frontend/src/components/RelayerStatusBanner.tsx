@@ -55,8 +55,8 @@ export function RelayerStatusBanner() {
         </svg>
         <span>
           Relayer disconnected.
-          {backoffSeconds > 0 && ` Retrying in ${backoffSeconds}s...`}
-          {" "}Anonymous voting and comments require the relayer.
+          {backoffSeconds > 0 && ` Retrying in ${backoffSeconds}s...`} Anonymous
+          voting and comments require the relayer.
         </span>
       </div>
       <button

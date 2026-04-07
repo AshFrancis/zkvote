@@ -4,11 +4,14 @@ import { Button } from "./ui/Button";
 import { Textarea } from "./ui/Textarea";
 import { Label } from "./ui/Label";
 import { Badge } from "./ui/Badge";
-import { MessageSquare, Eye, EyeOff, Loader2, AlertTriangle } from "lucide-react";
 import {
-  uploadCommentContent,
-  saveAnonymousComment,
-} from "../lib/comments";
+  MessageSquare,
+  Eye,
+  EyeOff,
+  Loader2,
+  AlertTriangle,
+} from "lucide-react";
+import { uploadCommentContent, saveAnonymousComment } from "../lib/comments";
 import {
   generateDeterministicZKCredentials,
   getZKCredentials,
@@ -89,7 +92,10 @@ export default function CommentForm({
           }
 
           setProgress("Regenerating credentials...");
-          const credentials = await generateDeterministicZKCredentials(kit, daoId);
+          const credentials = await generateDeterministicZKCredentials(
+            kit,
+            daoId,
+          );
 
           const leafIndexResult = await clients.membershipTree.get_leaf_index({
             dao_id: BigInt(daoId),
@@ -120,7 +126,7 @@ export default function CommentForm({
         const { pathElements, pathIndices } = await getMerklePath(
           leafIndex,
           daoId,
-          publicKey
+          publicKey,
         );
 
         // Use eligible_root from proposal (snapshot of when proposal was created)
@@ -130,7 +136,11 @@ export default function CommentForm({
         // nullifier = Poseidon(secret, daoId, proposalId)
         // NOTE: We use the vote circuit for comments now - no nonce needed!
         setProgress("Computing nullifier...");
-        const nullifier = await calculateNullifier(secret, daoId.toString(), proposalId.toString());
+        const nullifier = await calculateNullifier(
+          secret,
+          daoId.toString(),
+          proposalId.toString(),
+        );
 
         // Generate ZK proof using vote circuit (same circuit for voting and comments)
         // For comments, we just use voteChoice=false (0) - the contract ignores it
@@ -155,7 +165,11 @@ export default function CommentForm({
           console.log("Comment proof input ready, generating proof...");
         }
 
-        const { proof } = await generateVoteProof(proofInput, wasmPath, zkeyPath);
+        const { proof } = await generateVoteProof(
+          proofInput,
+          wasmPath,
+          zkeyPath,
+        );
 
         // Format proof for Soroban
         const { proof_a, proof_b, proof_c } = formatProofForSoroban(proof);
@@ -199,7 +213,9 @@ export default function CommentForm({
         // Submit public comment via direct wallet signing
         // The contract requires author.require_auth() so we must sign directly
         if (!kit) {
-          throw new Error("Wallet required for public comments. Please connect your wallet.");
+          throw new Error(
+            "Wallet required for public comments. Please connect your wallet.",
+          );
         }
 
         setProgress("Preparing transaction...");
@@ -216,7 +232,9 @@ export default function CommentForm({
 
         // Sign and send with wallet
         setProgress("Sign in your wallet...");
-        await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+        await tx.signAndSend({
+          signTransaction: kit.signTransaction.bind(kit),
+        });
       }
 
       // Success - clear form and notify parent
@@ -256,7 +274,11 @@ export default function CommentForm({
                 ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
                 : "bg-muted text-muted-foreground hover:bg-muted/80"
             } ${!isRegistered ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-            title={!isRegistered ? "Register to comment anonymously" : "Toggle anonymous mode"}
+            title={
+              !isRegistered
+                ? "Register to comment anonymously"
+                : "Toggle anonymous mode"
+            }
           >
             {isAnonymous ? (
               <>
@@ -292,7 +314,8 @@ export default function CommentForm({
         <div className="flex items-start gap-2 p-2 bg-purple-50 dark:bg-purple-900/20 rounded-md text-xs text-purple-700 dark:text-purple-300">
           <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
           <p>
-            Anonymous comments use zero-knowledge proofs. Generating the proof may take a few seconds.
+            Anonymous comments use zero-knowledge proofs. Generating the proof
+            may take a few seconds.
           </p>
         </div>
       )}

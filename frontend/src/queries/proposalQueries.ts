@@ -53,7 +53,7 @@ async function loadProposal({
           const nullifier = await calculateNullifier(
             secret,
             daoId.toString(),
-            proposalId.toString()
+            proposalId.toString(),
           );
 
           const nullifierUsedResult = await votingClient.is_nullifier_used({
@@ -78,9 +78,8 @@ async function loadProposal({
       eligibleRoot: proposal.eligible_root,
       voteMode: proposal.vote_mode.tag as "Fixed" | "Trailing",
       endTime: Number(proposal.end_time),
-      vkVersion: proposal.vk_version !== undefined
-        ? Number(proposal.vk_version)
-        : null,
+      vkVersion:
+        proposal.vk_version !== undefined ? Number(proposal.vk_version) : null,
     };
   } catch {
     return null;
@@ -89,7 +88,7 @@ async function loadProposal({
 
 async function fetchProposals(
   daoId: number,
-  publicKey: string | null
+  publicKey: string | null,
 ): Promise<Proposal[]> {
   // Get proposal count from contract
   const votingClient: VotingClient = publicKey
@@ -113,7 +112,7 @@ async function fetchProposals(
   }
 
   const loadedProposals = (await Promise.all(proposalPromises)).filter(
-    (p): p is Proposal => p !== null
+    (p): p is Proposal => p !== null,
   );
 
   // Sort by proposal ID descending (newest first)

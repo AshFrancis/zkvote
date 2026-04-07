@@ -26,12 +26,17 @@ function formatDuration(seconds: number): string {
   if (days > 0) parts.push(`${days} day${days !== 1 ? "s" : ""}`);
   if (hours > 0) parts.push(`${hours} hour${hours !== 1 ? "s" : ""}`);
   if (mins > 0) parts.push(`${mins} minute${mins !== 1 ? "s" : ""}`);
-  if (secs > 0 && days === 0) parts.push(`${secs} second${secs !== 1 ? "s" : ""}`);
+  if (secs > 0 && days === 0)
+    parts.push(`${secs} second${secs !== 1 ? "s" : ""}`);
 
   return parts.join(", ") || "0 seconds";
 }
 
-export default function DeadlineInput({ value, onChange, disabled = false }: DeadlineInputProps) {
+export default function DeadlineInput({
+  value,
+  onChange,
+  disabled = false,
+}: DeadlineInputProps) {
   const seconds = parseInt(value, 10) || 0;
 
   return (
@@ -48,9 +53,7 @@ export default function DeadlineInput({ value, onChange, disabled = false }: Dea
         placeholder="Enter seconds (e.g., 86400 for 1 day)"
         className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:ring-2 focus:ring-ring focus:border-transparent disabled:opacity-50"
       />
-      <p className="text-sm text-muted-foreground">
-        {formatDuration(seconds)}
-      </p>
+      <p className="text-sm text-muted-foreground">{formatDuration(seconds)}</p>
       <div className="flex flex-wrap gap-2">
         {PRESETS.map((preset) => (
           <button

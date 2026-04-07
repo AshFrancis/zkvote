@@ -81,7 +81,7 @@ describe("VoteResults", () => {
   describe("Progress bar", () => {
     it("renders green and red progress bar segments", () => {
       const { container } = render(
-        <VoteResults yesVotes={6} noVotes={4} isOpen={true} />
+        <VoteResults yesVotes={6} noVotes={4} isOpen={true} />,
       );
 
       const greenBar = container.querySelector(".bg-green-500");
@@ -92,7 +92,7 @@ describe("VoteResults", () => {
 
     it("sets correct width styles on progress bars", () => {
       const { container } = render(
-        <VoteResults yesVotes={3} noVotes={1} isOpen={true} />
+        <VoteResults yesVotes={3} noVotes={1} isOpen={true} />,
       );
 
       const greenBar = container.querySelector(".bg-green-500") as HTMLElement;
@@ -104,7 +104,7 @@ describe("VoteResults", () => {
 
     it("sets 0% width for both bars when no votes", () => {
       const { container } = render(
-        <VoteResults yesVotes={0} noVotes={0} isOpen={true} />
+        <VoteResults yesVotes={0} noVotes={0} isOpen={true} />,
       );
 
       const greenBar = container.querySelector(".bg-green-500") as HTMLElement;

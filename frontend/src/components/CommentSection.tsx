@@ -10,7 +10,9 @@ import { type CommentWithContent } from "../lib/comments";
 import { useCommentsQuery, useInvalidateComments } from "../queries";
 
 // Build a map of nullifiers to anonymous member numbers
-function buildNullifierMap(comments: CommentWithContent[]): Map<string, number> {
+function buildNullifierMap(
+  comments: CommentWithContent[],
+): Map<string, number> {
   const nullifierMap = new Map<string, number>();
   let memberNumber = 1;
 
@@ -51,7 +53,9 @@ export default function CommentSection({
   eligibleRoot,
   isAdmin,
 }: CommentSectionProps) {
-  const [showRevisions, setShowRevisions] = useState<CommentWithContent | null>(null);
+  const [showRevisions, setShowRevisions] = useState<CommentWithContent | null>(
+    null,
+  );
 
   // Use React Query for comments
   const {
@@ -71,13 +75,14 @@ export default function CommentSection({
 
   // Convert query error to string for display
   const error =
-    queryError && queryError instanceof Error && !queryError.message.includes("404")
+    queryError &&
+    queryError instanceof Error &&
+    !queryError.message.includes("404")
       ? "Failed to load comments"
       : null;
 
   const totalComments =
-    comments.length +
-    comments.reduce((sum, c) => sum + c.replies.length, 0);
+    comments.length + comments.reduce((sum, c) => sum + c.replies.length, 0);
 
   // Build nullifier map for anonymous member numbering
   const nullifierMap = useMemo(() => buildNullifierMap(comments), [comments]);
@@ -127,9 +132,7 @@ export default function CommentSection({
         />
 
         {/* Separator */}
-        {(comments.length > 0 || isLoading) && (
-          <hr className="border-border" />
-        )}
+        {(comments.length > 0 || isLoading) && <hr className="border-border" />}
 
         {/* Loading state */}
         {isLoading && (

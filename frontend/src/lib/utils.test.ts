@@ -74,7 +74,9 @@ describe("isUserRejection", () => {
   });
 
   it("returns true for User rejected message", () => {
-    expect(isUserRejection({ message: "User rejected the request" })).toBe(true);
+    expect(isUserRejection({ message: "User rejected the request" })).toBe(
+      true,
+    );
   });
 
   it("returns true for declined message", () => {
@@ -101,7 +103,9 @@ describe("isAccountNotFoundError", () => {
   });
 
   it("returns true for does not exist message", () => {
-    expect(isAccountNotFoundError(new Error("The account does not exist"))).toBe(true);
+    expect(
+      isAccountNotFoundError(new Error("The account does not exist")),
+    ).toBe(true);
   });
 
   it("returns false for other errors", () => {
@@ -217,7 +221,9 @@ describe("extractTxHash", () => {
   });
 
   it("returns null when nested response is not an object", () => {
-    expect(extractTxHash({ sendTransactionResponse: "not-an-object" })).toBe(null);
+    expect(extractTxHash({ sendTransactionResponse: "not-an-object" })).toBe(
+      null,
+    );
     expect(extractTxHash({ getTransactionResponse: 123 })).toBe(null);
   });
 });

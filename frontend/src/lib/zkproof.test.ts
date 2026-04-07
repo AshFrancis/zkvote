@@ -32,8 +32,12 @@ describe("formatProofForSoroban", () => {
     expect(result.proof_a).toHaveLength(128);
 
     // Verify X coordinate (padded to 64 hex chars)
-    const expectedX = BigInt("12345678901234567890").toString(16).padStart(64, "0");
-    const expectedY = BigInt("98765432109876543210").toString(16).padStart(64, "0");
+    const expectedX = BigInt("12345678901234567890")
+      .toString(16)
+      .padStart(64, "0");
+    const expectedY = BigInt("98765432109876543210")
+      .toString(16)
+      .padStart(64, "0");
     expect(result.proof_a).toBe(expectedX + expectedY);
   });
 
@@ -57,8 +61,12 @@ describe("formatProofForSoroban", () => {
 
     expect(result.proof_c).toHaveLength(128);
 
-    const expectedX = BigInt("55555555555555555555").toString(16).padStart(64, "0");
-    const expectedY = BigInt("66666666666666666666").toString(16).padStart(64, "0");
+    const expectedX = BigInt("55555555555555555555")
+      .toString(16)
+      .padStart(64, "0");
+    const expectedY = BigInt("66666666666666666666")
+      .toString(16)
+      .padStart(64, "0");
     expect(result.proof_c).toBe(expectedX + expectedY);
   });
 

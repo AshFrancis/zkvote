@@ -15,7 +15,13 @@ import {
   getTwitterUrl,
 } from "../lib/daoMetadata";
 import { Button } from "./ui/Button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/Card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "./ui/Card";
 import { Input } from "./ui/Input";
 import { Label } from "./ui/Label";
 import { Textarea } from "./ui/Textarea";
@@ -157,13 +163,17 @@ export default function DAOProfileEditor({
       const { cid } = await uploadImage(file);
       setCoverImageCid(cid);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to upload cover image");
+      setError(
+        err instanceof Error ? err.message : "Failed to upload cover image",
+      );
     } finally {
       setIsUploadingCover(false);
     }
   };
 
-  const handleProfileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -173,7 +183,9 @@ export default function DAOProfileEditor({
       const { cid } = await uploadImage(file);
       setProfileImageCid(cid);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to upload profile image");
+      setError(
+        err instanceof Error ? err.message : "Failed to upload profile image",
+      );
     } finally {
       setIsUploadingProfile(false);
     }
@@ -194,7 +206,8 @@ export default function DAOProfileEditor({
         coverImageCid !== originalProfile?.coverImageCid ||
         profileImageCid !== originalProfile?.profileImageCid ||
         website.trim() !== (originalProfile?.website || "") ||
-        (twitter.trim() ? normalizeTwitterHandle(twitter.trim()) : "") !== (originalProfile?.twitter || "") ||
+        (twitter.trim() ? normalizeTwitterHandle(twitter.trim()) : "") !==
+          (originalProfile?.twitter || "") ||
         linkedin.trim() !== (originalProfile?.linkedin || "") ||
         github.trim() !== (originalProfile?.github || "");
 
@@ -221,7 +234,9 @@ export default function DAOProfileEditor({
           profileImageCid: profileImageCid || undefined,
           links: {
             website: website.trim() || undefined,
-            twitter: twitter.trim() ? normalizeTwitterHandle(twitter.trim()) : undefined,
+            twitter: twitter.trim()
+              ? normalizeTwitterHandle(twitter.trim())
+              : undefined,
             linkedin: linkedin.trim() || undefined,
             github: github.trim() || undefined,
           },
@@ -277,7 +292,9 @@ export default function DAOProfileEditor({
           coverImageCid: coverImageCid || null,
           profileImageCid: profileImageCid || null,
           website: website.trim() || null,
-          twitter: twitter.trim() ? normalizeTwitterHandle(twitter.trim()) : null,
+          twitter: twitter.trim()
+            ? normalizeTwitterHandle(twitter.trim())
+            : null,
           linkedin: linkedin.trim() || null,
           github: github.trim() || null,
         };
@@ -294,27 +311,48 @@ export default function DAOProfileEditor({
         };
 
         // Calculate what changed
-        const changes: Record<string, { old: string | null; new: string | null }> = {};
+        const changes: Record<
+          string,
+          { old: string | null; new: string | null }
+        > = {};
         if (oldProfile.name !== newProfile.name) {
           changes.name = { old: oldProfile.name, new: newProfile.name };
         }
         if (oldProfile.description !== newProfile.description) {
-          changes.description = { old: oldProfile.description || null, new: newProfile.description || null };
+          changes.description = {
+            old: oldProfile.description || null,
+            new: newProfile.description || null,
+          };
         }
         if (oldProfile.coverImageCid !== newProfile.coverImageCid) {
-          changes.coverImageCid = { old: oldProfile.coverImageCid, new: newProfile.coverImageCid };
+          changes.coverImageCid = {
+            old: oldProfile.coverImageCid,
+            new: newProfile.coverImageCid,
+          };
         }
         if (oldProfile.profileImageCid !== newProfile.profileImageCid) {
-          changes.profileImageCid = { old: oldProfile.profileImageCid, new: newProfile.profileImageCid };
+          changes.profileImageCid = {
+            old: oldProfile.profileImageCid,
+            new: newProfile.profileImageCid,
+          };
         }
         if (oldProfile.website !== newProfile.website) {
-          changes.website = { old: oldProfile.website, new: newProfile.website };
+          changes.website = {
+            old: oldProfile.website,
+            new: newProfile.website,
+          };
         }
         if (oldProfile.twitter !== newProfile.twitter) {
-          changes.twitter = { old: oldProfile.twitter, new: newProfile.twitter };
+          changes.twitter = {
+            old: oldProfile.twitter,
+            new: newProfile.twitter,
+          };
         }
         if (oldProfile.linkedin !== newProfile.linkedin) {
-          changes.linkedin = { old: oldProfile.linkedin, new: newProfile.linkedin };
+          changes.linkedin = {
+            old: oldProfile.linkedin,
+            new: newProfile.linkedin,
+          };
         }
         if (oldProfile.github !== newProfile.github) {
           changes.github = { old: oldProfile.github, new: newProfile.github };
@@ -383,7 +421,9 @@ export default function DAOProfileEditor({
                   ) : (
                     <>
                       <Upload className="w-6 h-6 mb-2" />
-                      <span className="text-sm">Click to upload cover photo</span>
+                      <span className="text-sm">
+                        Click to upload cover photo
+                      </span>
                     </>
                   )}
                 </div>
@@ -526,8 +566,7 @@ export default function DAOProfileEditor({
 
           <div className="space-y-2">
             <Label htmlFor="twitter" className="flex items-center gap-2">
-              <TwitterIcon className="w-4 h-4" />
-              X (Twitter)
+              <TwitterIcon className="w-4 h-4" />X (Twitter)
             </Label>
             <Input
               id="twitter"
@@ -596,7 +635,9 @@ export default function DAOProfileEditor({
       <div className="flex justify-end">
         <Button
           onClick={handleSave}
-          disabled={isSaving || isUploadingCover || isUploadingProfile || !name.trim()}
+          disabled={
+            isSaving || isUploadingCover || isUploadingProfile || !name.trim()
+          }
           size="lg"
         >
           {isSaving ? (

@@ -1,14 +1,31 @@
 import { useState, useEffect } from "react";
 import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 import { initializeContractClients } from "../lib/contracts";
-import { getReadOnlyDaoRegistry, getReadOnlyMembershipSbt, getReadOnlyMembershipTree, getReadOnlyVoting } from "../lib/readOnlyContracts";
+import {
+  getReadOnlyDaoRegistry,
+  getReadOnlyMembershipSbt,
+  getReadOnlyMembershipTree,
+  getReadOnlyVoting,
+} from "../lib/readOnlyContracts";
 import { LoadingSpinner, Badge } from "./ui";
-import { CheckCircle, Copy, Check, Users, UserPlus, UserMinus, Vote, FileText, Shield, Key, Edit } from "lucide-react";
+import {
+  CheckCircle,
+  Copy,
+  Check,
+  Users,
+  UserPlus,
+  UserMinus,
+  Vote,
+  FileText,
+  Shield,
+  Key,
+  Edit,
+} from "lucide-react";
 import defaultVK from "../lib/verification_key_soroban.json";
 import ProfileChangesModal from "./ProfileChangesModal";
 
 // Relayer URL for fetching events
-const RELAYER_URL = import.meta.env.VITE_RELAYER_URL || 'http://localhost:3001';
+const RELAYER_URL = import.meta.env.VITE_RELAYER_URL || "http://localhost:3001";
 
 interface DAOInfoPanelProps {
   daoId: number;
@@ -50,24 +67,79 @@ interface DAOEvent {
 }
 
 // Event type to display info mapping (includes both with and without _event suffix)
-const EVENT_DISPLAY: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  dao_create: { label: 'DAO Created', icon: Shield, color: 'text-blue-500' },
-  dao_create_event: { label: 'DAO Created', icon: Shield, color: 'text-blue-500' },
-  admin_transfer: { label: 'Admin Transferred', icon: Shield, color: 'text-yellow-500' },
-  member_added: { label: 'Member Added', icon: UserPlus, color: 'text-green-500' },
-  member_revoked: { label: 'Member Revoked', icon: UserMinus, color: 'text-red-500' },
-  member_left: { label: 'Member Left', icon: UserMinus, color: 'text-orange-500' },
-  voter_registered: { label: 'Voter Registered', icon: Users, color: 'text-green-500' },
-  voter_removed: { label: 'Voter Removed', icon: UserMinus, color: 'text-red-500' },
-  voter_reinstated: { label: 'Voter Reinstated', icon: UserPlus, color: 'text-blue-500' },
-  vk_updated: { label: 'VK Updated', icon: Key, color: 'text-purple-500' },
-  vk_set_event: { label: 'VK Set', icon: Key, color: 'text-purple-500' },
-  sbt_mint_event: { label: 'Member Added', icon: UserPlus, color: 'text-green-500' },
-  proposal_created: { label: 'Proposal Created', icon: FileText, color: 'text-blue-500' },
-  proposal_closed: { label: 'Proposal Closed', icon: FileText, color: 'text-gray-500' },
-  proposal_archived: { label: 'Proposal Archived', icon: FileText, color: 'text-gray-400' },
-  vote_cast: { label: 'Vote Cast', icon: Vote, color: 'text-green-500' },
-  profile_updated: { label: 'Profile Updated', icon: Edit, color: 'text-indigo-500' },
+const EVENT_DISPLAY: Record<
+  string,
+  { label: string; icon: React.ElementType; color: string }
+> = {
+  dao_create: { label: "DAO Created", icon: Shield, color: "text-blue-500" },
+  dao_create_event: {
+    label: "DAO Created",
+    icon: Shield,
+    color: "text-blue-500",
+  },
+  admin_transfer: {
+    label: "Admin Transferred",
+    icon: Shield,
+    color: "text-yellow-500",
+  },
+  member_added: {
+    label: "Member Added",
+    icon: UserPlus,
+    color: "text-green-500",
+  },
+  member_revoked: {
+    label: "Member Revoked",
+    icon: UserMinus,
+    color: "text-red-500",
+  },
+  member_left: {
+    label: "Member Left",
+    icon: UserMinus,
+    color: "text-orange-500",
+  },
+  voter_registered: {
+    label: "Voter Registered",
+    icon: Users,
+    color: "text-green-500",
+  },
+  voter_removed: {
+    label: "Voter Removed",
+    icon: UserMinus,
+    color: "text-red-500",
+  },
+  voter_reinstated: {
+    label: "Voter Reinstated",
+    icon: UserPlus,
+    color: "text-blue-500",
+  },
+  vk_updated: { label: "VK Updated", icon: Key, color: "text-purple-500" },
+  vk_set_event: { label: "VK Set", icon: Key, color: "text-purple-500" },
+  sbt_mint_event: {
+    label: "Member Added",
+    icon: UserPlus,
+    color: "text-green-500",
+  },
+  proposal_created: {
+    label: "Proposal Created",
+    icon: FileText,
+    color: "text-blue-500",
+  },
+  proposal_closed: {
+    label: "Proposal Closed",
+    icon: FileText,
+    color: "text-gray-500",
+  },
+  proposal_archived: {
+    label: "Proposal Archived",
+    icon: FileText,
+    color: "text-gray-400",
+  },
+  vote_cast: { label: "Vote Cast", icon: Vote, color: "text-green-500" },
+  profile_updated: {
+    label: "Profile Updated",
+    icon: Edit,
+    color: "text-indigo-500",
+  },
 };
 
 // Compare VK with default ZKVote VK
@@ -99,15 +171,15 @@ function formatHex(hex: string, startChars = 8, endChars = 8): string {
 function formatEventData(data: Record<string, unknown>): string {
   const parts: string[] = [];
   for (const [key, value] of Object.entries(data)) {
-    if (typeof value === 'string' && value.length > 20) {
+    if (typeof value === "string" && value.length > 20) {
       parts.push(`${key}: ${value.slice(0, 8)}...`);
-    } else if (typeof value === 'object') {
+    } else if (typeof value === "object") {
       parts.push(`${key}: {...}`);
     } else {
       parts.push(`${key}: ${String(value)}`);
     }
   }
-  return parts.join(' • ');
+  return parts.join(" • ");
 }
 
 // Copy button component
@@ -126,12 +198,20 @@ function CopyButton({ text }: { text: string }) {
       className="p-1 text-muted-foreground hover:text-foreground transition-colors"
       title="Copy to clipboard"
     >
-      {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+      {copied ? (
+        <Check className="w-3 h-3 text-green-500" />
+      ) : (
+        <Copy className="w-3 h-3" />
+      )}
     </button>
   );
 }
 
-export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPanelProps) {
+export default function DAOInfoPanel({
+  daoId,
+  publicKey,
+  kit: _kit,
+}: DAOInfoPanelProps) {
   const [details, setDetails] = useState<DAODetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -139,7 +219,8 @@ export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPan
   const [events, setEvents] = useState<DAOEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [eventsError, setEventsError] = useState<string | null>(null);
-  const [selectedProfileEvent, setSelectedProfileEvent] = useState<DAOEvent | null>(null);
+  const [selectedProfileEvent, setSelectedProfileEvent] =
+    useState<DAOEvent | null>(null);
 
   useEffect(() => {
     loadDAODetails();
@@ -153,24 +234,28 @@ export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPan
 
       const response = await fetch(`${RELAYER_URL}/events/${daoId}?limit=20`);
       if (!response.ok) {
-        throw new Error('Failed to fetch events');
+        throw new Error("Failed to fetch events");
       }
 
       const data = await response.json();
       // Sort events: dao_create always at the end (bottom of activity log)
-      const sortedEvents = (data.events || []).sort((a: DAOEvent, b: DAOEvent) => {
-        // dao_create/dao_create_event should always be last
-        const aIsCreate = a.type === 'dao_create' || a.type === 'dao_create_event';
-        const bIsCreate = b.type === 'dao_create' || b.type === 'dao_create_event';
-        if (aIsCreate && !bIsCreate) return 1;
-        if (bIsCreate && !aIsCreate) return -1;
-        // Otherwise maintain timestamp DESC order (newest first)
-        return 0;
-      });
+      const sortedEvents = (data.events || []).sort(
+        (a: DAOEvent, b: DAOEvent) => {
+          // dao_create/dao_create_event should always be last
+          const aIsCreate =
+            a.type === "dao_create" || a.type === "dao_create_event";
+          const bIsCreate =
+            b.type === "dao_create" || b.type === "dao_create_event";
+          if (aIsCreate && !bIsCreate) return 1;
+          if (bIsCreate && !aIsCreate) return -1;
+          // Otherwise maintain timestamp DESC order (newest first)
+          return 0;
+        },
+      );
       setEvents(sortedEvents);
     } catch (err) {
-      console.error('Failed to load events:', err);
-      setEventsError('Events unavailable - relayer may be offline');
+      console.error("Failed to load events:", err);
+      setEventsError("Events unavailable - relayer may be offline");
     } finally {
       setEventsLoading(false);
     }
@@ -207,10 +292,14 @@ export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPan
 
       // Try to get members_can_propose from daoResult or default to true
       // Note: This field may not be present in older contract clients
-      const membersCanProposeValue = (daoResult.result as { members_can_propose?: boolean })?.members_can_propose ?? true;
+      const membersCanProposeValue =
+        (daoResult.result as { members_can_propose?: boolean })
+          ?.members_can_propose ?? true;
 
       // Fetch member count
-      const memberCountResult = await membershipSbt.get_member_count({ dao_id: BigInt(daoId) });
+      const memberCountResult = await membershipSbt.get_member_count({
+        dao_id: BigInt(daoId),
+      });
 
       // Fetch tree info (depth, leaf count, root) - may not exist if tree not initialized
       let treeInfo: { depth: number; leafCount: number; merkleRoot: string } = {
@@ -219,7 +308,9 @@ export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPan
         merkleRoot: "0",
       };
       try {
-        const treeInfoResult = await membershipTree.get_tree_info({ dao_id: BigInt(daoId) });
+        const treeInfoResult = await membershipTree.get_tree_info({
+          dao_id: BigInt(daoId),
+        });
         if (treeInfoResult.result) {
           treeInfo = {
             depth: Number(treeInfoResult.result[0]),
@@ -229,12 +320,18 @@ export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPan
         }
       } catch {
         // Tree not initialized yet - use defaults
-        if (import.meta.env.DEV) console.log("Tree not initialized for DAO:", daoId);
+        if (import.meta.env.DEV)
+          console.log("Tree not initialized for DAO:", daoId);
       }
 
       // Fetch VK version
-      const vkVersionResult = await voting.vk_version({ dao_id: BigInt(daoId) });
-      const vkVersion = vkVersionResult.result !== undefined ? Number(vkVersionResult.result) : null;
+      const vkVersionResult = await voting.vk_version({
+        dao_id: BigInt(daoId),
+      });
+      const vkVersion =
+        vkVersionResult.result !== undefined
+          ? Number(vkVersionResult.result)
+          : null;
 
       // Fetch VK if version exists
       let vk: DAODetails["vk"] = null;
@@ -242,14 +339,18 @@ export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPan
         try {
           const vkResult = await voting.vk_for_version({
             dao_id: BigInt(daoId),
-            version: vkVersion
+            version: vkVersion,
           });
 
           // Convert Buffer to hex string
-          const bufferToHex = (buf: Uint8Array | number[] | string | Buffer): string => {
-            if (typeof buf === 'string') return buf;
+          const bufferToHex = (
+            buf: Uint8Array | number[] | string | Buffer,
+          ): string => {
+            if (typeof buf === "string") return buf;
             if (buf instanceof Uint8Array || Array.isArray(buf)) {
-              return Array.from(buf).map((b: number) => b.toString(16).padStart(2, '0')).join('');
+              return Array.from(buf)
+                .map((b: number) => b.toString(16).padStart(2, "0"))
+                .join("");
             }
             return String(buf);
           };
@@ -309,15 +410,21 @@ export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPan
       {/* Basic Info */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="rounded-xl border bg-card p-4">
-          <h3 className="text-sm font-medium text-muted-foreground mb-1">Members</h3>
+          <h3 className="text-sm font-medium text-muted-foreground mb-1">
+            Members
+          </h3>
           <p className="text-2xl font-bold">{details.memberCount}</p>
         </div>
         <div className="rounded-xl border bg-card p-4">
-          <h3 className="text-sm font-medium text-muted-foreground mb-1">Registered Voters</h3>
+          <h3 className="text-sm font-medium text-muted-foreground mb-1">
+            Registered Voters
+          </h3>
           <p className="text-2xl font-bold">{details.leafCount}</p>
         </div>
         <div className="rounded-xl border bg-card p-4">
-          <h3 className="text-sm font-medium text-muted-foreground mb-1">VK Version</h3>
+          <h3 className="text-sm font-medium text-muted-foreground mb-1">
+            VK Version
+          </h3>
           <div className="flex items-center gap-2">
             <p className="text-2xl font-bold">{details.vkVersion ?? "N/A"}</p>
             {isZKVoteVK && (
@@ -332,7 +439,9 @@ export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPan
 
       {/* Admin */}
       <div className="rounded-xl border bg-card p-4">
-        <h3 className="text-sm font-medium text-muted-foreground mb-2">Admin</h3>
+        <h3 className="text-sm font-medium text-muted-foreground mb-2">
+          Admin
+        </h3>
         <div className="flex items-center gap-2">
           <code className="text-sm font-mono bg-muted px-2 py-1 rounded break-all">
             {details.admin}
@@ -343,19 +452,27 @@ export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPan
 
       {/* Proposal Mode */}
       <div className="rounded-xl border bg-card p-4">
-        <h3 className="text-sm font-medium text-muted-foreground mb-1">Proposal Mode</h3>
+        <h3 className="text-sm font-medium text-muted-foreground mb-1">
+          Proposal Mode
+        </h3>
         <p className="text-sm">
           {details.membersCanPropose ? (
-            <span className="text-green-600 dark:text-green-400">Members can create proposals</span>
+            <span className="text-green-600 dark:text-green-400">
+              Members can create proposals
+            </span>
           ) : (
-            <span className="text-orange-600 dark:text-orange-400">Admin-only proposals</span>
+            <span className="text-orange-600 dark:text-orange-400">
+              Admin-only proposals
+            </span>
           )}
         </p>
       </div>
 
       {/* Merkle Root */}
       <div className="rounded-xl border bg-card p-4">
-        <h3 className="text-sm font-medium text-muted-foreground mb-2">Current Merkle Root</h3>
+        <h3 className="text-sm font-medium text-muted-foreground mb-2">
+          Current Merkle Root
+        </h3>
         <div className="flex items-center gap-2">
           <code className="text-sm font-mono bg-muted px-2 py-1 rounded break-all">
             {details.merkleRoot}
@@ -363,7 +480,8 @@ export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPan
           <CopyButton text={details.merkleRoot} />
         </div>
         <p className="text-xs text-muted-foreground mt-2">
-          Tree depth: {details.treeDepth} (max {Math.pow(2, details.treeDepth).toLocaleString()} members)
+          Tree depth: {details.treeDepth} (max{" "}
+          {Math.pow(2, details.treeDepth).toLocaleString()} members)
         </p>
       </div>
 
@@ -372,7 +490,9 @@ export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPan
         <div className="rounded-xl border bg-card p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-medium text-muted-foreground">Verification Key</h3>
+              <h3 className="text-sm font-medium text-muted-foreground">
+                Verification Key
+              </h3>
               {isZKVoteVK && (
                 <Badge variant="success" className="gap-1">
                   <CheckCircle className="w-3 h-3" />
@@ -427,7 +547,9 @@ export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPan
                 </div>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-1">IC Points ({details.vk.ic.length})</p>
+                <p className="text-xs text-muted-foreground mb-1">
+                  IC Points ({details.vk.ic.length})
+                </p>
                 <div className="space-y-1">
                   {details.vk.ic.map((ic, i) => (
                     <div key={i} className="flex items-center gap-2">
@@ -443,7 +565,8 @@ export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPan
           ) : (
             <div className="flex items-center gap-2">
               <code className="text-sm font-mono bg-muted px-2 py-1 rounded">
-                Alpha: {formatHex(details.vk.alpha)} | Beta: {formatHex(details.vk.beta, 6, 6)} | ...
+                Alpha: {formatHex(details.vk.alpha)} | Beta:{" "}
+                {formatHex(details.vk.beta, 6, 6)} | ...
               </code>
             </div>
           )}
@@ -452,7 +575,9 @@ export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPan
 
       {/* Activity Log */}
       <div className="rounded-xl border bg-card p-4">
-        <h3 className="text-sm font-medium text-muted-foreground mb-3">Activity Log</h3>
+        <h3 className="text-sm font-medium text-muted-foreground mb-3">
+          Activity Log
+        </h3>
 
         {eventsLoading ? (
           <div className="flex items-center justify-center py-4">
@@ -460,7 +585,9 @@ export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPan
           </div>
         ) : eventsError ? (
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground italic">{eventsError}</p>
+            <p className="text-sm text-muted-foreground italic">
+              {eventsError}
+            </p>
             <p className="text-xs text-muted-foreground">
               View events on{" "}
               <a
@@ -474,18 +601,23 @@ export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPan
             </p>
           </div>
         ) : events.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic">No events recorded yet</p>
+          <p className="text-sm text-muted-foreground italic">
+            No events recorded yet
+          </p>
         ) : (
           <div className="space-y-2">
             {events.map((event, index) => {
               const display = EVENT_DISPLAY[event.type] || {
                 label: event.type,
                 icon: FileText,
-                color: 'text-gray-500'
+                color: "text-gray-500",
               };
               const Icon = display.icon;
 
-              const hasChanges = event.type === 'profile_updated' && event.data?.changes && Object.keys(event.data.changes).length > 0;
+              const hasChanges =
+                event.type === "profile_updated" &&
+                event.data?.changes &&
+                Object.keys(event.data.changes).length > 0;
 
               return (
                 <div
@@ -497,22 +629,32 @@ export default function DAOInfoPanel({ daoId, publicKey, kit: _kit }: DAOInfoPan
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{display.label}</p>
-                    {event.data && Object.keys(event.data).length > 0 && !hasChanges && (
-                      <p className="text-xs text-muted-foreground truncate">
-                        {formatEventData(event.data)}
-                      </p>
-                    )}
+                    {event.data &&
+                      Object.keys(event.data).length > 0 &&
+                      !hasChanges && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          {formatEventData(event.data)}
+                        </p>
+                      )}
                     {hasChanges && event.data.changes && (
                       <button
                         onClick={() => setSelectedProfileEvent(event)}
                         className="text-xs text-primary hover:underline"
                       >
-                        View {Object.keys(event.data.changes).length} change{Object.keys(event.data.changes).length !== 1 ? 's' : ''}
+                        View {Object.keys(event.data.changes).length} change
+                        {Object.keys(event.data.changes).length !== 1
+                          ? "s"
+                          : ""}
                       </button>
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground text-right">
-                    <p>Ledger {typeof event.ledger === 'number' && !isNaN(event.ledger) ? event.ledger : 'N/A'}</p>
+                    <p>
+                      Ledger{" "}
+                      {typeof event.ledger === "number" && !isNaN(event.ledger)
+                        ? event.ledger
+                        : "N/A"}
+                    </p>
                     {event.txHash && (
                       <p className="font-mono truncate max-w-[80px]">
                         {event.txHash.slice(0, 8)}...

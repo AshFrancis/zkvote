@@ -69,7 +69,10 @@ export default function Comment({
 
   // Modal states
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [alertModal, setAlertModal] = useState<{ title: string; message: string } | null>(null);
+  const [alertModal, setAlertModal] = useState<{
+    title: string;
+    message: string;
+  } | null>(null);
 
   // Initialize contract clients when needed (memoized for performance)
   const contractClients = useMemo(() => {
@@ -85,7 +88,8 @@ export default function Comment({
   const canReply = depth === 0 && hasMembership && !comment.deleted;
   const hasRevisions = comment.revisionCids.length > 0;
   // Deleted comments should always show history if we have the original content CID
-  const canViewHistory = hasRevisions || (comment.deleted && comment.contentCid);
+  const canViewHistory =
+    hasRevisions || (comment.deleted && comment.contentCid);
 
   const handleDeleteClick = () => {
     setShowDeleteConfirm(true);
@@ -429,7 +433,8 @@ export default function Comment({
           onClick={() => setIsCollapsed(false)}
           className="ml-6 text-xs text-muted-foreground hover:text-foreground"
         >
-          Show {comment.replies.length} {comment.replies.length === 1 ? "reply" : "replies"}
+          Show {comment.replies.length}{" "}
+          {comment.replies.length === 1 ? "reply" : "replies"}
         </button>
       )}
 

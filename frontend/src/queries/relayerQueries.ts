@@ -26,12 +26,12 @@ function checkConfigMismatches(config: RelayerConfig): string[] {
 
   if (config.votingContract && config.votingContract !== CONTRACTS.VOTING_ID) {
     mismatches.push(
-      `Relayer votingContract (${config.votingContract}) differs from local config (${CONTRACTS.VOTING_ID})`
+      `Relayer votingContract (${config.votingContract}) differs from local config (${CONTRACTS.VOTING_ID})`,
     );
   }
   if (config.treeContract && config.treeContract !== CONTRACTS.TREE_ID) {
     mismatches.push(
-      `Relayer treeContract (${config.treeContract}) differs from local config (${CONTRACTS.TREE_ID})`
+      `Relayer treeContract (${config.treeContract}) differs from local config (${CONTRACTS.TREE_ID})`,
     );
   }
   if (
@@ -39,12 +39,12 @@ function checkConfigMismatches(config: RelayerConfig): string[] {
     config.networkPassphrase !== NETWORK_CONFIG.networkPassphrase
   ) {
     mismatches.push(
-      `Relayer networkPassphrase differs from local config (${NETWORK_CONFIG.networkPassphrase})`
+      `Relayer networkPassphrase differs from local config (${NETWORK_CONFIG.networkPassphrase})`,
     );
   }
   if (config.rpc && config.rpc !== NETWORK_CONFIG.rpcUrl) {
     mismatches.push(
-      `Relayer RPC differs from local config (${NETWORK_CONFIG.rpcUrl})`
+      `Relayer RPC differs from local config (${NETWORK_CONFIG.rpcUrl})`,
     );
   }
 

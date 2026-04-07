@@ -12,7 +12,7 @@ export default function WalletConnect({
   onConnect,
   onDisconnect,
   publicKey,
-  isConnected
+  isConnected,
 }: WalletConnectProps) {
   const [error, setError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
@@ -42,18 +42,10 @@ export default function WalletConnect({
       <Banner variant="success">
         <div className="flex items-center justify-between w-full">
           <div>
-            <h3 className="text-lg font-semibold mb-1">
-              Wallet Connected
-            </h3>
-            <p className="font-mono text-sm">
-              {truncateAddress(publicKey)}
-            </p>
+            <h3 className="text-lg font-semibold mb-1">Wallet Connected</h3>
+            <p className="font-mono text-sm">{truncateAddress(publicKey)}</p>
           </div>
-          <Button
-            variant="destructive"
-            size="md"
-            onClick={handleDisconnect}
-          >
+          <Button variant="destructive" size="md" onClick={handleDisconnect}>
             Disconnect
           </Button>
         </div>
@@ -63,17 +55,14 @@ export default function WalletConnect({
 
   return (
     <Card variant="primary">
-      <h3 className="text-lg font-semibold mb-2">
-        Connect Wallet
-      </h3>
+      <h3 className="text-lg font-semibold mb-2">Connect Wallet</h3>
       <p className="text-muted-foreground mb-4">
-        Connect your Stellar wallet (Freighter, xBull, Albedo, etc.) to interact with the DAO.
+        Connect your Stellar wallet (Freighter, xBull, Albedo, etc.) to interact
+        with the DAO.
       </p>
       {error && (
         <div className="mb-4">
-          <Banner variant="error">
-            {error}
-          </Banner>
+          <Banner variant="error">{error}</Banner>
         </div>
       )}
       <Button

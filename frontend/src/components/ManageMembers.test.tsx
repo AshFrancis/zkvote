@@ -6,7 +6,9 @@ import ManageMembers from "./ManageMembers";
 vi.mock("../hooks/useWallet", () => ({
   useWallet: vi.fn(() => ({
     kit: {
-      signMessage: vi.fn().mockResolvedValue({ signedMessage: "mocked-signature" }),
+      signMessage: vi
+        .fn()
+        .mockResolvedValue({ signedMessage: "mocked-signature" }),
       signTransaction: vi.fn(),
     },
   })),
@@ -91,8 +93,9 @@ vi.mock("../lib/utils", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/utils")>();
   return {
     ...actual,
-    truncateAddress: vi.fn((addr: string, start = 4, end = 4) =>
-      `${addr.slice(0, start)}...${addr.slice(-end)}`
+    truncateAddress: vi.fn(
+      (addr: string, start = 4, end = 4) =>
+        `${addr.slice(0, start)}...${addr.slice(-end)}`,
     ),
     extractTxHash: vi.fn().mockReturnValue("txhash123"),
   };
@@ -163,7 +166,9 @@ describe("ManageMembers", () => {
       });
 
       expect(screen.getByText("Recipient Address")).toBeInTheDocument();
-      expect(screen.getByPlaceholderText(/G\.\.\. \(Stellar address\)/)).toBeInTheDocument();
+      expect(
+        screen.getByPlaceholderText(/G\.\.\. \(Stellar address\)/),
+      ).toBeInTheDocument();
     });
 
     it("hides mint SBT form for non-admin", async () => {
@@ -177,7 +182,8 @@ describe("ManageMembers", () => {
     });
 
     it("shows action menu for non-admin members when admin", async () => {
-      const { getReadOnlyMembershipSbt } = await import("../lib/readOnlyContracts");
+      const { getReadOnlyMembershipSbt } =
+        await import("../lib/readOnlyContracts");
       (getReadOnlyMembershipSbt as ReturnType<typeof vi.fn>).mockReturnValue({
         get_member_count: vi.fn().mockResolvedValue({ result: BigInt(1) }),
         get_members: vi.fn().mockResolvedValue({
@@ -191,7 +197,9 @@ describe("ManageMembers", () => {
 
       await waitFor(() => {
         // Look for the member actions menu button (three dots icon)
-        const actionButtons = document.querySelectorAll('[title="Member actions"]');
+        const actionButtons = document.querySelectorAll(
+          '[title="Member actions"]',
+        );
         expect(actionButtons.length).toBeGreaterThan(0);
       });
     });
@@ -221,7 +229,9 @@ describe("ManageMembers", () => {
         expect(screen.getByText("Mint SBT")).toBeInTheDocument();
       });
 
-      const addressInput = screen.getByPlaceholderText(/G\.\.\. \(Stellar address\)/);
+      const addressInput = screen.getByPlaceholderText(
+        /G\.\.\. \(Stellar address\)/,
+      );
       fireEvent.change(addressInput, { target: { value: "GNEWMEMBER..." } });
 
       const mintButton = screen.getByText("Mint SBT");
@@ -239,7 +249,8 @@ describe("ManageMembers", () => {
 
   describe("Leave DAO", () => {
     it("shows leave button for non-admin members", async () => {
-      const { getReadOnlyMembershipSbt } = await import("../lib/readOnlyContracts");
+      const { getReadOnlyMembershipSbt } =
+        await import("../lib/readOnlyContracts");
       (getReadOnlyMembershipSbt as ReturnType<typeof vi.fn>).mockReturnValue({
         get_member_count: vi.fn().mockResolvedValue({ result: BigInt(1) }),
         get_members: vi.fn().mockResolvedValue({
@@ -288,7 +299,9 @@ describe("ManageMembers", () => {
       });
 
       // Enter an address and try to mint
-      const addressInput = screen.getByPlaceholderText(/G\.\.\. \(Stellar address\)/);
+      const addressInput = screen.getByPlaceholderText(
+        /G\.\.\. \(Stellar address\)/,
+      );
       fireEvent.change(addressInput, { target: { value: "GTEST..." } });
 
       const mintButton = screen.getByText("Mint SBT");
@@ -344,7 +357,8 @@ describe("ManageMembers Reinstate Member", () => {
   });
 
   it("renders member list for admin to manage", async () => {
-    const { getReadOnlyMembershipSbt } = await import("../lib/readOnlyContracts");
+    const { getReadOnlyMembershipSbt } =
+      await import("../lib/readOnlyContracts");
     (getReadOnlyMembershipSbt as ReturnType<typeof vi.fn>).mockReturnValue({
       get_member_count: vi.fn().mockResolvedValue({ result: BigInt(1) }),
       get_members: vi.fn().mockResolvedValue({
@@ -377,7 +391,8 @@ describe("ManageMembers Alias Handling", () => {
   });
 
   it("renders member list with aliases", async () => {
-    const { getReadOnlyMembershipSbt } = await import("../lib/readOnlyContracts");
+    const { getReadOnlyMembershipSbt } =
+      await import("../lib/readOnlyContracts");
 
     (getReadOnlyMembershipSbt as ReturnType<typeof vi.fn>).mockReturnValue({
       get_member_count: vi.fn().mockResolvedValue({ result: BigInt(1) }),
@@ -396,7 +411,8 @@ describe("ManageMembers Alias Handling", () => {
   });
 
   it("handles null aliases gracefully", async () => {
-    const { getReadOnlyMembershipSbt } = await import("../lib/readOnlyContracts");
+    const { getReadOnlyMembershipSbt } =
+      await import("../lib/readOnlyContracts");
 
     (getReadOnlyMembershipSbt as ReturnType<typeof vi.fn>).mockReturnValue({
       get_member_count: vi.fn().mockResolvedValue({ result: BigInt(2) }),
@@ -429,9 +445,12 @@ describe("ManageMembers Data Refresh", () => {
   });
 
   it("calls get_members on initial load", async () => {
-    const getMembersMock = vi.fn().mockResolvedValue({ result: ["GEXISTING..."] });
+    const getMembersMock = vi
+      .fn()
+      .mockResolvedValue({ result: ["GEXISTING..."] });
 
-    const { getReadOnlyMembershipSbt } = await import("../lib/readOnlyContracts");
+    const { getReadOnlyMembershipSbt } =
+      await import("../lib/readOnlyContracts");
     (getReadOnlyMembershipSbt as ReturnType<typeof vi.fn>).mockReturnValue({
       get_member_count: vi.fn().mockResolvedValue({ result: BigInt(1) }),
       get_members: getMembersMock,
@@ -464,7 +483,8 @@ describe("ManageMembers Confirmation Modals", () => {
   });
 
   it("shows revoke confirmation modal when clicking remove", async () => {
-    const { getReadOnlyMembershipSbt } = await import("../lib/readOnlyContracts");
+    const { getReadOnlyMembershipSbt } =
+      await import("../lib/readOnlyContracts");
     (getReadOnlyMembershipSbt as ReturnType<typeof vi.fn>).mockReturnValue({
       get_member_count: vi.fn().mockResolvedValue({ result: BigInt(1) }),
       get_members: vi.fn().mockResolvedValue({
@@ -477,7 +497,9 @@ describe("ManageMembers Confirmation Modals", () => {
     render(<ManageMembers {...adminProps} />);
 
     await waitFor(() => {
-      const actionButtons = document.querySelectorAll('[title="Member actions"]');
+      const actionButtons = document.querySelectorAll(
+        '[title="Member actions"]',
+      );
       expect(actionButtons.length).toBeGreaterThan(0);
     });
 
@@ -501,7 +523,8 @@ describe("ManageMembers Confirmation Modals", () => {
   });
 
   it("closes revoke modal when cancelled", async () => {
-    const { getReadOnlyMembershipSbt } = await import("../lib/readOnlyContracts");
+    const { getReadOnlyMembershipSbt } =
+      await import("../lib/readOnlyContracts");
     (getReadOnlyMembershipSbt as ReturnType<typeof vi.fn>).mockReturnValue({
       get_member_count: vi.fn().mockResolvedValue({ result: BigInt(1) }),
       get_members: vi.fn().mockResolvedValue({
@@ -514,7 +537,9 @@ describe("ManageMembers Confirmation Modals", () => {
     render(<ManageMembers {...adminProps} />);
 
     await waitFor(() => {
-      const actionButtons = document.querySelectorAll('[title="Member actions"]');
+      const actionButtons = document.querySelectorAll(
+        '[title="Member actions"]',
+      );
       expect(actionButtons.length).toBeGreaterThan(0);
     });
 

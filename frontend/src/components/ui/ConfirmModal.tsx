@@ -62,7 +62,12 @@ export function ConfirmModal({
             <Icon className={`w-5 h-5 ${iconColor}`} />
             <h3 className="text-lg font-semibold">{title}</h3>
           </div>
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={isLoading}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            disabled={isLoading}
+          >
             <X className="w-4 h-4" />
           </Button>
         </div>
@@ -77,7 +82,11 @@ export function ConfirmModal({
           <Button variant="outline" onClick={onClose} disabled={isLoading}>
             {cancelText}
           </Button>
-          <Button variant={buttonVariant} onClick={onConfirm} disabled={isLoading}>
+          <Button
+            variant={buttonVariant}
+            onClick={onConfirm}
+            disabled={isLoading}
+          >
             {isLoading ? "Processing..." : confirmText}
           </Button>
         </div>

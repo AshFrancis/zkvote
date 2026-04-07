@@ -29,7 +29,10 @@ export const MAX_NAME_LENGTH = 24;
 export function validateDAOMetadata(metadata: Partial<DAOMetadata>): string[] {
   const errors: string[] = [];
 
-  if (metadata.description && metadata.description.length > MAX_DESCRIPTION_LENGTH) {
+  if (
+    metadata.description &&
+    metadata.description.length > MAX_DESCRIPTION_LENGTH
+  ) {
     errors.push(`Description exceeds ${MAX_DESCRIPTION_LENGTH} characters`);
   }
 
@@ -55,7 +58,7 @@ export function validateDAOMetadata(metadata: Partial<DAOMetadata>): string[] {
  * Upload DAO metadata to IPFS
  */
 export async function uploadDAOMetadata(
-  metadata: Omit<DAOMetadata, "version" | "updatedAt">
+  metadata: Omit<DAOMetadata, "version" | "updatedAt">,
 ): Promise<{ cid: string }> {
   const fullMetadata: DAOMetadata = {
     version: 1,
@@ -85,7 +88,9 @@ export async function uploadDAOMetadata(
 /**
  * Fetch DAO metadata from IPFS
  */
-export async function fetchDAOMetadata(cid: string): Promise<DAOMetadata | null> {
+export async function fetchDAOMetadata(
+  cid: string,
+): Promise<DAOMetadata | null> {
   try {
     const response = await relayerFetch(`/ipfs/${cid}`);
     if (!response.ok) return null;
@@ -124,7 +129,8 @@ export async function uploadImage(file: File): Promise<{ cid: string }> {
  * Get the URL for an IPFS image
  */
 export function getImageUrl(cid: string): string {
-  const relayerUrl = import.meta.env.VITE_RELAYER_URL || "http://localhost:3001";
+  const relayerUrl =
+    import.meta.env.VITE_RELAYER_URL || "http://localhost:3001";
   return `${relayerUrl}/ipfs/image/${cid}`;
 }
 

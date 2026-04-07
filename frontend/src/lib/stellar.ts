@@ -21,7 +21,10 @@ export const server = new rpc.Server(NETWORK_CONFIG.rpcUrl, {
 export const networkPassphrase = NETWORK_CONFIG.networkPassphrase;
 
 // Optional relayer endpoints (if front-end is allowed to call them directly)
-export async function checkRelayerReady(relayerUrl: string, authToken?: string) {
+export async function checkRelayerReady(
+  relayerUrl: string,
+  authToken?: string,
+) {
   const headers: Record<string, string> = {};
   if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
   try {
@@ -30,7 +33,10 @@ export async function checkRelayerReady(relayerUrl: string, authToken?: string) 
     const data = await res.json();
     return { ok: data?.status === "ok", details: data };
   } catch (err: unknown) {
-    return { ok: false, error: err instanceof Error ? err.message : "health check failed" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "health check failed",
+    };
   }
 }
 
@@ -42,7 +48,10 @@ export type RelayerConfig = {
   vkVersion?: number;
 };
 
-export async function fetchRelayerConfig(relayerUrl: string, authToken?: string): Promise<RelayerConfig> {
+export async function fetchRelayerConfig(
+  relayerUrl: string,
+  authToken?: string,
+): Promise<RelayerConfig> {
   const headers: Record<string, string> = {};
   if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
   const res = await fetch(`${relayerUrl}/config`, { headers });
@@ -74,7 +83,10 @@ export async function buildContractInvocation(
   } catch {
     // If account doesn't exist or can't be fetched, use a mock account for simulation
     // This works for read-only operations
-    sourceAccount = new (await import("@stellar/stellar-sdk")).Account(source, "0");
+    sourceAccount = new (await import("@stellar/stellar-sdk")).Account(
+      source,
+      "0",
+    );
   }
 
   const contract = new Contract(contractId);
@@ -95,10 +107,7 @@ export async function buildContractInvocation(
   }
 
   // Prepare transaction with simulation results
-  const prepared = rpc.assembleTransaction(
-    transaction,
-    simulated
-  ).build();
+  const prepared = rpc.assembleTransaction(transaction, simulated).build();
 
   return prepared;
 }
@@ -107,7 +116,10 @@ export async function buildContractInvocation(
  * Wallet Kit interface for transaction signing
  */
 interface WalletKit {
-  signTransaction(xdr: string, options: { networkPassphrase: string }): Promise<{ signedTxXdr: string }>;
+  signTransaction(
+    xdr: string,
+    options: { networkPassphrase: string },
+  ): Promise<{ signedTxXdr: string }>;
 }
 
 /**
@@ -118,7 +130,7 @@ interface WalletKit {
  */
 export async function signAndSubmitTransaction(
   tx: Transaction,
-  kit: WalletKit
+  kit: WalletKit,
 ) {
   // Sign transaction using wallet kit
   const { signedTxXdr } = await kit.signTransaction(tx.toXDR(), {
@@ -166,7 +178,7 @@ export async function simulateContractCall(
   const Account = (await import("@stellar/stellar-sdk")).Account;
   const dummyAccount = new Account(
     "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
-    "0"
+    "0",
   );
 
   const transaction = new TransactionBuilder(dummyAccount, {

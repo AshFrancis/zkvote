@@ -11,7 +11,11 @@ export function cn(...inputs: ClassValue[]) {
  * @param startChars Number of characters to show at start (default: 4)
  * @param endChars Number of characters to show at end (default: 4)
  */
-export function truncateAddress(address: string, startChars = 4, endChars = 4): string {
+export function truncateAddress(
+  address: string,
+  startChars = 4,
+  endChars = 4,
+): string {
   if (!address || address.length <= startChars + endChars + 3) {
     return address;
   }
@@ -58,14 +62,15 @@ export function isUserRejection(err: unknown): boolean {
 export function handleTransactionError(
   err: unknown,
   setError: (msg: string) => void,
-  errorMessage?: string
+  errorMessage?: string,
 ): boolean {
   if (isUserRejection(err)) {
     if (import.meta.env.DEV) console.log("User cancelled the transaction");
     return true;
   }
 
-  const message = errorMessage || (err instanceof Error ? err.message : "Transaction failed");
+  const message =
+    errorMessage || (err instanceof Error ? err.message : "Transaction failed");
   setError(message);
   return false;
 }
@@ -89,14 +94,14 @@ export function isAccountNotFoundError(err: unknown): boolean {
  * @param text Text to convert to slug
  */
 export function toSlug(text: string | undefined | null): string {
-  if (!text) return '';
+  if (!text) return "";
   return text
     .toLowerCase()
     .trim()
-    .replace(/[^\w\s-]/g, '') // Remove non-word chars (except spaces and hyphens)
-    .replace(/\s+/g, '-') // Replace spaces with hyphens
-    .replace(/-+/g, '-') // Replace multiple hyphens with single
-    .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
+    .replace(/[^\w\s-]/g, "") // Remove non-word chars (except spaces and hyphens)
+    .replace(/\s+/g, "-") // Replace spaces with hyphens
+    .replace(/-+/g, "-") // Replace multiple hyphens with single
+    .replace(/^-|-$/g, ""); // Remove leading/trailing hyphens
 }
 
 /**
@@ -123,23 +128,29 @@ export function parseIdFromSlug(idSlug: string): number | null {
  * The result can be a sendResult or assembled transaction
  */
 export function extractTxHash(result: unknown): string | null {
-  if (!result || typeof result !== 'object') return null;
+  if (!result || typeof result !== "object") return null;
 
   const res = result as Record<string, unknown>;
 
   // Direct hash property
-  if (typeof res.hash === 'string') return res.hash;
+  if (typeof res.hash === "string") return res.hash;
 
   // From sendTransaction result
-  if (res.sendTransactionResponse && typeof res.sendTransactionResponse === 'object') {
+  if (
+    res.sendTransactionResponse &&
+    typeof res.sendTransactionResponse === "object"
+  ) {
     const sendRes = res.sendTransactionResponse as Record<string, unknown>;
-    if (typeof sendRes.hash === 'string') return sendRes.hash;
+    if (typeof sendRes.hash === "string") return sendRes.hash;
   }
 
   // From getTransaction result
-  if (res.getTransactionResponse && typeof res.getTransactionResponse === 'object') {
+  if (
+    res.getTransactionResponse &&
+    typeof res.getTransactionResponse === "object"
+  ) {
     const getRes = res.getTransactionResponse as Record<string, unknown>;
-    if (typeof getRes.txHash === 'string') return getRes.txHash;
+    if (typeof getRes.txHash === "string") return getRes.txHash;
   }
 
   return null;

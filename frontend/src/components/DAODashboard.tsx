@@ -1,17 +1,24 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { initializeContractClients } from "../lib/contracts";
-import { getReadOnlyDaoRegistry, getReadOnlyMembershipSbt, getReadOnlyMembershipTree } from "../lib/readOnlyContracts";
+import {
+  getReadOnlyDaoRegistry,
+  getReadOnlyMembershipSbt,
+  getReadOnlyMembershipTree,
+} from "../lib/readOnlyContracts";
 import { useWallet } from "../hooks/useWallet";
 import { useRegistration } from "../hooks/useRegistration";
 import { isUserRejection, extractTxHash } from "../lib/utils";
 import { notifyEvent } from "../lib/api";
-import {
-  type DAOMetadata,
-  fetchDAOMetadata,
-} from "../lib/daoMetadata";
+import { type DAOMetadata, fetchDAOMetadata } from "../lib/daoMetadata";
 import { Alert, LoadingSpinner, CreateProposalForm } from "./ui";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/Card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "./ui/Card";
 import ProposalList from "./ProposalList";
 import ManageMembers from "./ManageMembers";
 import DAOInfoPanel from "./DAOInfoPanel";
@@ -26,7 +33,12 @@ interface DAODashboardProps {
   initialTab?: DAOTab;
 }
 
-export default function DAODashboard({ publicKey, daoId, isInitializing = false, initialTab = 'proposals' }: DAODashboardProps) {
+export default function DAODashboard({
+  publicKey,
+  daoId,
+  isInitializing = false,
+  initialTab = "proposals",
+}: DAODashboardProps) {
   const { kit } = useWallet();
   const navigate = useNavigate();
 
@@ -44,7 +56,9 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
   const [joining, setJoining] = useState(false);
   const [creatingProposal, setCreatingProposal] = useState(false);
   const [proposalKey, setProposalKey] = useState(0);
-  const [pendingProposal, setPendingProposal] = useState<{ title: string } | null>(null);
+  const [pendingProposal, setPendingProposal] = useState<{
+    title: string;
+  } | null>(null);
   const activeTab = initialTab;
   const [metadata, setMetadata] = useState<DAOMetadata | null>(null);
 
@@ -61,8 +75,13 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
 
   // Helper to get URL path for a tab
   const getTabPath = (tab: DAOTab) => {
-    const daoSlug = dao?.name ? `${daoId}-${dao.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}` : String(daoId);
-    if (tab === 'proposals') return `/daos/${daoSlug}`;
+    const daoSlug = dao?.name
+      ? `${daoId}-${dao.name
+          .toLowerCase()
+          .replace(/\s+/g, "-")
+          .replace(/[^a-z0-9-]/g, "")}`
+      : String(daoId);
+    if (tab === "proposals") return `/daos/${daoSlug}`;
     return `/daos/${daoSlug}/${tab}`;
   };
 
@@ -77,7 +96,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
 
   // Update page title and meta description based on active tab
   useEffect(() => {
-    const daoName = dao?.name || 'DAO';
+    const daoName = dao?.name || "DAO";
     const tabMeta: Record<DAOTab, { title: string; description: string }> = {
       proposals: {
         title: `${daoName} - Proposals | ZKVote`,
@@ -95,7 +114,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
         title: `${daoName} - Settings | ZKVote`,
         description: `Manage settings for ${daoName} DAO. Configure membership and proposal permissions.`,
       },
-      'create-proposal': {
+      "create-proposal": {
         title: `${daoName} - New Proposal | ZKVote`,
         description: `Create a new proposal for ${daoName} DAO. Start a vote for the community.`,
       },
@@ -106,11 +125,11 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
 
     let metaDescription = document.querySelector('meta[name="description"]');
     if (!metaDescription) {
-      metaDescription = document.createElement('meta');
-      metaDescription.setAttribute('name', 'description');
+      metaDescription = document.createElement("meta");
+      metaDescription.setAttribute("name", "description");
       document.head.appendChild(metaDescription);
     }
-    metaDescription.setAttribute('content', description);
+    metaDescription.setAttribute("content", description);
   }, [activeTab, dao?.name]);
 
   const loadDAOInfo = async () => {
@@ -145,8 +164,13 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
           });
         } catch (err) {
           const errorMessage = err instanceof Error ? err.message : String(err);
-          if (errorMessage.includes('Account not found') || errorMessage.includes('does not exist')) {
-            console.warn('Connected wallet account not found on network, using read-only mode');
+          if (
+            errorMessage.includes("Account not found") ||
+            errorMessage.includes("does not exist")
+          ) {
+            console.warn(
+              "Connected wallet account not found on network, using read-only mode",
+            );
             useReadOnly = true;
           } else {
             throw err;
@@ -166,7 +190,10 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
         checkTreeInitialized(),
       ]);
       const vkSet = await checkVKSet();
-      const isAdmin = !useReadOnly && publicKey ? (daoResult.result.admin === publicKey) : false;
+      const isAdmin =
+        !useReadOnly && publicKey
+          ? daoResult.result.admin === publicKey
+          : false;
 
       const metadataCid = daoResult.result.metadata_cid || null;
 
@@ -217,7 +244,10 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
         return result.result;
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
-        if (errorMessage.includes('Account not found') || errorMessage.includes('does not exist')) {
+        if (
+          errorMessage.includes("Account not found") ||
+          errorMessage.includes("does not exist")
+        ) {
           const sbtClient = getReadOnlyMembershipSbt();
           const result = await sbtClient.has({
             dao_id: BigInt(daoId),
@@ -268,14 +298,16 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
         encrypted_alias: undefined,
       });
 
-      const result = await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+      const result = await tx.signAndSend({
+        signTransaction: kit.signTransaction.bind(kit),
+      });
 
       const txHash = extractTxHash(result);
       if (txHash) {
         notifyEvent(daoId, "member_added", txHash, { member: publicKey });
       }
 
-      setDao(prev => prev ? { ...prev, hasMembership: true } : prev);
+      setDao((prev) => (prev ? { ...prev, hasMembership: true } : prev));
 
       const cacheKey = `dao_info_${daoId}`;
       const cached = localStorage.getItem(cacheKey);
@@ -287,7 +319,10 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
 
       await loadDAOInfo();
 
-      if (import.meta.env.DEV) console.log("Successfully joined DAO! Click 'Register for Voting' to set up voting credentials.");
+      if (import.meta.env.DEV)
+        console.log(
+          "Successfully joined DAO! Click 'Register for Voting' to set up voting credentials.",
+        );
     } catch (err) {
       if (!isUserRejection(err)) {
         setError(err instanceof Error ? err.message : "Failed to join DAO");
@@ -323,29 +358,39 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
         content_cid: data.contentCid,
         end_time: endTime,
         creator: publicKey || "",
-        vote_mode: { tag: data.voteMode === "fixed" ? "Fixed" : "Trailing", values: void 0 },
+        vote_mode: {
+          tag: data.voteMode === "fixed" ? "Fixed" : "Trailing",
+          values: void 0,
+        },
       });
 
       if (!kit) {
         throw new Error("Wallet kit not available");
       }
 
-      const result = await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+      const result = await tx.signAndSend({
+        signTransaction: kit.signTransaction.bind(kit),
+      });
 
       const txHash = extractTxHash(result);
       if (txHash) {
-        notifyEvent(daoId, "proposal_created", txHash, { title: data.title, contentCid: data.contentCid });
+        notifyEvent(daoId, "proposal_created", txHash, {
+          title: data.title,
+          contentCid: data.contentCid,
+        });
       }
 
       setPendingProposal({ title: data.title });
-      navigateToTab('proposals');
+      navigateToTab("proposals");
 
       setTimeout(() => {
         setPendingProposal(null);
-        setProposalKey(prev => prev + 1);
+        setProposalKey((prev) => prev + 1);
       }, 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create proposal");
+      setError(
+        err instanceof Error ? err.message : "Failed to create proposal",
+      );
       console.error("Failed to create proposal:", err);
     } finally {
       setCreatingProposal(false);
@@ -397,13 +442,22 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
         isRegistering={registration.isRegistering}
       />
 
-      {error && <Alert variant="error" className="mb-4">{error}</Alert>}
-
-      {activeTab === 'info' && (
-        <DAOInfoPanel key={`info-${dao.hasMembership}`} daoId={daoId} publicKey={publicKey} kit={kit} />
+      {error && (
+        <Alert variant="error" className="mb-4">
+          {error}
+        </Alert>
       )}
 
-      {activeTab === 'proposals' && (
+      {activeTab === "info" && (
+        <DAOInfoPanel
+          key={`info-${dao.hasMembership}`}
+          daoId={daoId}
+          publicKey={publicKey}
+          kit={kit}
+        />
+      )}
+
+      {activeTab === "proposals" && (
         <ProposalList
           key={`proposals-${proposalKey}-${dao.hasMembership}`}
           publicKey={publicKey}
@@ -417,7 +471,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
         />
       )}
 
-      {activeTab === 'members' && (
+      {activeTab === "members" && (
         <ManageMembers
           key={`members-${dao.hasMembership}-${dao.isAdmin}`}
           daoId={daoId}
@@ -426,17 +480,19 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
         />
       )}
 
-      {activeTab === 'create-proposal' && (
+      {activeTab === "create-proposal" && (
         <Card>
           <CardHeader>
             <CardTitle>New Proposal</CardTitle>
-            <CardDescription>Create a new proposal for the community to vote on.</CardDescription>
+            <CardDescription>
+              Create a new proposal for the community to vote on.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <CreateProposalForm
               onSubmit={handleCreateProposal}
               onCancel={() => {
-                navigateToTab('proposals');
+                navigateToTab("proposals");
                 setError(null);
               }}
               isSubmitting={creatingProposal}
@@ -445,7 +501,7 @@ export default function DAODashboard({ publicKey, daoId, isInitializing = false,
         </Card>
       )}
 
-      {activeTab === 'settings' && dao.isAdmin && publicKey && kit && (
+      {activeTab === "settings" && dao.isAdmin && publicKey && kit && (
         <DAOSettings
           daoId={daoId}
           daoName={dao.name}

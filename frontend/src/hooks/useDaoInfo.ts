@@ -132,11 +132,23 @@ export function useDaoInfo({
           cachedDao.creator = newDaoInfo.creator;
           localStorage.setItem(cacheKey, JSON.stringify(cachedDao));
         } catch {
-          localStorage.setItem(cacheKey, JSON.stringify({ name: newDaoInfo.name, creator: newDaoInfo.creator }));
+          localStorage.setItem(
+            cacheKey,
+            JSON.stringify({
+              name: newDaoInfo.name,
+              creator: newDaoInfo.creator,
+            }),
+          );
         }
       } else {
         // Create minimal cache entry
-        localStorage.setItem(cacheKey, JSON.stringify({ name: newDaoInfo.name, creator: newDaoInfo.creator }));
+        localStorage.setItem(
+          cacheKey,
+          JSON.stringify({
+            name: newDaoInfo.name,
+            creator: newDaoInfo.creator,
+          }),
+        );
       }
     } catch (err) {
       console.error("Failed to load DAO info:", err);

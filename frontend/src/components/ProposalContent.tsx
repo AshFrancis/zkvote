@@ -23,9 +23,7 @@ interface ProposalContentProps {
 /** Check if contentCid looks like a valid IPFS CID */
 function isValidCid(cid: string): boolean {
   return (
-    cid.startsWith("Qm") ||
-    cid.startsWith("bafy") ||
-    cid.startsWith("bafk")
+    cid.startsWith("Qm") || cid.startsWith("bafy") || cid.startsWith("bafk")
   );
 }
 
@@ -78,13 +76,18 @@ export default function ProposalContent({ contentCid }: ProposalContentProps) {
       <div className="clearfix">
         {(metadata?.image || metadata?.videoUrl) && (
           <div className="w-full md:float-right md:w-[320px] lg:w-[400px] md:ml-6 mb-4">
-            <MediaSlider image={metadata?.image} videoUrl={metadata?.videoUrl} />
+            <MediaSlider
+              image={metadata?.image}
+              videoUrl={metadata?.videoUrl}
+            />
           </div>
         )}
 
         {metadata?.body && (
           <div className="prose prose-sm dark:prose-invert max-w-none">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{metadata.body}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {metadata.body}
+            </ReactMarkdown>
           </div>
         )}
       </div>

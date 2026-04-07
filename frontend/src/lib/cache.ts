@@ -10,10 +10,10 @@
  * version changes (new contract IDs after redeployment).
  */
 
-import { DEPLOY_VERSION, CONTRACTS, NETWORK_CONFIG } from '../config/contracts';
+import { DEPLOY_VERSION, CONTRACTS, NETWORK_CONFIG } from "../config/contracts";
 
 // Storage key for tracking the current deployment version
-const VERSION_KEY = 'zkvote_deploy_version';
+const VERSION_KEY = "zkvote_deploy_version";
 
 // Prefix for all zkvote cache keys
 const CACHE_PREFIX = `zkvote_${NETWORK_CONFIG.networkName}_${CONTRACTS.REGISTRY_ID.slice(0, 6)}`;
@@ -26,7 +26,10 @@ export function checkAndClearStaleCache(): boolean {
   const storedVersion = localStorage.getItem(VERSION_KEY);
 
   if (storedVersion !== DEPLOY_VERSION) {
-    if (import.meta.env.DEV) console.log(`[Cache] Deployment version changed: ${storedVersion} -> ${DEPLOY_VERSION}`);
+    if (import.meta.env.DEV)
+      console.log(
+        `[Cache] Deployment version changed: ${storedVersion} -> ${DEPLOY_VERSION}`,
+      );
     clearAllZKVoteCaches();
     localStorage.setItem(VERSION_KEY, DEPLOY_VERSION);
     return true;
@@ -43,13 +46,14 @@ export function clearAllZKVoteCaches(): void {
 
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key && (
-      key.startsWith('zkvote_') ||
-      key.startsWith('dao_') ||
-      key.startsWith('tree_') ||
-      key.startsWith('proposal_') ||
-      key.startsWith('member_')
-    )) {
+    if (
+      key &&
+      (key.startsWith("zkvote_") ||
+        key.startsWith("dao_") ||
+        key.startsWith("tree_") ||
+        key.startsWith("proposal_") ||
+        key.startsWith("member_"))
+    ) {
       keysToRemove.push(key);
     }
   }
@@ -58,14 +62,18 @@ export function clearAllZKVoteCaches(): void {
     localStorage.removeItem(key);
   }
 
-  if (import.meta.env.DEV) console.log(`[Cache] Cleared ${keysToRemove.length} stale cache entries`);
+  if (import.meta.env.DEV)
+    console.log(`[Cache] Cleared ${keysToRemove.length} stale cache entries`);
 }
 
 /**
  * Generate a deployment-aware cache key
  */
-export function cacheKey(namespace: string, ...parts: (string | number)[]): string {
-  return `${CACHE_PREFIX}_${namespace}_${parts.join('_')}`;
+export function cacheKey(
+  namespace: string,
+  ...parts: (string | number)[]
+): string {
+  return `${CACHE_PREFIX}_${namespace}_${parts.join("_")}`;
 }
 
 /**

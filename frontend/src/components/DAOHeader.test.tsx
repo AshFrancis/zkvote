@@ -4,7 +4,9 @@ import DAOHeader, { type DAOHeaderProps, type DAOInfo } from "./DAOHeader";
 
 // Mock react-markdown and remark-gfm since they are ESM-only modules
 vi.mock("react-markdown", () => ({
-  default: ({ children }: { children: string }) => <div data-testid="markdown">{children}</div>,
+  default: ({ children }: { children: string }) => (
+    <div data-testid="markdown">{children}</div>
+  ),
 }));
 
 vi.mock("remark-gfm", () => ({
@@ -340,7 +342,9 @@ describe("DAOHeader", () => {
       render(<DAOHeader {...props} />);
 
       expect(screen.queryByText("Register to Vote")).not.toBeInTheDocument();
-      expect(screen.queryByText("Complete Registration")).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("Complete Registration"),
+      ).not.toBeInTheDocument();
     });
 
     it("does not show registration button for non-members", () => {
@@ -419,16 +423,22 @@ describe("DAOHeader", () => {
       render(<DAOHeader {...props} />);
 
       // Initially hidden
-      expect(screen.queryByText("This is a test DAO description")).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("This is a test DAO description"),
+      ).not.toBeInTheDocument();
 
       // Click to show
       fireEvent.click(screen.getByText("Show description"));
-      expect(screen.getByText("This is a test DAO description")).toBeInTheDocument();
+      expect(
+        screen.getByText("This is a test DAO description"),
+      ).toBeInTheDocument();
       expect(screen.getByText("Hide description")).toBeInTheDocument();
 
       // Click to hide
       fireEvent.click(screen.getByText("Hide description"));
-      expect(screen.queryByText("This is a test DAO description")).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("This is a test DAO description"),
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -447,7 +457,9 @@ describe("DAOHeader", () => {
 
       const coverImg = screen.getByAltText("DAO Cover");
       expect(coverImg).toBeInTheDocument();
-      expect(coverImg.getAttribute("src")).toBe("https://ipfs.example.com/QmCoverCid123");
+      expect(coverImg.getAttribute("src")).toBe(
+        "https://ipfs.example.com/QmCoverCid123",
+      );
     });
 
     it("renders profile image when profileImageCid is provided", () => {
@@ -464,7 +476,9 @@ describe("DAOHeader", () => {
 
       const profileImg = screen.getByAltText("DAO Profile");
       expect(profileImg).toBeInTheDocument();
-      expect(profileImg.getAttribute("src")).toBe("https://ipfs.example.com/QmProfileCid456");
+      expect(profileImg.getAttribute("src")).toBe(
+        "https://ipfs.example.com/QmProfileCid456",
+      );
     });
   });
 

@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Play, Image as ImageIcon } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Play,
+  Image as ImageIcon,
+} from "lucide-react";
 
 const RELAYER_URL = import.meta.env.VITE_RELAYER_URL || "http://localhost:3001";
 
@@ -83,7 +88,9 @@ interface MediaSliderProps {
 export function MediaSlider({ image, videoUrl }: MediaSliderProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [imageLoaded, setImageLoaded] = useState(false);
-  const [thumbnailsLoaded, setThumbnailsLoaded] = useState<Record<number, boolean>>({});
+  const [thumbnailsLoaded, setThumbnailsLoaded] = useState<
+    Record<number, boolean>
+  >({});
 
   // Build media items array - video first if present
   const mediaItems: MediaItem[] = [];
@@ -199,7 +206,9 @@ export function MediaSlider({ image, videoUrl }: MediaSliderProps) {
                   className={`w-full h-full object-cover transition-opacity duration-200 ${
                     thumbnailsLoaded[index] ? "opacity-100" : "opacity-0"
                   }`}
-                  onLoad={() => setThumbnailsLoaded((prev) => ({ ...prev, [index]: true }))}
+                  onLoad={() =>
+                    setThumbnailsLoaded((prev) => ({ ...prev, [index]: true }))
+                  }
                 />
               ) : (
                 <div className="w-full h-full bg-muted flex items-center justify-center">

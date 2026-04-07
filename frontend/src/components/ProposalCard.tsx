@@ -7,7 +7,14 @@ import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
 import { Card, CardContent } from "./ui/Card";
 import VoteModal from "./VoteModal";
-import { Clock, CheckCircle, XCircle, AlertCircle, Eye, Vote } from "lucide-react";
+import {
+  Clock,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Eye,
+  Vote,
+} from "lucide-react";
 
 const RELAYER_URL = import.meta.env.VITE_RELAYER_URL || "http://localhost:3001";
 
@@ -61,8 +68,10 @@ export default function ProposalCard({
   const MAX_RETRIES = 3;
 
   const totalVotes = proposal.yesVotes + proposal.noVotes;
-  const yesPercentage = totalVotes > 0 ? (proposal.yesVotes / totalVotes) * 100 : 0;
-  const noPercentage = totalVotes > 0 ? (proposal.noVotes / totalVotes) * 100 : 0;
+  const yesPercentage =
+    totalVotes > 0 ? (proposal.yesVotes / totalVotes) * 100 : 0;
+  const noPercentage =
+    totalVotes > 0 ? (proposal.noVotes / totalVotes) * 100 : 0;
 
   const isRegistered = publicKey ? !!getZKCredentials(daoId, publicKey) : false;
 
@@ -71,14 +80,20 @@ export default function ProposalCard({
   const isPastDeadline = hasDeadline && now > proposal.endTime;
 
   // Check if contentCid looks like a valid CID
-  const hasRichContent = proposal.contentCid &&
+  const hasRichContent =
+    proposal.contentCid &&
     (proposal.contentCid.startsWith("Qm") ||
-     proposal.contentCid.startsWith("bafy") ||
-     proposal.contentCid.startsWith("bafk"));
+      proposal.contentCid.startsWith("bafy") ||
+      proposal.contentCid.startsWith("bafk"));
 
   // Fetch metadata eagerly to show thumbnail, with exponential backoff retry
   useEffect(() => {
-    if (hasRichContent && !metadata && !loadingMetadata && retryCount < MAX_RETRIES) {
+    if (
+      hasRichContent &&
+      !metadata &&
+      !loadingMetadata &&
+      retryCount < MAX_RETRIES
+    ) {
       setLoadingMetadata(true);
 
       const fetchWithRetry = async () => {
@@ -106,7 +121,13 @@ export default function ProposalCard({
 
       fetchWithRetry();
     }
-  }, [hasRichContent, proposal.contentCid, metadata, loadingMetadata, retryCount]);
+  }, [
+    hasRichContent,
+    proposal.contentCid,
+    metadata,
+    loadingMetadata,
+    retryCount,
+  ]);
 
   const formatDeadline = (timestamp: number): string => {
     if (timestamp === 0) return "No deadline";
@@ -163,7 +184,7 @@ export default function ProposalCard({
                 <img
                   src={getImageUrl(metadata.image.cid)}
                   alt={metadata.image.filename || "Proposal image"}
-                  className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                  className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
                   loading="lazy"
                   onLoad={() => setImageLoaded(true)}
                 />
@@ -178,14 +199,39 @@ export default function ProposalCard({
                     <span className="text-sm font-medium text-muted-foreground">
                       #{proposal.id}
                     </span>
-                    {proposal.vkVersion !== undefined && proposal.vkVersion !== null && (
-                      <Badge variant="purple" className="text-[10px] px-1.5 py-0 h-5">v{proposal.vkVersion}</Badge>
-                    )}
-                    <Badge variant={proposal.voteMode === "Fixed" ? "warning" : "success"} className="text-[10px] px-1.5 py-0 h-5">
+                    {proposal.vkVersion !== undefined &&
+                      proposal.vkVersion !== null && (
+                        <Badge
+                          variant="purple"
+                          className="text-[10px] px-1.5 py-0 h-5"
+                        >
+                          v{proposal.vkVersion}
+                        </Badge>
+                      )}
+                    <Badge
+                      variant={
+                        proposal.voteMode === "Fixed" ? "warning" : "success"
+                      }
+                      className="text-[10px] px-1.5 py-0 h-5"
+                    >
                       {proposal.voteMode}
                     </Badge>
-                    {proposal.hasVoted && <Badge variant="blue" className="text-[10px] px-1.5 py-0 h-5">Voted</Badge>}
-                    {isPastDeadline && <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-5">Closed</Badge>}
+                    {proposal.hasVoted && (
+                      <Badge
+                        variant="blue"
+                        className="text-[10px] px-1.5 py-0 h-5"
+                      >
+                        Voted
+                      </Badge>
+                    )}
+                    {isPastDeadline && (
+                      <Badge
+                        variant="destructive"
+                        className="text-[10px] px-1.5 py-0 h-5"
+                      >
+                        Closed
+                      </Badge>
+                    )}
                   </div>
                   <h3 className="text-base font-semibold leading-normal">
                     {proposal.title}
@@ -193,11 +239,15 @@ export default function ProposalCard({
 
                   {/* Legacy content (non-CID) */}
                   {!hasRichContent && proposal.contentCid && (
-                    <p className="text-sm text-muted-foreground mt-1 truncate">{proposal.contentCid}</p>
+                    <p className="text-sm text-muted-foreground mt-1 truncate">
+                      {proposal.contentCid}
+                    </p>
                   )}
 
                   {hasDeadline && (
-                    <div className={`flex items-center gap-1.5 text-xs font-medium ${getDeadlineColor()} mt-1`}>
+                    <div
+                      className={`flex items-center gap-1.5 text-xs font-medium ${getDeadlineColor()} mt-1`}
+                    >
                       <Clock className="w-3.5 h-3.5" />
                       {formatDeadline(proposal.endTime)}
                     </div>

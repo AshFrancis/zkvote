@@ -54,7 +54,7 @@ async function getZeroHashes(): Promise<string[]> {
 export async function computeMerklePath(
   leafIndex: number,
   _totalLeaves: number,
-  leaves: string[]
+  leaves: string[],
 ): Promise<{ pathElements: string[]; pathIndices: number[] }> {
   const poseidon = await getPoseidon();
   const zeros = await getZeroHashes();
@@ -75,9 +75,10 @@ export async function computeMerklePath(
     if (isLeft) {
       // Right sibling
       const siblingIndex = currentIndex + 1;
-      sibling = siblingIndex < currentLevel.length
-        ? currentLevel[siblingIndex]
-        : zeros[level];
+      sibling =
+        siblingIndex < currentLevel.length
+          ? currentLevel[siblingIndex]
+          : zeros[level];
     } else {
       // Left sibling
       const siblingIndex = currentIndex - 1;
@@ -90,7 +91,8 @@ export async function computeMerklePath(
     const nextLevel: string[] = [];
     for (let i = 0; i < currentLevel.length; i += 2) {
       const left = currentLevel[i];
-      const right = i + 1 < currentLevel.length ? currentLevel[i + 1] : zeros[level];
+      const right =
+        i + 1 < currentLevel.length ? currentLevel[i + 1] : zeros[level];
       const hash = poseidon.F.toString(poseidon([BigInt(left), BigInt(right)]));
       nextLevel.push(hash);
     }
@@ -110,7 +112,10 @@ export async function computeMerklePath(
 /**
  * Simpler version: For the first leaf (index 0), path is all zeros on the right
  */
-export async function getPathForFirstLeaf(): Promise<{ pathElements: string[]; pathIndices: number[] }> {
+export async function getPathForFirstLeaf(): Promise<{
+  pathElements: string[];
+  pathIndices: number[];
+}> {
   const zeros = await getZeroHashes();
 
   return {
@@ -131,7 +136,7 @@ export async function getPathForFirstLeaf(): Promise<{ pathElements: string[]; p
 export async function getMerklePath(
   leafIndex: number,
   daoId: number,
-  publicKey: string
+  publicKey: string,
 ): Promise<{ pathElements: string[]; pathIndices: number[] }> {
   // Initialize contract clients
   const clients = initializeContractClients(publicKey);

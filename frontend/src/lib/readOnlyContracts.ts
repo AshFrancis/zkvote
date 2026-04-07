@@ -42,7 +42,15 @@ export function getReadOnlyVoting() {
 }
 
 // Helper function to get all DAOs
-export async function getAllDaos(): Promise<Array<{ id: number; name: string; creator: string; membership_open: boolean; metadata_cid?: string }>> {
+export async function getAllDaos(): Promise<
+  Array<{
+    id: number;
+    name: string;
+    creator: string;
+    membership_open: boolean;
+    metadata_cid?: string;
+  }>
+> {
   try {
     const registry = getReadOnlyDaoRegistry();
 
@@ -55,7 +63,13 @@ export async function getAllDaos(): Promise<Array<{ id: number; name: string; cr
     }
 
     // Fetch all DAOs
-    const daos: Array<{ id: number; name: string; creator: string; membership_open: boolean; metadata_cid?: string }> = [];
+    const daos: Array<{
+      id: number;
+      name: string;
+      creator: string;
+      membership_open: boolean;
+      metadata_cid?: string;
+    }> = [];
 
     for (let i = 1; i <= daoCount; i++) {
       try {
@@ -77,13 +91,24 @@ export async function getAllDaos(): Promise<Array<{ id: number; name: string; cr
 
     return daos;
   } catch (err) {
-    console.error('Failed to fetch DAOs:', err);
+    console.error("Failed to fetch DAOs:", err);
     return [];
   }
 }
 
 // Helper function to get user's DAOs with their role
-export async function getUserDaos(userAddress: string): Promise<Array<{ id: number; name: string; creator: string; role: 'admin' | 'member'; membership_open: boolean; metadata_cid?: string }>> {
+export async function getUserDaos(
+  userAddress: string,
+): Promise<
+  Array<{
+    id: number;
+    name: string;
+    creator: string;
+    role: "admin" | "member";
+    membership_open: boolean;
+    metadata_cid?: string;
+  }>
+> {
   try {
     const registry = getReadOnlyDaoRegistry();
     const sbtClient = getReadOnlyMembershipSbt();
@@ -97,7 +122,14 @@ export async function getUserDaos(userAddress: string): Promise<Array<{ id: numb
     }
 
     // Fetch all DAOs and check user's role in each
-    const userDaos: Array<{ id: number; name: string; creator: string; role: 'admin' | 'member'; membership_open: boolean; metadata_cid?: string }> = [];
+    const userDaos: Array<{
+      id: number;
+      name: string;
+      creator: string;
+      role: "admin" | "member";
+      membership_open: boolean;
+      metadata_cid?: string;
+    }> = [];
 
     for (let i = 1; i <= daoCount; i++) {
       try {
@@ -110,7 +142,10 @@ export async function getUserDaos(userAddress: string): Promise<Array<{ id: numb
         // Check if user has SBT (is member)
         let isMember = false;
         try {
-          const hasResult = await sbtClient.has({ dao_id: BigInt(i), of: userAddress });
+          const hasResult = await sbtClient.has({
+            dao_id: BigInt(i),
+            of: userAddress,
+          });
           isMember = hasResult.result;
         } catch (err) {
           // If checking membership fails, assume not a member
@@ -123,7 +158,7 @@ export async function getUserDaos(userAddress: string): Promise<Array<{ id: numb
             id: i,
             name: dao.name,
             creator: dao.admin,
-            role: isAdmin ? 'admin' : 'member',
+            role: isAdmin ? "admin" : "member",
             membership_open: dao.membership_open,
             metadata_cid: dao.metadata_cid ?? undefined,
           });
@@ -136,7 +171,7 @@ export async function getUserDaos(userAddress: string): Promise<Array<{ id: numb
 
     return userDaos;
   } catch (err) {
-    console.error('Failed to fetch user DAOs:', err);
+    console.error("Failed to fetch user DAOs:", err);
     return [];
   }
 }

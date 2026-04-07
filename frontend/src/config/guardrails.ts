@@ -21,7 +21,9 @@ export function validateStaticConfig() {
   }
 
   // Simple sanity: avoid accidental mainnet use unless explicit
-  if (NETWORK_CONFIG.networkPassphrase.includes("Public Global Stellar Network")) {
+  if (
+    NETWORK_CONFIG.networkPassphrase.includes("Public Global Stellar Network")
+  ) {
     warnings.push("Config is pointing at mainnet — ensure this is intentional");
   }
 

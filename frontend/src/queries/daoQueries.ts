@@ -17,7 +17,7 @@ export interface DaoInfo {
  */
 async function fetchDaoInfo(
   daoId: number,
-  publicKey: string | null
+  publicKey: string | null,
 ): Promise<DaoInfo> {
   let result;
 

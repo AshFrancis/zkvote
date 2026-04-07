@@ -54,15 +54,15 @@ export function getAnonymousCommentsAll(): AnonymousCommentRecord[] {
 
 export function getAnonymousComments(
   daoId: number,
-  proposalId: number
+  proposalId: number,
 ): AnonymousCommentRecord[] {
   return getAnonymousCommentsAll().filter(
-    (r) => r.daoId === daoId && r.proposalId === proposalId
+    (r) => r.daoId === daoId && r.proposalId === proposalId,
   );
 }
 
 export function getAnonymousCommentByNullifier(
-  nullifier: string
+  nullifier: string,
 ): AnonymousCommentRecord | undefined {
   return getAnonymousCommentsAll().find((r) => r.nullifier === nullifier);
 }
@@ -70,20 +70,20 @@ export function getAnonymousCommentByNullifier(
 export function canEditAnonymousComment(
   daoId: number,
   proposalId: number,
-  nullifier: string
+  nullifier: string,
 ): boolean {
   const record = getAnonymousCommentsAll().find(
     (r) =>
       r.daoId === daoId &&
       r.proposalId === proposalId &&
-      r.nullifier === nullifier
+      r.nullifier === nullifier,
   );
   return !!record;
 }
 
 // Upload comment content to IPFS
 export async function uploadCommentContent(
-  body: string
+  body: string,
 ): Promise<{ cid: string }> {
   const metadata: CommentMetadata = {
     version: 1,
@@ -106,7 +106,7 @@ export async function uploadCommentContent(
 
 // Fetch comment content from IPFS
 export async function fetchCommentContent(
-  cid: string
+  cid: string,
 ): Promise<CommentMetadata | null> {
   try {
     const response = await relayerFetch(`/ipfs/${cid}`);
@@ -120,7 +120,7 @@ export async function fetchCommentContent(
 // Fetch all comments for a proposal
 export async function fetchComments(
   daoId: number,
-  proposalId: number
+  proposalId: number,
 ): Promise<CommentInfo[]> {
   const response = await relayerFetch(`/comments/${daoId}/${proposalId}`);
   if (!response.ok) {
@@ -193,12 +193,17 @@ export async function editComment(params: {
     });
 
     // Sign and send the transaction
-    await tx.signAndSend({ signTransaction: params.kit.signTransaction.bind(params.kit) });
+    await tx.signAndSend({
+      signTransaction: params.kit.signTransaction.bind(params.kit),
+    });
 
     return { success: true };
   } catch (err) {
     console.error("Edit comment error:", err);
-    return { success: false, error: err instanceof Error ? err.message : "Failed to edit comment" };
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to edit comment",
+    };
   }
 }
 
@@ -220,19 +225,24 @@ export async function deleteComment(params: {
     });
 
     // Sign and send the transaction
-    await tx.signAndSend({ signTransaction: params.kit.signTransaction.bind(params.kit) });
+    await tx.signAndSend({
+      signTransaction: params.kit.signTransaction.bind(params.kit),
+    });
 
     return { success: true };
   } catch (err) {
     console.error("Delete comment error:", err);
-    return { success: false, error: err instanceof Error ? err.message : "Failed to delete comment" };
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to delete comment",
+    };
   }
 }
 
 // Build comment tree from flat list
 export function buildCommentTree(
   comments: CommentInfo[],
-  contentMap: Map<string, CommentMetadata | null>
+  contentMap: Map<string, CommentMetadata | null>,
 ): CommentWithContent[] {
   // Create map for quick lookup
   const commentMap = new Map<number, CommentWithContent>();

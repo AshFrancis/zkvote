@@ -102,15 +102,10 @@ export function RouteErrorBoundary({ children }: { children: ReactNode }) {
               This page encountered an error. Try navigating back or refreshing.
             </p>
             <div className="flex gap-3 justify-center">
-              <Button
-                variant="outline"
-                onClick={() => window.history.back()}
-              >
+              <Button variant="outline" onClick={() => window.history.back()}>
                 Go Back
               </Button>
-              <Button onClick={() => window.location.reload()}>
-                Reload
-              </Button>
+              <Button onClick={() => window.location.reload()}>Reload</Button>
             </div>
           </div>
         </div>

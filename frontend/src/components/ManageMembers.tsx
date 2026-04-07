@@ -1,14 +1,14 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { initializeContractClients } from '../lib/contracts';
-import { useWallet } from '../hooks/useWallet';
-import { useMemberData } from '../hooks/useMemberData';
-import type { TreeInfo, Member } from '../hooks/useMemberData';
-import { encryptAlias } from '../lib/encryption';
-import { Alert, LoadingSpinner, Badge } from './ui';
-import { ConfirmModal } from './ui/ConfirmModal';
-import { truncateAddress, extractTxHash } from '../lib/utils';
-import { notifyEvent } from '../lib/api';
-import { MoreVertical, UserMinus, Shield } from 'lucide-react';
+import { useState, useCallback, useRef, useEffect } from "react";
+import { initializeContractClients } from "../lib/contracts";
+import { useWallet } from "../hooks/useWallet";
+import { useMemberData } from "../hooks/useMemberData";
+import type { TreeInfo, Member } from "../hooks/useMemberData";
+import { encryptAlias } from "../lib/encryption";
+import { Alert, LoadingSpinner, Badge } from "./ui";
+import { ConfirmModal } from "./ui/ConfirmModal";
+import { truncateAddress, extractTxHash } from "../lib/utils";
+import { notifyEvent } from "../lib/api";
+import { MoreVertical, UserMinus, Shield } from "lucide-react";
 
 // Dropdown menu for member actions (admin only)
 interface MemberActionsMenuProps {
@@ -17,7 +17,11 @@ interface MemberActionsMenuProps {
   disabled?: boolean;
 }
 
-function MemberActionsMenu({ onRemove, onMakeAdmin, disabled }: MemberActionsMenuProps) {
+function MemberActionsMenu({
+  onRemove,
+  onMakeAdmin,
+  disabled,
+}: MemberActionsMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -28,8 +32,8 @@ function MemberActionsMenu({ onRemove, onMakeAdmin, disabled }: MemberActionsMen
         setIsOpen(false);
       }
     }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   return (
@@ -81,21 +85,29 @@ interface ManageMembersProps {
 // Re-export types for consumers
 export type { TreeInfo, Member };
 
-export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializing = false }: ManageMembersProps) {
+export default function ManageMembers({
+  publicKey,
+  daoId,
+  isAdmin,
+  isInitializing = false,
+}: ManageMembersProps) {
   const { kit } = useWallet();
 
   // Sign message helper - extracts signedMessage from response object if present
-  const signMessage = useCallback(async (message: string): Promise<string | Uint8Array> => {
-    if (!kit?.signMessage) {
-      throw new Error("Wallet does not support message signing");
-    }
-    const res = await kit.signMessage(message);
-    // Handle both response formats: { signedMessage: string } or direct string/Uint8Array
-    if (typeof res === 'object' && res !== null && 'signedMessage' in res) {
-      return (res as { signedMessage: string }).signedMessage;
-    }
-    return res as string | Uint8Array;
-  }, [kit]);
+  const signMessage = useCallback(
+    async (message: string): Promise<string | Uint8Array> => {
+      if (!kit?.signMessage) {
+        throw new Error("Wallet does not support message signing");
+      }
+      const res = await kit.signMessage(message);
+      // Handle both response formats: { signedMessage: string } or direct string/Uint8Array
+      if (typeof res === "object" && res !== null && "signedMessage" in res) {
+        return (res as { signedMessage: string }).signedMessage;
+      }
+      return res as string | Uint8Array;
+    },
+    [kit],
+  );
 
   // Use the data hook for member management
   const {
@@ -130,10 +142,14 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
   const [leaving, setLeaving] = useState(false);
   const [aliasesVisible, setAliasesVisible] = useState(false);
   const [aliasInputUnlocked, setAliasInputUnlocked] = useState(false);
-  const [revokeConfirm, setRevokeConfirm] = useState<{ address: string } | null>(null);
+  const [revokeConfirm, setRevokeConfirm] = useState<{
+    address: string;
+  } | null>(null);
   const [leaveConfirm, setLeaveConfirm] = useState(false);
   const [revoking, setRevoking] = useState(false);
-  const [makeAdminConfirm, setMakeAdminConfirm] = useState<{ address: string } | null>(null);
+  const [makeAdminConfirm, setMakeAdminConfirm] = useState<{
+    address: string;
+  } | null>(null);
   const [transferringAdmin, setTransferringAdmin] = useState(false);
 
   const handleMintSBT = async () => {
@@ -156,7 +172,9 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
       });
 
       if (alreadyHas.result) {
-        setError(`Address ${mintAddress.substring(0, 8)}... already has a membership SBT for this DAO`);
+        setError(
+          `Address ${mintAddress.substring(0, 8)}... already has a membership SBT for this DAO`,
+        );
         setMinting(false);
         return;
       }
@@ -185,15 +203,22 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
         throw new Error("Wallet kit not available");
       }
 
-      const result = await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+      const result = await tx.signAndSend({
+        signTransaction: kit.signTransaction.bind(kit),
+      });
 
       // Notify relayer of member added event
       const txHash = extractTxHash(result);
       if (txHash) {
-        notifyEvent(daoId, "member_added", txHash, { member: mintAddress, alias: memberAlias || undefined });
+        notifyEvent(daoId, "member_added", txHash, {
+          member: mintAddress,
+          alias: memberAlias || undefined,
+        });
       }
 
-      setSuccess(`Successfully minted SBT to ${mintAddress.substring(0, 8)}...${memberAlias ? ` (${memberAlias})` : ''}`);
+      setSuccess(
+        `Successfully minted SBT to ${mintAddress.substring(0, 8)}...${memberAlias ? ` (${memberAlias})` : ""}`,
+      );
 
       setMintAddress("");
       setMemberAlias("");
@@ -221,7 +246,9 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
       if (key) {
         setAliasesVisible(true);
       } else {
-        setError("Failed to unlock aliases - signature was cancelled or failed");
+        setError(
+          "Failed to unlock aliases - signature was cancelled or failed",
+        );
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reveal aliases");
@@ -242,10 +269,14 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
       if (key) {
         setAliasInputUnlocked(true);
       } else {
-        setError("Failed to unlock alias input - signature was cancelled or failed");
+        setError(
+          "Failed to unlock alias input - signature was cancelled or failed",
+        );
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to unlock alias input");
+      setError(
+        err instanceof Error ? err.message : "Failed to unlock alias input",
+      );
     }
   };
 
@@ -273,26 +304,35 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
       }
 
       // Step 1: Revoke the SBT (sets revoked flag)
-      if (import.meta.env.DEV) console.log('[handleRemoveMember] Step 1: Revoking SBT...');
+      if (import.meta.env.DEV)
+        console.log("[handleRemoveMember] Step 1: Revoking SBT...");
       const revokeTx = await clients.membershipSbt.revoke({
         dao_id: BigInt(daoId),
         member: address,
         admin: publicKey || "",
       });
 
-      await revokeTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
-      if (import.meta.env.DEV) console.log('[handleRemoveMember] SBT revoked');
+      await revokeTx.signAndSend({
+        signTransaction: kit.signTransaction.bind(kit),
+      });
+      if (import.meta.env.DEV) console.log("[handleRemoveMember] SBT revoked");
 
       // Step 2: Remove member from Merkle tree (zeros their leaf)
-      if (import.meta.env.DEV) console.log('[handleRemoveMember] Step 2: Removing from Merkle tree...');
+      if (import.meta.env.DEV)
+        console.log(
+          "[handleRemoveMember] Step 2: Removing from Merkle tree...",
+        );
       const removeTx = await clients.membershipTree.remove_member({
         dao_id: BigInt(daoId),
         member: address,
         admin: publicKey || "",
       });
 
-      const removeResult = await removeTx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
-      if (import.meta.env.DEV) console.log('[handleRemoveMember] Member removed from tree');
+      const removeResult = await removeTx.signAndSend({
+        signTransaction: kit.signTransaction.bind(kit),
+      });
+      if (import.meta.env.DEV)
+        console.log("[handleRemoveMember] Member removed from tree");
 
       // Notify relayer of member revoked event
       const txHash = extractTxHash(removeResult);
@@ -301,12 +341,14 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
       }
 
       // Update local state
-      const updatedMembers = members.filter(m => m.address !== address);
+      const updatedMembers = members.filter((m) => m.address !== address);
       const updatedRemoved = [...removedMembers, address];
 
       setMembers(updatedMembers);
       setRemovedMembers(updatedRemoved);
-      setSuccess(`Successfully removed ${address.substring(0, 8)}... (SBT revoked + tree updated)`);
+      setSuccess(
+        `Successfully removed ${address.substring(0, 8)}... (SBT revoked + tree updated)`,
+      );
 
       // Reload tree info to show updated root
       await loadTreeInfo();
@@ -342,7 +384,9 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
         throw new Error("Wallet kit not available");
       }
 
-      const result = await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+      const result = await tx.signAndSend({
+        signTransaction: kit.signTransaction.bind(kit),
+      });
 
       // Notify relayer of member left event
       const txHash = extractTxHash(result);
@@ -353,8 +397,10 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
       setSuccess(`You have left the DAO`);
 
       // Update local state
-      const updatedMembers = members.filter(m => m.address !== publicKey);
-      const updatedRemoved = publicKey ? [...removedMembers, publicKey] : removedMembers;
+      const updatedMembers = members.filter((m) => m.address !== publicKey);
+      const updatedRemoved = publicKey
+        ? [...removedMembers, publicKey]
+        : removedMembers;
 
       setMembers(updatedMembers);
       setRemovedMembers(updatedRemoved);
@@ -385,7 +431,7 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
       setSuccess(null);
 
       // Use existing key or unlock encryption
-      const key = encryptionKey || await unlockEncryption();
+      const key = encryptionKey || (await unlockEncryption());
       if (!key) {
         setError("Failed to derive encryption key");
         setUpdatingAlias(false);
@@ -410,7 +456,9 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
 
       await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
 
-      setSuccess(`Successfully updated alias for ${memberAddress.substring(0, 8)}...`);
+      setSuccess(
+        `Successfully updated alias for ${memberAddress.substring(0, 8)}...`,
+      );
 
       // Reload to get updated aliases
       await loadTreeInfo();
@@ -453,7 +501,9 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
         new_admin: newAdminAddress,
       });
 
-      const result = await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+      const result = await tx.signAndSend({
+        signTransaction: kit.signTransaction.bind(kit),
+      });
 
       // Notify relayer of admin transfer event
       const txHash = extractTxHash(result);
@@ -464,10 +514,12 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
         });
       }
 
-      setSuccess(`Successfully transferred admin rights to ${newAdminAddress.substring(0, 8)}...`);
+      setSuccess(
+        `Successfully transferred admin rights to ${newAdminAddress.substring(0, 8)}...`,
+      );
 
       // Update local state - mark new admin
-      const updatedMembers = members.map(m => ({
+      const updatedMembers = members.map((m) => ({
         ...m,
         isAdmin: m.address === newAdminAddress,
       }));
@@ -527,9 +579,7 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
           <p className="text-3xl font-bold text-foreground">
             {treeInfo?.depth ? Math.pow(2, treeInfo.depth).toLocaleString() : 0}
           </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Maximum members
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">Maximum members</p>
         </div>
 
         <div className="rounded-xl border bg-card p-6">
@@ -537,7 +587,7 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
             Verifying Key Version
           </h3>
           <p className="text-3xl font-bold text-primary">
-            {treeInfo?.vkVersion ?? 'N/A'}
+            {treeInfo?.vkVersion ?? "N/A"}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
             Proofs must match this version
@@ -551,7 +601,7 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
           Current Merkle Root
         </h3>
         <p className="font-mono text-xs text-muted-foreground break-all">
-          {treeInfo?.root || 'N/A'}
+          {treeInfo?.root || "N/A"}
         </p>
       </div>
 
@@ -568,16 +618,42 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
             >
               {aliasesVisible ? (
                 <>
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2}
+                    stroke="currentColor"
+                    className="w-4 h-4"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88"
+                    />
                   </svg>
                   Hide Aliases
                 </>
               ) : (
                 <>
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2}
+                    stroke="currentColor"
+                    className="w-4 h-4"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
                   </svg>
                   Reveal Aliases
                 </>
@@ -587,15 +663,12 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
         </div>
         {members.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No members yet. {isAdmin ? 'Mint an SBT to add members.' : ''}
+            No members yet. {isAdmin ? "Mint an SBT to add members." : ""}
           </p>
         ) : (
           <div className="space-y-2">
             {members.map((member) => (
-              <div
-                key={member.address}
-                className="p-3 bg-muted/50 rounded-lg"
-              >
+              <div key={member.address} className="p-3 bg-muted/50 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 flex-1">
                     <div className="flex flex-col">
@@ -605,10 +678,10 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
                           value={newAlias}
                           onChange={(e) => setNewAlias(e.target.value)}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !updatingAlias) {
+                            if (e.key === "Enter" && !updatingAlias) {
                               e.preventDefault();
                               handleUpdateAlias(member.address);
-                            } else if (e.key === 'Escape') {
+                            } else if (e.key === "Escape") {
                               setEditingAlias(null);
                               setNewAlias("");
                             }
@@ -636,32 +709,48 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
                       )}
                       <p className="font-mono text-xs text-muted-foreground">
                         {/* Truncated on mobile, full on md+ */}
-                        <span className="md:hidden">{truncateAddress(member.address, 5, 5)}</span>
-                        <span className="hidden md:inline">{member.address}</span>
+                        <span className="md:hidden">
+                          {truncateAddress(member.address, 5, 5)}
+                        </span>
+                        <span className="hidden md:inline">
+                          {member.address}
+                        </span>
                       </p>
                     </div>
-                    {member.isAdmin && (
-                      <Badge variant="blue">Admin</Badge>
-                    )}
+                    {member.isAdmin && <Badge variant="blue">Admin</Badge>}
                     {member.address === publicKey && (
                       <Badge variant="secondary">You</Badge>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    {isAdmin && memberAliases.has(member.address) && editingAlias !== member.address && (
-                      <button
-                        onClick={() => {
-                          setEditingAlias(member.address);
-                          setNewAlias(memberAliases.get(member.address) || "");
-                        }}
-                        className="p-1 text-primary hover:bg-primary/10 rounded transition-colors"
-                        title="Edit alias"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                        </svg>
-                      </button>
-                    )}
+                    {isAdmin &&
+                      memberAliases.has(member.address) &&
+                      editingAlias !== member.address && (
+                        <button
+                          onClick={() => {
+                            setEditingAlias(member.address);
+                            setNewAlias(
+                              memberAliases.get(member.address) || "",
+                            );
+                          }}
+                          className="p-1 text-primary hover:bg-primary/10 rounded transition-colors"
+                          title="Edit alias"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                            />
+                          </svg>
+                        </button>
+                      )}
                     {editingAlias === member.address && (
                       <>
                         <button
@@ -670,8 +759,18 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
                           className="p-1 text-green-600 dark:text-green-400 hover:bg-green-500/10 rounded transition-colors disabled:opacity-50"
                           title="Save alias"
                         >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 13l4 4L19 7"
+                            />
                           </svg>
                         </button>
                         <button
@@ -683,18 +782,35 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
                           className="p-1 text-muted-foreground hover:bg-muted rounded transition-colors disabled:opacity-50"
                           title="Cancel"
                         >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
                           </svg>
                         </button>
                       </>
                     )}
-                    {isAdmin && member.address !== publicKey && !member.isAdmin && editingAlias !== member.address && (
-                      <MemberActionsMenu
-                        onRemove={() => handleRemoveMemberClick(member.address)}
-                        onMakeAdmin={() => handleMakeAdminClick(member.address)}
-                      />
-                    )}
+                    {isAdmin &&
+                      member.address !== publicKey &&
+                      !member.isAdmin &&
+                      editingAlias !== member.address && (
+                        <MemberActionsMenu
+                          onRemove={() =>
+                            handleRemoveMemberClick(member.address)
+                          }
+                          onMakeAdmin={() =>
+                            handleMakeAdminClick(member.address)
+                          }
+                        />
+                      )}
                     {!isAdmin && member.address === publicKey && (
                       <button
                         onClick={handleLeaveClick}
@@ -721,13 +837,12 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
           </h3>
           <div className="space-y-2">
             {removedMembers.map((address) => (
-              <div
-                key={address}
-                className="p-3 bg-destructive/10 rounded-lg"
-              >
+              <div key={address} className="p-3 bg-destructive/10 rounded-lg">
                 <p className="font-mono text-sm text-foreground">
                   {/* Truncated on mobile, full on md+ */}
-                  <span className="md:hidden">{truncateAddress(address, 5, 5)}</span>
+                  <span className="md:hidden">
+                    {truncateAddress(address, 5, 5)}
+                  </span>
                   <span className="hidden md:inline">{address}</span>
                 </p>
               </div>
@@ -749,7 +864,8 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
             Mint Membership SBT
           </h3>
           <p className="text-sm text-muted-foreground mb-4">
-            Grant membership by minting a soulbound token to a Stellar address. Members can then register for anonymous voting.
+            Grant membership by minting a soulbound token to a Stellar address.
+            Members can then register for anonymous voting.
           </p>
 
           <div className="space-y-4">
@@ -775,17 +891,63 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
                   onClick={toggleAliasInput}
                   type="button"
                   className="p-1.5 text-primary bg-primary/10 border border-primary/20 rounded-md hover:bg-primary/20 transition-colors"
-                  title={aliasInputUnlocked ? "Lock alias input" : "Unlock alias input"}
+                  title={
+                    aliasInputUnlocked
+                      ? "Lock alias input"
+                      : "Unlock alias input"
+                  }
                 >
                   {aliasInputUnlocked ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="w-4 h-4">
-                      <rect width="12" height="8.571" x="6" y="12.071" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" rx="2" />
-                      <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16.286 8.643a4.286 4.286 0 0 0-8.572 0v3.428" />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      className="w-4 h-4"
+                    >
+                      <rect
+                        width="12"
+                        height="8.571"
+                        x="6"
+                        y="12.071"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        rx="2"
+                      />
+                      <path
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M16.286 8.643a4.286 4.286 0 0 0-8.572 0v3.428"
+                      />
                     </svg>
                   ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="w-4 h-4">
-                      <rect width="12.526" height="8.947" x="5.737" y="12.053" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" rx="2" />
-                      <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7.526 12.053v-3.58a4.474 4.474 0 0 1 8.948 0v3.58" />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      className="w-4 h-4"
+                    >
+                      <rect
+                        width="12.526"
+                        height="8.947"
+                        x="5.737"
+                        y="12.053"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        rx="2"
+                      />
+                      <path
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M7.526 12.053v-3.58a4.474 4.474 0 0 1 8.948 0v3.58"
+                      />
                     </svg>
                   )}
                 </button>
@@ -822,7 +984,11 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
         onClose={() => setRevokeConfirm(null)}
         onConfirm={handleRemoveMemberConfirm}
         title="Revoke Membership"
-        message={revokeConfirm ? `Revoke membership for ${revokeConfirm.address.substring(0, 8)}...? They will no longer be able to vote.` : ""}
+        message={
+          revokeConfirm
+            ? `Revoke membership for ${revokeConfirm.address.substring(0, 8)}...? They will no longer be able to vote.`
+            : ""
+        }
         confirmText="Revoke"
         variant="danger"
         isLoading={revoking}
@@ -846,7 +1012,11 @@ export default function ManageMembers({ publicKey, daoId, isAdmin, isInitializin
         onClose={() => setMakeAdminConfirm(null)}
         onConfirm={handleMakeAdminConfirm}
         title="Transfer Admin Rights"
-        message={makeAdminConfirm ? `Transfer admin rights to ${makeAdminConfirm.address.substring(0, 8)}...? You will no longer be the admin of this DAO.` : ""}
+        message={
+          makeAdminConfirm
+            ? `Transfer admin rights to ${makeAdminConfirm.address.substring(0, 8)}...? You will no longer be the admin of this DAO.`
+            : ""
+        }
         confirmText="Transfer"
         variant="warning"
         isLoading={transferringAdmin}

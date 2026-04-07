@@ -23,11 +23,15 @@ export function useProposalActions({
   const [hasMembership, setHasMembership] = useState(false);
   const [joining, setJoining] = useState(false);
   const [registering, setRegistering] = useState(false);
-  const [registrationStatus, setRegistrationStatus] = useState<string | null>(null);
+  const [registrationStatus, setRegistrationStatus] = useState<string | null>(
+    null,
+  );
   const [actionError, setActionError] = useState<string | null>(null);
 
   const [isRegistered, setIsRegistered] = useState(() => {
-    return publicKey && numericDaoId !== null ? !!getZKCredentials(numericDaoId, publicKey) : false;
+    return publicKey && numericDaoId !== null
+      ? !!getZKCredentials(numericDaoId, publicKey)
+      : false;
   });
 
   // Update isRegistered when publicKey or daoId changes
@@ -84,7 +88,9 @@ export function useProposalActions({
       setHasMembership(true);
     } catch (err) {
       if (!isUserRejection(err)) {
-        setActionError(err instanceof Error ? err.message : "Failed to join DAO");
+        setActionError(
+          err instanceof Error ? err.message : "Failed to join DAO",
+        );
         console.error("Join DAO failed:", err);
       }
     } finally {
@@ -100,9 +106,14 @@ export function useProposalActions({
       setActionError(null);
       setRegistrationStatus("Step 1/2: Generating secret (sign message)...");
 
-      const credentials = await generateDeterministicZKCredentials(kit, numericDaoId);
+      const credentials = await generateDeterministicZKCredentials(
+        kit,
+        numericDaoId,
+      );
 
-      setRegistrationStatus("Step 2/2: Registering commitment (sign transaction)...");
+      setRegistrationStatus(
+        "Step 2/2: Registering commitment (sign transaction)...",
+      );
       const clients = initializeContractClients(publicKey);
 
       const tx = await clients.membershipTree.register_with_caller({
@@ -113,15 +124,20 @@ export function useProposalActions({
 
       const isCommitmentExistsError = (err: unknown): boolean => {
         const errStr = (err as { message?: string })?.message || String(err);
-        return errStr.includes('#5') || errStr.includes('Error(Contract, #5)');
+        return errStr.includes("#5") || errStr.includes("Error(Contract, #5)");
       };
 
       let alreadyRegistered = false;
       try {
-        await tx.signAndSend({ signTransaction: kit.signTransaction.bind(kit) });
+        await tx.signAndSend({
+          signTransaction: kit.signTransaction.bind(kit),
+        });
       } catch (err) {
         if (isCommitmentExistsError(err)) {
-          if (import.meta.env.DEV) console.log("[Registration] Commitment already exists on-chain - recovering credentials");
+          if (import.meta.env.DEV)
+            console.log(
+              "[Registration] Commitment already exists on-chain - recovering credentials",
+            );
           alreadyRegistered = true;
         } else {
           throw err;
@@ -144,7 +160,9 @@ export function useProposalActions({
       setRegistrationStatus(null);
     } catch (err) {
       if (!isUserRejection(err)) {
-        setActionError(err instanceof Error ? err.message : "Failed to register for voting");
+        setActionError(
+          err instanceof Error ? err.message : "Failed to register for voting",
+        );
         console.error("Registration failed:", err);
       }
       setRegistrationStatus(null);

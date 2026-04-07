@@ -66,8 +66,12 @@ export default function ProposalList({
                 <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-pulse" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-medium text-foreground truncate">{pendingProposal.title}</h3>
-                <p className="text-sm text-muted-foreground">Confirming on network...</p>
+                <h3 className="font-medium text-foreground truncate">
+                  {pendingProposal.title}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Confirming on network...
+                </p>
               </div>
               <LoadingSpinner size="sm" color="blue" />
             </div>

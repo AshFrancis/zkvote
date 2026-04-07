@@ -28,7 +28,7 @@ describe("ErrorBoundary", () => {
       render(
         <ErrorBoundary>
           <NormalComponent />
-        </ErrorBoundary>
+        </ErrorBoundary>,
       );
 
       expect(screen.getByText("Normal content")).toBeInTheDocument();
@@ -39,7 +39,7 @@ describe("ErrorBoundary", () => {
         <ErrorBoundary>
           <div>Child one</div>
           <div>Child two</div>
-        </ErrorBoundary>
+        </ErrorBoundary>,
       );
 
       expect(screen.getByText("Child one")).toBeInTheDocument();
@@ -52,12 +52,12 @@ describe("ErrorBoundary", () => {
       render(
         <ErrorBoundary>
           <ThrowingComponent message="Test error" />
-        </ErrorBoundary>
+        </ErrorBoundary>,
       );
 
       expect(screen.getByText("Something went wrong")).toBeInTheDocument();
       expect(
-        screen.getByText("An unexpected error occurred. Please try again.")
+        screen.getByText("An unexpected error occurred. Please try again."),
       ).toBeInTheDocument();
     });
 
@@ -65,7 +65,7 @@ describe("ErrorBoundary", () => {
       render(
         <ErrorBoundary>
           <ThrowingComponent message="Test error" />
-        </ErrorBoundary>
+        </ErrorBoundary>,
       );
 
       expect(screen.getByText("Try Again")).toBeInTheDocument();
@@ -75,7 +75,7 @@ describe("ErrorBoundary", () => {
       render(
         <ErrorBoundary>
           <ThrowingComponent message="Test error" />
-        </ErrorBoundary>
+        </ErrorBoundary>,
       );
 
       expect(screen.getByText("Reload Page")).toBeInTheDocument();
@@ -85,7 +85,7 @@ describe("ErrorBoundary", () => {
       render(
         <ErrorBoundary>
           <ThrowingComponent message="Logged error" />
-        </ErrorBoundary>
+        </ErrorBoundary>,
       );
 
       expect(console.error).toHaveBeenCalled();
@@ -97,11 +97,13 @@ describe("ErrorBoundary", () => {
       render(
         <ErrorBoundary fallback={<div>Custom error fallback</div>}>
           <ThrowingComponent message="Test error" />
-        </ErrorBoundary>
+        </ErrorBoundary>,
       );
 
       expect(screen.getByText("Custom error fallback")).toBeInTheDocument();
-      expect(screen.queryByText("Something went wrong")).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("Something went wrong"),
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -120,7 +122,7 @@ describe("ErrorBoundary", () => {
       render(
         <ErrorBoundary>
           <ConditionalThrower />
-        </ErrorBoundary>
+        </ErrorBoundary>,
       );
 
       // Should be in error state
@@ -134,7 +136,9 @@ describe("ErrorBoundary", () => {
 
       // Should re-render children successfully
       expect(screen.getByText("Recovered content")).toBeInTheDocument();
-      expect(screen.queryByText("Something went wrong")).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("Something went wrong"),
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -150,7 +154,7 @@ describe("ErrorBoundary", () => {
       render(
         <ErrorBoundary>
           <ThrowingComponent message="Test error" />
-        </ErrorBoundary>
+        </ErrorBoundary>,
       );
 
       fireEvent.click(screen.getByText("Reload Page"));
@@ -165,7 +169,7 @@ describe("RouteErrorBoundary", () => {
     render(
       <RouteErrorBoundary>
         <div>Route content</div>
-      </RouteErrorBoundary>
+      </RouteErrorBoundary>,
     );
 
     expect(screen.getByText("Route content")).toBeInTheDocument();
@@ -175,14 +179,14 @@ describe("RouteErrorBoundary", () => {
     render(
       <RouteErrorBoundary>
         <ThrowingComponent message="Route error" />
-      </RouteErrorBoundary>
+      </RouteErrorBoundary>,
     );
 
     expect(screen.getByText("Page Error")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "This page encountered an error. Try navigating back or refreshing."
-      )
+        "This page encountered an error. Try navigating back or refreshing.",
+      ),
     ).toBeInTheDocument();
   });
 
@@ -190,7 +194,7 @@ describe("RouteErrorBoundary", () => {
     render(
       <RouteErrorBoundary>
         <ThrowingComponent message="Route error" />
-      </RouteErrorBoundary>
+      </RouteErrorBoundary>,
     );
 
     expect(screen.getByText("Go Back")).toBeInTheDocument();
@@ -200,7 +204,7 @@ describe("RouteErrorBoundary", () => {
     render(
       <RouteErrorBoundary>
         <ThrowingComponent message="Route error" />
-      </RouteErrorBoundary>
+      </RouteErrorBoundary>,
     );
 
     expect(screen.getByText("Reload")).toBeInTheDocument();
@@ -216,7 +220,7 @@ describe("RouteErrorBoundary", () => {
     render(
       <RouteErrorBoundary>
         <ThrowingComponent message="Route error" />
-      </RouteErrorBoundary>
+      </RouteErrorBoundary>,
     );
 
     fireEvent.click(screen.getByText("Go Back"));
