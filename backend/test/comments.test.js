@@ -561,6 +561,7 @@ test('POST /ipfs/metadata - rejects invalid video URL', async () => {
 
   const res = await request(app)
     .post('/ipfs/metadata')
+    .set('Authorization', `Bearer ${token}`)
     .send(metadata);
 
   assert.equal(res.statusCode, 400);
@@ -576,6 +577,7 @@ test('POST /ipfs/metadata - requires version field', async () => {
 
   const res = await request(app)
     .post('/ipfs/metadata')
+    .set('Authorization', `Bearer ${token}`)
     .send(metadata);
 
   assert.equal(res.statusCode, 400);
