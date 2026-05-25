@@ -90,7 +90,7 @@
     "exit-x": "^0.2.2",
     "expect": "^30.2.0",
     "fast-json-stable-stringify": "^2.1.0",
-    "fast-levenshtein": "^2.0.6",
+    "fast-levenshtein": "^3.0.0",
     "fast-safe-stringify": "^2.1.1",
     "fastfile": "^0.0.20",
     "fb-watchman": "^2.0.2",
