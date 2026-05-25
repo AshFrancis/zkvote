@@ -33,7 +33,7 @@
     "express-rate-limit": "^8.3.2",
     "helmet": "^8.2.0",
     "multer": "^2.1.1",
-    "pinata": "^2.5.1",
+    "pinata": "^1.10.1",
     "zod": "^3.25.76"
   },
   "overrides": {
