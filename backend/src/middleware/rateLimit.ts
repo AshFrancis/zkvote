@@ -17,7 +17,9 @@ const isTestMode = process.env.RELAYER_TEST_MODE === "true";
 // guardrail at the next restart.
 if (process.env.NODE_ENV === "production" && isTestMode) {
   // eslint-disable-next-line no-console
-  console.error("[fatal] RELAYER_TEST_MODE=true is forbidden when NODE_ENV=production");
+  console.error(
+    "[fatal] RELAYER_TEST_MODE=true is forbidden when NODE_ENV=production",
+  );
   process.exit(1);
 }
 
