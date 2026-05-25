@@ -1,7 +1,7 @@
 /**
  * Shared Type Definitions for ZKVote Backend
  */
-import type { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from "express";
 declare global {
     namespace Express {
         interface Request {
@@ -9,7 +9,7 @@ declare global {
         }
     }
 }
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type LogLevel = "debug" | "info" | "warn" | "error";
 export interface LogMeta {
     [key: string]: unknown;
 }
@@ -85,7 +85,7 @@ export interface Dao {
     updated_at?: string;
 }
 export interface DaoWithRole extends Dao {
-    role: 'admin' | 'member' | null;
+    role: "admin" | "member" | null;
 }
 export interface IpfsUploadResult {
     cid: string;
@@ -112,7 +112,7 @@ export interface RpcHealthResult {
     error?: string;
 }
 export interface TransactionResult {
-    status: 'SUCCESS' | 'FAILED' | 'NOT_FOUND' | 'ERROR';
+    status: "SUCCESS" | "FAILED" | "NOT_FOUND" | "ERROR";
     ledger?: number;
     errorResult?: unknown;
     hash?: string;

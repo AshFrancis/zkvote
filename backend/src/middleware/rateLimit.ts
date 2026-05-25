@@ -11,6 +11,16 @@ import type { Request, Response, NextFunction } from "express";
 
 const isTestMode = process.env.RELAYER_TEST_MODE === "true";
 
+// N11 hardening: RELAYER_TEST_MODE neuters auth + rate limits AND stubs the
+// relayer keypair (stellar.ts). Refusing to start in this configuration in
+// production prevents a post-foothold env flip from silently breaking every
+// guardrail at the next restart.
+if (process.env.NODE_ENV === "production" && isTestMode) {
+  // eslint-disable-next-line no-console
+  console.error("[fatal] RELAYER_TEST_MODE=true is forbidden when NODE_ENV=production");
+  process.exit(1);
+}
+
 /**
  * No-op middleware for test mode - skips rate limiting
  */

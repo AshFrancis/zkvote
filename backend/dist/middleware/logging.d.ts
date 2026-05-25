@@ -3,7 +3,7 @@
  *
  * Provides request context and structured logging for all requests.
  */
-import type { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from "express";
 /**
  * Request logging middleware
  * Adds context ID and logs request start/end

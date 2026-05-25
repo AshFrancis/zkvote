@@ -4,7 +4,7 @@
  * Provides auth token verification for write endpoints.
  * Uses constant-time comparison to prevent timing attacks.
  */
-import type { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from "express";
 /**
  * Extract auth token from request headers
  */

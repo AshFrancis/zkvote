@@ -1,47 +1,27 @@
-# Build stage
-FROM node:20-alpine AS builder
+# zkvote-backend — hardened multi-stage build.
+# Built ON the box from /opt/apps/zkvote/backend. Frontend is on Pages.
 
+# ---- builder ----
+FROM node:20-bookworm-slim AS builder
+# python3 + build-essential: only used if better-sqlite3 has no prebuilt for
+# this platform. Discarded with the builder stage either way.
+RUN apt-get update && apt-get install -y --no-install-recommends python3 build-essential \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-
-# Copy package files
 COPY package*.json ./
-
-# Install all dependencies (including devDependencies for build)
 RUN npm ci
-
-# Copy source code
 COPY . .
-
-# Build TypeScript
 RUN npm run build
+# prune dev dependencies (native modules already compiled in npm ci above)
+RUN npm prune --omit=dev
 
-# Production stage
-FROM node:20-alpine AS production
-
+# ---- runner ----
+FROM node:20-bookworm-slim AS runner
+ENV NODE_ENV=production PORT=8080
 WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install only production dependencies
-RUN npm ci --omit=dev
-
-# Copy built files from builder
-COPY --from=builder /app/dist ./dist
-
-# Create data directory for SQLite
-RUN mkdir -p /app/data
-
-# Set environment variables
-ENV NODE_ENV=production
-ENV PORT=8080
-
-# Expose port
+COPY --from=builder --chown=node:node /app /app
+# SQLite data dir — owned by the non-root runtime user; mounted as a volume
+RUN mkdir -p /app/data && chown node:node /app/data
+USER node
 EXPOSE 8080
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
-
-# Run the application
 CMD ["node", "dist/index.js"]

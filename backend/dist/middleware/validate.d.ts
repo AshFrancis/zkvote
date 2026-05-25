@@ -3,8 +3,8 @@
  *
  * Express middleware for request body and query validation using Zod schemas.
  */
-import type { Request, Response, NextFunction } from 'express';
-import type { ZodSchema } from 'zod';
+import type { Request, Response, NextFunction } from "express";
+import type { ZodSchema } from "zod";
 /**
  * Create validation middleware for request body
  */

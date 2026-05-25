@@ -3,7 +3,7 @@
  *
  * Provides health, readiness, and configuration endpoints.
  */
-import type * as StellarSdk from '@stellar/stellar-sdk';
+import type * as StellarSdk from "@stellar/stellar-sdk";
 declare const router: import("express-serve-static-core").Router;
 /**
  * Initialize health routes with dependencies

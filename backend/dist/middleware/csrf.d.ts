@@ -4,7 +4,7 @@
  * Validates Origin header for write requests when CORS is configured.
  * This adds defense-in-depth beyond the auth token.
  */
-import type { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from "express";
 /**
  * CSRF guard middleware
  * Validates Origin header against allowed origins for write operations

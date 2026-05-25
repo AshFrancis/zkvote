@@ -3,7 +3,7 @@
  *
  * Catches unhandled errors and returns standardized error responses.
  */
-import type { ErrorRequestHandler } from 'express';
+import type { ErrorRequestHandler } from "express";
 /**
  * Global error handler middleware (must be last)
  */

@@ -378,7 +378,14 @@ impl Voting {
     /// Set verification key from registry during DAO initialization
     /// This function is called by the registry contract during create_and_init_dao
     /// to avoid re-entrancy issues. The registry is a trusted system contract.
+    ///
+    /// CRIT-3 fix (2026-05-24): require the registry contract's auth — the
+    /// previous code documented "registry is a trusted system contract" but
+    /// did NOT enforce it. Sibling `init_tree_from_registry`/`register_from_registry`
+    /// already do this; this one was missed in the original audit pass.
     pub fn set_vk_from_registry(env: Env, dao_id: u64, vk: VerificationKey) {
+        let registry: Address = env.storage().instance().get(&REGISTRY).unwrap();
+        registry.require_auth();
         Self::bump_instance(&env);
         Self::validate_vk(&env, &vk);
 

@@ -4,7 +4,7 @@
  * Provides rate limiting with IP hashing for privacy.
  * Disabled in test mode (RELAYER_TEST_MODE=true) to allow test suite to run without rate limit interference.
  */
-import type { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from "express";
 /**
  * Rate limiter for vote submissions
  * 10 votes per minute per IP

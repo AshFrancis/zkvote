@@ -23,9 +23,14 @@ export function csrfGuard(
     return next();
   }
 
-  // If CORS is not configured (wildcard), skip origin check
-  if (config.corsOrigins === "*") {
-    return next();
+  // N12 hardening: with wildcard CORS, any third-party origin could POST
+  // to write endpoints — fail-closed instead of waving the request through.
+  // Production deploys must set CORS_ORIGIN to the frontend origin.
+  if (config.corsOrigins === "*" || !config.corsOrigins) {
+    log("warn", "csrf_blocked_wildcard_cors", { path: req.path });
+    return res
+      .status(403)
+      .json({ error: "CORS_ORIGIN must be configured for write endpoints" });
   }
 
   // Get origin from headers

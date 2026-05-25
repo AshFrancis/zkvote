@@ -3,16 +3,24 @@
  *
  * Provides structured JSON logging with sensitive field redaction.
  */
-import crypto from 'crypto';
+import crypto from "crypto";
 // ============================================
 // REDACTION
 // ============================================
-const REDACTED_FIELDS = ['proof', 'nullifier', 'commitment', 'secret', 'token', 'password', 'jwt'];
+const REDACTED_FIELDS = [
+    "proof",
+    "nullifier",
+    "commitment",
+    "secret",
+    "token",
+    "password",
+    "jwt",
+];
 function redact(obj) {
     const safe = { ...obj };
     for (const key of REDACTED_FIELDS) {
         if (key in safe) {
-            safe[key] = '[REDACTED]';
+            safe[key] = "[REDACTED]";
         }
     }
     return safe;
@@ -33,23 +41,27 @@ export function createLogger(service) {
     };
     return {
         log,
-        debug: (event, meta) => log('debug', event, meta),
-        info: (event, meta) => log('info', event, meta),
-        warn: (event, meta) => log('warn', event, meta),
-        error: (event, meta) => log('error', event, meta),
+        debug: (event, meta) => log("debug", event, meta),
+        info: (event, meta) => log("info", event, meta),
+        warn: (event, meta) => log("warn", event, meta),
+        error: (event, meta) => log("error", event, meta),
     };
 }
 /**
  * Generate a unique request ID
  */
 export function generateRequestId() {
-    return crypto.randomBytes(6).toString('hex');
+    return crypto.randomBytes(6).toString("hex");
 }
 /**
  * Hash an IP address for privacy
  */
 export function hashIp(ip) {
-    return crypto.createHash('sha256').update(ip || '').digest('hex').slice(0, 12);
+    return crypto
+        .createHash("sha256")
+        .update(ip || "")
+        .digest("hex")
+        .slice(0, 12);
 }
 // ============================================
 // SIMPLE LOG FUNCTION
@@ -62,5 +74,5 @@ export function log(level, event, meta = {}) {
     console.log(JSON.stringify({ level, event, ts: new Date().toISOString(), ...safe }));
 }
 // Default logger instance
-export const logger = createLogger('relayer');
+export const logger = createLogger("relayer");
 //# sourceMappingURL=logger.js.map

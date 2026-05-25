@@ -100,7 +100,10 @@ router.post("/events", authGuard, (req: Request, res: Response) => {
 /**
  * POST /events/notify - Frontend event notification
  */
-router.post("/events/notify", queryLimiter, (async (
+// N4 hardening: was unauthenticated. Inbound events fan out into Soroban RPC
+// reads (sync_membership) — unauthenticated callers could amplify into a
+// downstream-RPC DoS.
+router.post("/events/notify", authGuard, queryLimiter, (async (
   req: Request,
   res: Response,
 ) => {

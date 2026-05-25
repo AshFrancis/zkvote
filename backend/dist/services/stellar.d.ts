@@ -4,8 +4,8 @@
  * Provides Stellar SDK setup, helper functions, and transaction utilities
  * for interacting with Soroban smart contracts.
  */
-import * as StellarSdk from '@stellar/stellar-sdk';
-import type { Groth16Proof } from '../types/index.js';
+import * as StellarSdk from "@stellar/stellar-sdk";
+import type { Groth16Proof } from "../types/index.js";
 export interface TestServer {
     getHealth: () => Promise<{
         status: string;

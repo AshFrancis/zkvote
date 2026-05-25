@@ -4,7 +4,7 @@
  * Provides persistent storage for events with efficient querying.
  * Supports frontend notifications with on-chain verification.
  */
-import { type Database as DatabaseType } from 'better-sqlite3';
+import { type Database as DatabaseType } from "better-sqlite3";
 export interface Event {
     id?: number;
     dao_id: number;

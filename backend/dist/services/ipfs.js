@@ -8,8 +8,8 @@ import { PinataSDK } from "pinata";
 // ============================================
 // LOGGER
 // ============================================
-import { createLogger } from './logger.js';
-const ipfsLogger = createLogger('ipfs');
+import { createLogger } from "./logger.js";
+const ipfsLogger = createLogger("ipfs");
 const log = (level, event, meta = {}) => {
     ipfsLogger[level](event, meta);
 };
@@ -76,7 +76,8 @@ export function validateMetadataSchema(data, schema) {
         }
     }
     // Validate version
-    if ("version" in obj && !schema.allowedVersions.includes(obj.version)) {
+    if ("version" in obj &&
+        !schema.allowedVersions.includes(obj.version)) {
         return { valid: false, error: `Invalid version: ${obj.version}` };
     }
     // Validate body length
@@ -85,7 +86,10 @@ export function validateMetadataSchema(data, schema) {
             return { valid: false, error: "Body must be a string" };
         }
         if (obj.body.length > schema.maxBodyLength) {
-            return { valid: false, error: `Body exceeds maximum length of ${schema.maxBodyLength}` };
+            return {
+                valid: false,
+                error: `Body exceeds maximum length of ${schema.maxBodyLength}`,
+            };
         }
     }
     // Validate createdAt format if present
@@ -133,9 +137,9 @@ export function initPinata(jwt, gateway) {
     isDedicatedGateway = gatewayUrl.includes(".mypinata.cloud");
     pinata = new PinataSDK({
         pinataJwt: jwt,
-        pinataGateway: gatewayUrl
+        pinataGateway: gatewayUrl,
     });
-    log('info', 'pinata_initialized', { dedicatedGateway: isDedicatedGateway });
+    log("info", "pinata_initialized", { dedicatedGateway: isDedicatedGateway });
 }
 /**
  * Propagate content to public IPFS gateways (fire and forget)
@@ -154,7 +158,7 @@ async function propagateToPublicGateways(cid) {
             });
             clearTimeout(timeout);
             if (response.ok) {
-                log('debug', 'ipfs_propagated', { gateway, cid });
+                log("debug", "ipfs_propagated", { gateway, cid });
             }
         }
         catch {
@@ -164,8 +168,12 @@ async function propagateToPublicGateways(cid) {
     });
     // Don't wait for all - just fire and forget
     Promise.allSettled(propagationPromises).then((results) => {
-        const successful = results.filter(r => r.status === "fulfilled").length;
-        log('info', 'ipfs_propagation_complete', { cid, successful, total: PUBLIC_GATEWAYS.length });
+        const successful = results.filter((r) => r.status === "fulfilled").length;
+        log("info", "ipfs_propagation_complete", {
+            cid,
+            successful,
+            total: PUBLIC_GATEWAYS.length,
+        });
     });
 }
 /**
@@ -176,11 +184,9 @@ export async function pinJSON(data, name = "zkvote-metadata") {
         throw new Error("Pinata client not initialized");
     }
     // SDK v2.x: pinata.upload.public.json() with chainable methods
-    const result = await pinata.upload.public.json(data)
-        .name(name)
-        .keyvalues({
+    const result = await pinata.upload.public.json(data).name(name).keyvalues({
         app: "zkvote",
-        type: "proposal-metadata"
+        type: "proposal-metadata",
     });
     // Propagate to public gateways in background
     propagateToPublicGateways(result.cid);
@@ -199,13 +205,16 @@ export async function pinFile(buffer, filename, mimeType) {
     }
     // Create a File object from the buffer
     // Cast buffer to BlobPart to satisfy strict TypeScript checks
-    const file = new File([buffer], filename, { type: mimeType });
+    const file = new File([buffer], filename, {
+        type: mimeType,
+    });
     // SDK v2.x: pinata.upload.public.file() with chainable methods
-    const result = await pinata.upload.public.file(file)
+    const result = await pinata.upload.public
+        .file(file)
         .name(filename)
         .keyvalues({
         app: "zkvote",
-        type: "proposal-image"
+        type: "proposal-image",
     });
     // Propagate to public gateways in background
     propagateToPublicGateways(result.cid);
@@ -249,13 +258,15 @@ export async function fetchContent(cid) {
         try {
             const signedUrl = await pinata.gateways.private.createAccessLink({
                 cid: cid,
-                expires: 300 // 5 minutes
+                expires: 300, // 5 minutes
             });
             url = signedUrl;
         }
         catch (err) {
             const error = err;
-            throw new Error(`Failed to create signed URL: ${error.message}`);
+            throw new Error(`Failed to create signed URL: ${error.message}`, {
+                cause: err,
+            });
         }
     }
     else {
@@ -279,7 +290,7 @@ export async function fetchContent(cid) {
         }
         return {
             data,
-            contentType
+            contentType,
         };
     }
     finally {
@@ -304,13 +315,15 @@ export async function fetchRawContent(cid) {
         try {
             const signedUrl = await pinata.gateways.private.createAccessLink({
                 cid: cid,
-                expires: 300 // 5 minutes
+                expires: 300, // 5 minutes
             });
             url = signedUrl;
         }
         catch (err) {
             const error = err;
-            throw new Error(`Failed to create signed URL: ${error.message}`);
+            throw new Error(`Failed to create signed URL: ${error.message}`, {
+                cause: err,
+            });
         }
     }
     else {
@@ -329,7 +342,7 @@ export async function fetchRawContent(cid) {
         const buffer = Buffer.from(arrayBuffer);
         return {
             buffer,
-            contentType
+            contentType,
         };
     }
     finally {
@@ -350,7 +363,7 @@ export async function isHealthy() {
     }
     catch (error) {
         const err = error;
-        log('error', 'pinata_health_failed', { error: err.message });
+        log("error", "pinata_health_failed", { error: err.message });
         return false;
     }
 }
@@ -361,7 +374,7 @@ export async function isHealthy() {
 export function getPublicUrls(cid) {
     return {
         primary: `https://ipfs.io/ipfs/${cid}`,
-        fallbacks: PUBLIC_GATEWAYS.map(gw => `${gw}/${cid}`),
+        fallbacks: PUBLIC_GATEWAYS.map((gw) => `${gw}/${cid}`),
     };
 }
 /**

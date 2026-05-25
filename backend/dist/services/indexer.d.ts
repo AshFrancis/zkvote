@@ -4,8 +4,8 @@
  * Stores events in SQLite for persistence.
  * Supports frontend notifications with on-chain verification.
  */
-import * as StellarSdk from '@stellar/stellar-sdk';
-import type { Event, EventQueryOptions, DbStatus } from './db.js';
+import * as StellarSdk from "@stellar/stellar-sdk";
+import type { Event, EventQueryOptions, DbStatus } from "./db.js";
 /** Indexer status response */
 export interface IndexerStatus extends DbStatus {
     isRunning: boolean;

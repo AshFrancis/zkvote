@@ -3,7 +3,7 @@
  *
  * Provides structured JSON logging with sensitive field redaction.
  */
-import type { LogLevel, LogMeta } from '../types/index.js';
+import type { LogLevel, LogMeta } from "../types/index.js";
 export interface Logger {
     log(level: LogLevel, event: string, meta?: LogMeta): void;
     debug(event: string, meta?: LogMeta): void;

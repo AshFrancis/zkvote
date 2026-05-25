@@ -186,7 +186,13 @@ impl MembershipSbt {
     /// Mint SBT from registry during DAO initialization
     /// This function is called by the registry contract during create_and_init_dao
     /// to avoid re-entrancy issues. The registry is a trusted system contract.
+    ///
+    /// CRIT-1 fix (2026-05-24): require the registry contract's auth — the
+    /// previous code documented "registry is a trusted system contract" but
+    /// did NOT enforce it, letting anyone mint themselves an SBT in any DAO.
     pub fn mint_from_registry(env: Env, dao_id: u64, to: Address) {
+        let registry = Self::registry_addr(&env);
+        registry.require_auth();
         Self::bump_instance(&env);
         // Check not already minted
         if Self::has(env.clone(), dao_id, to.clone()) {
