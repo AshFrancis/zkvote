@@ -43,6 +43,7 @@ const setupApp = async () => {
   process.env.VOTING_CONTRACT_ID = 'C'.padEnd(56, 'A');
   process.env.TREE_CONTRACT_ID = 'C'.padEnd(56, 'B');
   process.env.SOROBAN_RPC_URL = 'http://localhost:8000/soroban/rpc';
+  process.env.CORS_ORIGIN = 'http://localhost'; // CSRF middleware fails-closed on wildcard CORS
   process.env.NETWORK_PASSPHRASE = 'Test SDF Future Network ; October 2022';
   process.env.RELAYER_AUTH_TOKEN = token;
   process.env.RELAYER_TEST_MODE = 'true';
