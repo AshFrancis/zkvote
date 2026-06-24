@@ -69,7 +69,7 @@
     "dezalgo": "^1.0.4",
     "dunder-proto": "^1.0.1",
     "eastasianwidth": "^0.2.0",
-    "ejs": "^3.1.10",
+    "ejs": "^5.0.2",
     "electron-to-chromium": "^1.5.260",
     "elliptic": "^6.6.1",
     "emittery": "^0.13.1",
